@@ -1,7 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.core.dependencies import requerir_admin
 from app.database import get_db
+from app.models.usuario import Usuario
 from app.schemas.usuario import (
     UsuarioCreate,
     UsuarioUpdate,
@@ -25,7 +27,8 @@ router = APIRouter(
     response_model=list[UsuarioResponse]
 )
 def listar_usuarios(
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    admin: Usuario = Depends(requerir_admin)
 ):
     return usuario_service.listar_usuarios(db)
 
@@ -40,7 +43,8 @@ def listar_usuarios(
 )
 def obtener_usuario(
     usuario_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    admin: Usuario = Depends(requerir_admin)
 ):
     usuario = usuario_service.obtener_usuario(
         db,
@@ -67,7 +71,8 @@ def obtener_usuario(
 )
 def crear_usuario(
     datos: UsuarioCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    admin: Usuario = Depends(requerir_admin)
 ):
     usuario_existente = usuario_service.obtener_usuario_por_email(
         db,
@@ -97,7 +102,8 @@ def crear_usuario(
 def actualizar_usuario(
     usuario_id: int,
     datos: UsuarioUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    admin: Usuario = Depends(requerir_admin)
 ):
     usuario = usuario_service.obtener_usuario(
         db,
@@ -144,7 +150,8 @@ def actualizar_usuario(
 )
 def eliminar_usuario(
     usuario_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    admin: Usuario = Depends(requerir_admin)
 ):
     usuario = usuario_service.obtener_usuario(
         db,

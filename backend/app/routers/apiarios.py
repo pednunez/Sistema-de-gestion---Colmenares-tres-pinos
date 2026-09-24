@@ -1,19 +1,37 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.core.dependencies import obtener_usuario_actual
 from app.database import get_db
+from app.models.usuario import Usuario
 from app.schemas.apiario import (
     ApiarioCreate,
     ApiarioUpdate,
     ApiarioResponse
 )
+from app.schemas.auditoria import AuditoriaCreate
 from app.services import apiario as apiario_service
+from app.services import auditoria as auditoria_service
 
 
 router = APIRouter(
     prefix="/apiarios",
     tags=["Apiarios"]
 )
+
+
+# ==========================================================
+# FUNCIÓN AUXILIAR PARA AUDITORÍA
+# ==========================================================
+
+def apiario_a_dict(apiario):
+    return {
+        "id": apiario.id,
+        "nombre": apiario.nombre,
+        "ubicacion": apiario.ubicacion,
+        "descripcion": apiario.descripcion,
+        "activo": apiario.activo
+    }
 
 
 # ==========================================================
@@ -67,12 +85,27 @@ def obtener_apiario(
 )
 def crear_apiario(
     datos: ApiarioCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    usuario: Usuario = Depends(obtener_usuario_actual)
 ):
-    return apiario_service.crear_apiario(
+    apiario = apiario_service.crear_apiario(
         db,
         datos
     )
+
+    auditoria_service.registrar_auditoria(
+        db,
+        AuditoriaCreate(
+            usuario_id=usuario.id,
+            entidad="APIARIO",
+            entidad_id=apiario.id,
+            accion="CREAR",
+            datos_anteriores=None,
+            datos_nuevos=apiario_a_dict(apiario)
+        )
+    )
+
+    return apiario
 
 
 # ==========================================================
@@ -86,7 +119,8 @@ def crear_apiario(
 def actualizar_apiario(
     apiario_id: int,
     datos: ApiarioUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    usuario: Usuario = Depends(obtener_usuario_actual)
 ):
     apiario = apiario_service.obtener_apiario(
         db,
@@ -99,11 +133,27 @@ def actualizar_apiario(
             detail="Apiario no encontrado"
         )
 
-    return apiario_service.actualizar_apiario(
+    datos_anteriores = apiario_a_dict(apiario)
+
+    apiario_actualizado = apiario_service.actualizar_apiario(
         db,
         apiario,
         datos
     )
+
+    auditoria_service.registrar_auditoria(
+        db,
+        AuditoriaCreate(
+            usuario_id=usuario.id,
+            entidad="APIARIO",
+            entidad_id=apiario_actualizado.id,
+            accion="MODIFICAR",
+            datos_anteriores=datos_anteriores,
+            datos_nuevos=apiario_a_dict(apiario_actualizado)
+        )
+    )
+
+    return apiario_actualizado
 
 
 # ==========================================================
@@ -116,7 +166,8 @@ def actualizar_apiario(
 )
 def eliminar_apiario(
     apiario_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    usuario: Usuario = Depends(obtener_usuario_actual)
 ):
     apiario = apiario_service.obtener_apiario(
         db,
@@ -129,7 +180,23 @@ def eliminar_apiario(
             detail="Apiario no encontrado"
         )
 
-    return apiario_service.eliminar_apiario(
+    datos_anteriores = apiario_a_dict(apiario)
+
+    apiario_eliminado = apiario_service.eliminar_apiario(
         db,
         apiario
     )
+
+    auditoria_service.registrar_auditoria(
+        db,
+        AuditoriaCreate(
+            usuario_id=usuario.id,
+            entidad="APIARIO",
+            entidad_id=apiario_eliminado.id,
+            accion="ELIMINAR",
+            datos_anteriores=datos_anteriores,
+            datos_nuevos=apiario_a_dict(apiario_eliminado)
+        )
+    )
+
+    return apiario_eliminado

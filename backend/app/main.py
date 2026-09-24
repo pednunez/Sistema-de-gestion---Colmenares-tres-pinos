@@ -12,6 +12,7 @@ from app.routers.transferencias_marcos import (
 )
 from app.routers.historial import router as historial_router
 from app.routers.auditoria import router as auditoria_router
+from app.routers.auth import router as auth_router
 
 
 app = FastAPI(
@@ -24,6 +25,8 @@ app = FastAPI(
 # ==========================================================
 # ROUTERS
 # ==========================================================
+
+app.include_router(auth_router)
 
 app.include_router(apiarios_router)
 app.include_router(colmenas_router)

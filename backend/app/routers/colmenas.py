@@ -1,19 +1,47 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.core.dependencies import obtener_usuario_actual
 from app.database import get_db
+from app.models.usuario import Usuario
+
 from app.schemas.colmena import (
     ColmenaCreate,
     ColmenaUpdate,
     ColmenaResponse
 )
+
+from app.schemas.auditoria import AuditoriaCreate
+
 from app.services import colmena as colmena_service
+from app.services import auditoria as auditoria_service
 
 
 router = APIRouter(
     prefix="/colmenas",
     tags=["Colmenas"]
 )
+
+
+# ==========================================================
+# FUNCIÓN AUXILIAR PARA AUDITORÍA
+# ==========================================================
+
+def colmena_a_dict(colmena):
+
+    return {
+        "id": colmena.id,
+        "apiario_id": colmena.apiario_id,
+        "codigo": colmena.codigo,
+        "estado": colmena.estado,
+        "fecha_instalacion": (
+            str(colmena.fecha_instalacion)
+            if colmena.fecha_instalacion
+            else None
+        ),
+        "observaciones": colmena.observaciones,
+        "activo": colmena.activo
+    }
 
 
 # ==========================================================
@@ -67,9 +95,10 @@ def obtener_colmena(
 )
 def crear_colmena(
     datos: ColmenaCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    usuario: Usuario = Depends(obtener_usuario_actual)
 ):
-    # Verificar que el apiario exista y esté activo
+
     apiario = colmena_service.obtener_apiario_activo(
         db,
         datos.apiario_id
@@ -81,7 +110,6 @@ def crear_colmena(
             detail="El apiario indicado no existe o está inactivo"
         )
 
-    # Evitar códigos de colmena duplicados
     colmena_existente = colmena_service.obtener_colmena_por_codigo(
         db,
         datos.codigo
@@ -93,10 +121,24 @@ def crear_colmena(
             detail="Ya existe una colmena con ese código"
         )
 
-    return colmena_service.crear_colmena(
+    colmena = colmena_service.crear_colmena(
         db,
         datos
     )
+
+    auditoria_service.registrar_auditoria(
+        db,
+        AuditoriaCreate(
+            usuario_id=usuario.id,
+            entidad="COLMENA",
+            entidad_id=colmena.id,
+            accion="CREAR",
+            datos_anteriores=None,
+            datos_nuevos=colmena_a_dict(colmena)
+        )
+    )
+
+    return colmena
 
 
 # ==========================================================
@@ -110,8 +152,10 @@ def crear_colmena(
 def actualizar_colmena(
     colmena_id: int,
     datos: ColmenaUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    usuario: Usuario = Depends(obtener_usuario_actual)
 ):
+
     colmena = colmena_service.obtener_colmena(
         db,
         colmena_id
@@ -123,7 +167,8 @@ def actualizar_colmena(
             detail="Colmena no encontrada"
         )
 
-    # Si se cambia el apiario, comprobar que exista
+    datos_anteriores = colmena_a_dict(colmena)
+
     if datos.apiario_id is not None:
 
         apiario = colmena_service.obtener_apiario_activo(
@@ -137,7 +182,6 @@ def actualizar_colmena(
                 detail="El apiario indicado no existe o está inactivo"
             )
 
-    # Si se cambia el código, comprobar que no esté utilizado
     if datos.codigo is not None:
 
         existente = colmena_service.obtener_colmena_por_codigo(
@@ -154,15 +198,31 @@ def actualizar_colmena(
                 detail="Ya existe una colmena con ese código"
             )
 
-    return colmena_service.actualizar_colmena(
+    colmena_actualizada = colmena_service.actualizar_colmena(
         db,
         colmena,
         datos
     )
 
+    auditoria_service.registrar_auditoria(
+        db,
+        AuditoriaCreate(
+            usuario_id=usuario.id,
+            entidad="COLMENA",
+            entidad_id=colmena_actualizada.id,
+            accion="MODIFICAR",
+            datos_anteriores=datos_anteriores,
+            datos_nuevos=colmena_a_dict(
+                colmena_actualizada
+            )
+        )
+    )
+
+    return colmena_actualizada
+
 
 # ==========================================================
-# BAJA LÓGICA DE COLMENA
+# BAJA LÓGICA
 # ==========================================================
 
 @router.delete(
@@ -171,8 +231,10 @@ def actualizar_colmena(
 )
 def eliminar_colmena(
     colmena_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    usuario: Usuario = Depends(obtener_usuario_actual)
 ):
+
     colmena = colmena_service.obtener_colmena(
         db,
         colmena_id
@@ -184,7 +246,25 @@ def eliminar_colmena(
             detail="Colmena no encontrada"
         )
 
-    return colmena_service.eliminar_colmena(
+    datos_anteriores = colmena_a_dict(colmena)
+
+    colmena_eliminada = colmena_service.eliminar_colmena(
         db,
         colmena
     )
+
+    auditoria_service.registrar_auditoria(
+        db,
+        AuditoriaCreate(
+            usuario_id=usuario.id,
+            entidad="COLMENA",
+            entidad_id=colmena_eliminada.id,
+            accion="ELIMINAR",
+            datos_anteriores=datos_anteriores,
+            datos_nuevos=colmena_a_dict(
+                colmena_eliminada
+            )
+        )
+    )
+
+    return colmena_eliminada
