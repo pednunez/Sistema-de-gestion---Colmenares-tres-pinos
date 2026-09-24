@@ -1,0 +1,49 @@
+# ==========================================================
+# COLMENARES TRES PINOS
+# Archivos que NO deben subirse a GitHub
+# ==========================================================
+
+# Variables privadas y credenciales
+.env
+*.env
+
+# Entornos virtuales de Python
+.venv/
+venv/
+
+# Archivos generados por Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# VS Code
+.vscode/
+
+# PyCharm
+.idea/
+
+# Windows
+Thumbs.db
+Desktop.ini
+
+# macOS
+.DS_Store
+
+# Logs
+*.log
+
+# Archivos temporales
+*.tmp
+*.temp
+
+# Node / React - para cuando hagamos frontend
+node_modules/
+dist/
+build/
+
+# Variables de entorno del frontend
+.env.local
+.env.development.local
+.env.production.local
+.env.test.local
