@@ -1,19 +1,69 @@
+from datetime import date, datetime
+from decimal import Decimal
+from enum import Enum
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.orm import Session
 
+from app.core.dependencies import obtener_usuario_actual
 from app.database import get_db
+from app.models.usuario import Usuario
+
 from app.schemas.tratamiento import (
     TratamientoCreate,
     TratamientoUpdate,
     TratamientoResponse
 )
+from app.schemas.auditoria import AuditoriaCreate
+
 from app.services import tratamiento as tratamiento_service
+from app.services import auditoria as auditoria_service
 
 
 router = APIRouter(
     prefix="/tratamientos",
     tags=["Tratamientos"]
 )
+
+
+# ==========================================================
+# FUNCIONES AUXILIARES PARA AUDITORÍA
+# ==========================================================
+
+def valor_json(valor):
+    """
+    Convierte tipos especiales a valores compatibles con JSON.
+    """
+
+    if isinstance(valor, (datetime, date)):
+        return valor.isoformat()
+
+    if isinstance(valor, UUID):
+        return str(valor)
+
+    if isinstance(valor, Enum):
+        return valor.value
+
+    if isinstance(valor, Decimal):
+        return float(valor)
+
+    return valor
+
+
+def tratamiento_a_dict(tratamiento):
+    """
+    Convierte automáticamente todas las columnas
+    del tratamiento a un diccionario.
+    """
+
+    return {
+        columna.key: valor_json(
+            getattr(tratamiento, columna.key)
+        )
+        for columna in sa_inspect(tratamiento).mapper.column_attrs
+    }
 
 
 # ==========================================================
@@ -67,9 +117,14 @@ def obtener_tratamiento(
 )
 def crear_tratamiento(
     datos: TratamientoCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    usuario_actual: Usuario = Depends(obtener_usuario_actual)
 ):
-    # Verificar colmena
+
+    # ------------------------------------------------------
+    # VALIDAR COLMENA
+    # ------------------------------------------------------
+
     colmena = tratamiento_service.obtener_colmena_activa(
         db,
         datos.colmena_id
@@ -81,19 +136,10 @@ def crear_tratamiento(
             detail="La colmena indicada no existe o está inactiva"
         )
 
-    # Verificar usuario
-    usuario = tratamiento_service.obtener_usuario_activo(
-        db,
-        datos.usuario_id
-    )
+    # ------------------------------------------------------
+    # VALIDAR INSPECCIÓN SI FUE INDICADA
+    # ------------------------------------------------------
 
-    if usuario is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="El usuario indicado no existe o está inactivo"
-        )
-
-    # Verificar inspección si fue indicada
     if datos.inspeccion_id is not None:
 
         inspeccion = tratamiento_service.obtener_inspeccion(
@@ -107,17 +153,46 @@ def crear_tratamiento(
                 detail="La inspección indicada no existe o está inactiva"
             )
 
-        # La inspección debe pertenecer a la misma colmena
         if inspeccion.colmena_id != datos.colmena_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="La inspección no pertenece a la colmena indicada"
             )
 
-    return tratamiento_service.crear_tratamiento(
-        db,
-        datos
+    # ------------------------------------------------------
+    # EL USUARIO REAL VIENE DEL JWT
+    # ------------------------------------------------------
+
+    datos_seguros = datos.model_copy(
+        update={
+            "usuario_id": usuario_actual.id
+        }
     )
+
+    tratamiento = tratamiento_service.crear_tratamiento(
+        db,
+        datos_seguros
+    )
+
+    # ------------------------------------------------------
+    # AUDITORÍA
+    # ------------------------------------------------------
+
+    auditoria_service.registrar_auditoria(
+        db,
+        AuditoriaCreate(
+            usuario_id=usuario_actual.id,
+            entidad="TRATAMIENTO",
+            entidad_id=tratamiento.id,
+            accion="CREAR",
+            datos_anteriores=None,
+            datos_nuevos=tratamiento_a_dict(
+                tratamiento
+            )
+        )
+    )
+
+    return tratamiento
 
 
 # ==========================================================
@@ -131,8 +206,10 @@ def crear_tratamiento(
 def actualizar_tratamiento(
     tratamiento_id: int,
     datos: TratamientoUpdate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    usuario_actual: Usuario = Depends(obtener_usuario_actual)
 ):
+
     tratamiento = tratamiento_service.obtener_tratamiento(
         db,
         tratamiento_id
@@ -144,11 +221,124 @@ def actualizar_tratamiento(
             detail="Tratamiento no encontrado"
         )
 
-    return tratamiento_service.actualizar_tratamiento(
-        db,
-        tratamiento,
-        datos
+    # Estado antes del cambio
+    datos_anteriores = tratamiento_a_dict(
+        tratamiento
     )
+
+    cambios = datos.model_dump(
+        exclude_unset=True
+    )
+
+    # No permitimos cambiar quién creó el tratamiento
+    cambios.pop(
+        "usuario_id",
+        None
+    )
+
+    # ------------------------------------------------------
+    # DETERMINAR COLMENA FINAL
+    # ------------------------------------------------------
+
+    colmena_id_final = cambios.get(
+        "colmena_id",
+        tratamiento.colmena_id
+    )
+
+    if "colmena_id" in cambios:
+
+        colmena = tratamiento_service.obtener_colmena_activa(
+            db,
+            colmena_id_final
+        )
+
+        if colmena is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="La colmena indicada no existe o está inactiva"
+            )
+
+    # ------------------------------------------------------
+    # VALIDAR INSPECCIÓN SI SE CAMBIA
+    # ------------------------------------------------------
+
+    if (
+        "inspeccion_id" in cambios
+        and cambios["inspeccion_id"] is not None
+    ):
+
+        inspeccion = tratamiento_service.obtener_inspeccion(
+            db,
+            cambios["inspeccion_id"]
+        )
+
+        if inspeccion is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="La inspección indicada no existe o está inactiva"
+            )
+
+        if inspeccion.colmena_id != colmena_id_final:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="La inspección no pertenece a la colmena indicada"
+            )
+
+    # Si cambia solamente la colmena y ya existía una inspección,
+    # verificamos que siga siendo compatible.
+    elif (
+        "colmena_id" in cambios
+        and tratamiento.inspeccion_id is not None
+    ):
+
+        inspeccion_actual = tratamiento_service.obtener_inspeccion(
+            db,
+            tratamiento.inspeccion_id
+        )
+
+        if (
+            inspeccion_actual is not None
+            and inspeccion_actual.colmena_id != colmena_id_final
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "La inspección asociada actualmente no pertenece "
+                    "a la nueva colmena"
+                )
+            )
+
+    datos_seguros = TratamientoUpdate(
+        **cambios
+    )
+
+    tratamiento_actualizado = (
+        tratamiento_service.actualizar_tratamiento(
+            db,
+            tratamiento,
+            datos_seguros
+        )
+    )
+
+    # ------------------------------------------------------
+    # AUDITORÍA
+    # ------------------------------------------------------
+
+    auditoria_service.registrar_auditoria(
+        db,
+        AuditoriaCreate(
+            usuario_id=usuario_actual.id,
+            entidad="TRATAMIENTO",
+            entidad_id=tratamiento_actualizado.id,
+            accion="MODIFICAR",
+            datos_anteriores=datos_anteriores,
+            datos_nuevos=tratamiento_a_dict(
+                tratamiento_actualizado
+            )
+        )
+    )
+
+    return tratamiento_actualizado
 
 
 # ==========================================================
@@ -161,8 +351,10 @@ def actualizar_tratamiento(
 )
 def cancelar_tratamiento(
     tratamiento_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    usuario_actual: Usuario = Depends(obtener_usuario_actual)
 ):
+
     tratamiento = tratamiento_service.obtener_tratamiento(
         db,
         tratamiento_id
@@ -174,7 +366,37 @@ def cancelar_tratamiento(
             detail="Tratamiento no encontrado"
         )
 
-    return tratamiento_service.cancelar_tratamiento(
-        db,
+    # Datos antes de cancelar
+    datos_anteriores = tratamiento_a_dict(
         tratamiento
     )
+
+    tratamiento_cancelado = (
+        tratamiento_service.cancelar_tratamiento(
+            db,
+            tratamiento
+        )
+    )
+
+    # ------------------------------------------------------
+    # AUDITORÍA
+    #
+    # Se registra como MODIFICAR porque el tratamiento
+    # permanece en la base de datos y cambia a CANCELADO.
+    # ------------------------------------------------------
+
+    auditoria_service.registrar_auditoria(
+        db,
+        AuditoriaCreate(
+            usuario_id=usuario_actual.id,
+            entidad="TRATAMIENTO",
+            entidad_id=tratamiento_cancelado.id,
+            accion="MODIFICAR",
+            datos_anteriores=datos_anteriores,
+            datos_nuevos=tratamiento_a_dict(
+                tratamiento_cancelado
+            )
+        )
+    )
+
+    return tratamiento_cancelado
