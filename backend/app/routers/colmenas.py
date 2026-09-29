@@ -1,4 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from io import BytesIO
+from uuid import UUID
+
+import qrcode
+
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import obtener_usuario_actual
@@ -33,6 +39,11 @@ def colmena_a_dict(colmena):
         "id": colmena.id,
         "apiario_id": colmena.apiario_id,
         "codigo": colmena.codigo,
+        "codigo_qr": (
+            str(colmena.codigo_qr)
+            if colmena.codigo_qr
+            else None
+        ),
         "estado": colmena.estado,
         "fecha_instalacion": (
             str(colmena.fecha_instalacion)
@@ -56,6 +67,104 @@ def listar_colmenas(
     db: Session = Depends(get_db)
 ):
     return colmena_service.listar_colmenas(db)
+
+
+# ==========================================================
+# CONSULTAR COLMENA MEDIANTE CÓDIGO QR
+# ==========================================================
+
+@router.get(
+    "/qr/{codigo_qr}",
+    response_model=ColmenaResponse,
+    name="consultar_colmena_por_qr"
+)
+def consultar_colmena_por_qr(
+    codigo_qr: UUID,
+    db: Session = Depends(get_db)
+):
+    colmena = colmena_service.obtener_colmena_por_qr(
+        db,
+        codigo_qr
+    )
+
+    if colmena is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No existe una colmena activa asociada a este código QR"
+        )
+
+    return colmena
+
+
+# ==========================================================
+# GENERAR IMAGEN QR DE UNA COLMENA
+# ==========================================================
+
+@router.get(
+    "/{colmena_id}/qr",
+    response_class=StreamingResponse
+)
+def generar_qr_colmena(
+    colmena_id: int,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    colmena = colmena_service.obtener_colmena(
+        db,
+        colmena_id
+    )
+
+    if colmena is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Colmena no encontrada"
+        )
+
+    if colmena.codigo_qr is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La colmena no posee un código QR"
+        )
+
+    # URL que abrirá el QR al ser escaneado
+    url_colmena = str(
+        request.url_for(
+            "consultar_colmena_por_qr",
+            codigo_qr=str(colmena.codigo_qr)
+        )
+    )
+
+    # Generar QR
+    qr = qrcode.QRCode(
+        version=1,
+        box_size=10,
+        border=4
+    )
+
+    qr.add_data(url_colmena)
+    qr.make(fit=True)
+
+    imagen = qr.make_image(
+        fill_color="black",
+        back_color="white"
+    )
+
+    buffer = BytesIO()
+    imagen.save(
+        buffer,
+        format="PNG"
+    )
+    buffer.seek(0)
+
+    return StreamingResponse(
+        buffer,
+        media_type="image/png",
+        headers={
+            "Content-Disposition": (
+                f'inline; filename="QR_{colmena.codigo}.png"'
+            )
+        }
+    )
 
 
 # ==========================================================

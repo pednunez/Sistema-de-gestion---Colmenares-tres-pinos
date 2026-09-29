@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -30,6 +31,22 @@ def obtener_colmena(db: Session, colmena_id: int):
 def obtener_colmena_por_codigo(db: Session, codigo: str):
     consulta = select(Colmena).where(
         Colmena.codigo == codigo,
+        Colmena.activo == True
+    )
+
+    return db.scalar(consulta)
+
+
+# ==========================================================
+# OBTENER COLMENA POR CÓDIGO QR
+# ==========================================================
+
+def obtener_colmena_por_qr(
+    db: Session,
+    codigo_qr: UUID
+):
+    consulta = select(Colmena).where(
+        Colmena.codigo_qr == codigo_qr,
         Colmena.activo == True
     )
 
