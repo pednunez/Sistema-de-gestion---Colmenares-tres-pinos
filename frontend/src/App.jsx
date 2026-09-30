@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import {
   LayoutDashboard,
@@ -21,14 +21,30 @@ import {
   Server,
 } from "lucide-react";
 
+import Auth from "./components/Auth";
 
 const API_URL = "http://127.0.0.1:8000";
 
 
 function App() {
 
+  // ==========================================================
+  // SESIÓN / JWT
+  // ==========================================================
+
+  const [sesion, setSesion] = useState(null);
+  const [verificandoSesion, setVerificandoSesion] = useState(true);
+
+  // ==========================================================
+  // INTERFAZ
+  // ==========================================================
+
   const [vistaActiva, setVistaActiva] = useState("Dashboard");
   const [menuMovil, setMenuMovil] = useState(false);
+
+  // ==========================================================
+  // DATOS DEL SISTEMA
+  // ==========================================================
 
   const [apiarios, setApiarios] = useState([]);
   const [colmenas, setColmenas] = useState([]);
@@ -36,19 +52,83 @@ function App() {
   const [tratamientos, setTratamientos] = useState([]);
   const [transferencias, setTransferencias] = useState([]);
 
-  const [cargando, setCargando] = useState(true);
+  const [cargando, setCargando] = useState(false);
   const [error, setError] = useState("");
 
   const [busqueda, setBusqueda] = useState("");
-
   const [colmenaQr, setColmenaQr] = useState(null);
 
 
   // ==========================================================
-  // CARGAR DATOS
+  // VERIFICAR JWT AL ABRIR / RECARGAR LA PÁGINA
   // ==========================================================
 
-  const cargarDatos = async () => {
+  useEffect(() => {
+
+    const token =
+      localStorage.getItem("access_token") ||
+      sessionStorage.getItem("access_token");
+
+    if (!token) {
+      setVerificandoSesion(false);
+      return;
+    }
+
+    const verificarToken = async () => {
+
+      try {
+
+        const respuesta = await fetch(
+          `${API_URL}/auth/me`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
+
+        if (!respuesta.ok) {
+          throw new Error("Sesión inválida o expirada");
+        }
+
+        const usuario = await respuesta.json();
+
+        setSesion({
+          token,
+          usuario,
+        });
+
+      } catch (error) {
+
+        console.error(error);
+
+        localStorage.removeItem("access_token");
+        sessionStorage.removeItem("access_token");
+
+        setSesion(null);
+
+      } finally {
+
+        setVerificandoSesion(false);
+
+      }
+
+    };
+
+    verificarToken();
+
+  }, []);
+
+
+  // ==========================================================
+  // CARGAR DATOS DEL BACKEND
+  // ==========================================================
+
+  const cargarDatos = useCallback(async () => {
+
+    if (!sesion?.token) {
+      return;
+    }
 
     setCargando(true);
     setError("");
@@ -65,7 +145,11 @@ function App() {
 
       const respuestas = await Promise.all(
         endpoints.map((endpoint) =>
-          fetch(`${API_URL}${endpoint}`)
+          fetch(`${API_URL}${endpoint}`, {
+            headers: {
+              Authorization: `Bearer ${sesion.token}`,
+            },
+          })
         )
       );
 
@@ -102,7 +186,7 @@ function App() {
       console.error(error);
 
       setError(
-        "No fue posible conectar con el backend."
+        "No fue posible cargar los datos del sistema."
       );
 
     } finally {
@@ -111,14 +195,42 @@ function App() {
 
     }
 
-  };
+  }, [sesion?.token]);
 
 
   useEffect(() => {
 
-    cargarDatos();
+    if (sesion?.token) {
+      cargarDatos();
+    }
 
-  }, []);
+  }, [sesion?.token, cargarDatos]);
+
+
+  // ==========================================================
+  // CERRAR SESIÓN
+  // ==========================================================
+
+  const cerrarSesion = () => {
+
+    localStorage.removeItem("access_token");
+    sessionStorage.removeItem("access_token");
+
+    setSesion(null);
+
+    setVistaActiva("Dashboard");
+    setMenuMovil(false);
+
+    setApiarios([]);
+    setColmenas([]);
+    setInspecciones([]);
+    setTratamientos([]);
+    setTransferencias([]);
+
+    setBusqueda("");
+    setColmenaQr(null);
+
+  };
 
 
   // ==========================================================
@@ -126,53 +238,52 @@ function App() {
   // ==========================================================
 
   const menu = [
-
     {
       nombre: "Dashboard",
       icono: LayoutDashboard,
     },
-
     {
       nombre: "Apiarios",
       icono: MapPinned,
     },
-
     {
       nombre: "Colmenas",
       icono: Boxes,
     },
-
     {
       nombre: "Inspecciones",
       icono: ClipboardCheck,
     },
-
     {
       nombre: "Tratamientos",
       icono: Pill,
     },
-
     {
       nombre: "Transferencias",
       icono: ArrowRightLeft,
     },
-
     {
       nombre: "QR",
       icono: QrCode,
     },
-
     {
       nombre: "Auditoría",
       icono: ShieldCheck,
+      soloAdmin: true,
     },
-
     {
       nombre: "Usuarios",
       icono: Users,
+      soloAdmin: true,
     },
-
   ];
+
+
+  const menuVisible = menu.filter(
+    (item) =>
+      !item.soloAdmin ||
+      sesion?.usuario?.rol === "ADMIN"
+  );
 
 
   const cambiarVista = (nombre) => {
@@ -183,6 +294,67 @@ function App() {
 
   };
 
+
+  // ==========================================================
+  // PANTALLA DE VERIFICACIÓN
+  // ==========================================================
+
+  if (verificandoSesion) {
+
+    return (
+      <div
+        className="
+          min-h-screen
+          flex
+          items-center
+          justify-center
+          bg-slate-100
+        "
+      >
+        <div className="text-center">
+
+          <RefreshCw
+            size={30}
+            className="
+              animate-spin
+              mx-auto
+              mb-3
+              text-amber-500
+            "
+          />
+
+          <p className="text-slate-500">
+            Verificando sesión...
+          </p>
+
+        </div>
+      </div>
+    );
+
+  }
+
+
+  // ==========================================================
+  // LOGIN
+  // ==========================================================
+
+  if (!sesion) {
+
+    return (
+      <Auth
+        onLogin={(datos) => {
+          setSesion(datos);
+          setVistaActiva("Dashboard");
+        }}
+      />
+    );
+
+  }
+
+
+  // ==========================================================
+  // APLICACIÓN
+  // ==========================================================
 
   return (
 
@@ -242,7 +414,6 @@ function App() {
             CP
           </div>
 
-
           <div>
 
             <p className="font-bold text-lg">
@@ -266,7 +437,7 @@ function App() {
           "
         >
 
-          {menu.map((item) => {
+          {menuVisible.map((item) => {
 
             const Icon = item.icono;
 
@@ -277,6 +448,7 @@ function App() {
 
               <button
                 key={item.nombre}
+                type="button"
                 onClick={() =>
                   cambiarVista(item.nombre)
                 }
@@ -322,7 +494,27 @@ function App() {
           "
         >
 
+          <div
+            className="
+              px-4
+              pb-4
+            "
+          >
+
+            <p className="text-sm font-semibold">
+              {sesion.usuario?.nombre || "Usuario"}
+            </p>
+
+            <p className="text-xs text-slate-400">
+              {sesion.usuario?.rol}
+            </p>
+
+          </div>
+
+
           <button
+            type="button"
+            onClick={cerrarSesion}
             className="
               w-full
               flex
@@ -350,7 +542,7 @@ function App() {
 
 
       {/* ======================================================
-          CONTENIDO
+          CONTENIDO PRINCIPAL
       ====================================================== */}
 
       <div
@@ -359,8 +551,6 @@ function App() {
           min-w-0
         "
       >
-
-        {/* HEADER */}
 
         <header
           className="
@@ -388,6 +578,7 @@ function App() {
           >
 
             <button
+              type="button"
               onClick={() =>
                 setMenuMovil(true)
               }
@@ -443,6 +634,7 @@ function App() {
           >
 
             <button
+              type="button"
               onClick={cargarDatos}
               className="
                 flex
@@ -503,7 +695,11 @@ function App() {
                   font-semibold
                 "
               >
-                Administrador
+                {sesion.usuario?.nombre || "Usuario"}
+              </p>
+
+              <p className="text-xs text-slate-500">
+                {sesion.usuario?.rol}
               </p>
 
             </div>
@@ -512,8 +708,6 @@ function App() {
 
         </header>
 
-
-        {/* ERROR */}
 
         {error && (
 
@@ -625,7 +819,7 @@ function App() {
 
             <VistaProtegida
               titulo="Auditoría"
-              descripcion="La auditoría está protegida para usuarios ADMIN. La conectaremos al iniciar sesión mediante JWT."
+              descripcion="Módulo administrativo de trazabilidad de acciones realizadas en el sistema."
               icono={ShieldCheck}
             />
 
@@ -636,7 +830,7 @@ function App() {
 
             <VistaProtegida
               titulo="Gestión de usuarios"
-              descripcion="Este módulo estará disponible para el usuario ADMIN después de conectar el Login del frontend."
+              descripcion="Administración de usuarios y roles del sistema."
               icono={Users}
             />
 
@@ -701,13 +895,12 @@ function App() {
 
 
               <button
+                type="button"
                 onClick={() =>
                   setMenuMovil(false)
                 }
               >
-
                 <X />
-
               </button>
 
             </div>
@@ -715,7 +908,7 @@ function App() {
 
             <div className="space-y-1">
 
-              {menu.map((item) => {
+              {menuVisible.map((item) => {
 
                 const Icon = item.icono;
 
@@ -723,6 +916,7 @@ function App() {
 
                   <button
                     key={item.nombre}
+                    type="button"
                     onClick={() =>
                       cambiarVista(item.nombre)
                     }
@@ -750,6 +944,31 @@ function App() {
               })}
 
             </div>
+
+
+            <button
+              type="button"
+              onClick={cerrarSesion}
+              className="
+                mt-8
+                w-full
+                flex
+                items-center
+                gap-3
+                px-4
+                py-3
+                rounded-xl
+                text-slate-400
+                hover:bg-slate-900
+                hover:text-white
+              "
+            >
+
+              <LogOut size={18} />
+
+              Cerrar sesión
+
+            </button>
 
           </div>
 
@@ -1724,6 +1943,7 @@ function VistaQR({
 
             <button
               key={colmena.id}
+              type="button"
               onClick={() =>
                 setColmenaQr(colmena)
               }
@@ -1751,6 +1971,7 @@ function VistaQR({
                   className="
                     text-xs
                     text-slate-500
+                    break-all
                   "
                 >
                   {colmena.codigo_qr}
@@ -1861,7 +2082,7 @@ function VistaQR({
 
 
 // ==========================================================
-// VISTA PROTEGIDA
+// VISTA ADMINISTRATIVA
 // ==========================================================
 
 function VistaProtegida({
@@ -1945,6 +2166,7 @@ function Tarjeta({
   return (
 
     <button
+      type="button"
       onClick={onClick}
       className="
         bg-white
