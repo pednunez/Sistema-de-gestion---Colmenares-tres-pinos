@@ -26,13 +26,6 @@ class LoginRequest(BaseModel):
 # RESPUESTA DEL LOGIN
 # ==========================================================
 
-class TokenResponse(BaseModel):
-
-    access_token: str
-
-    token_type: str = "bearer"
-
-
 # ==========================================================
 # INFORMACIÓN DEL USUARIO AUTENTICADO
 # ==========================================================
@@ -143,3 +136,7 @@ class RestablecerPasswordRequest(BaseModel):
 class MensajeResponse(BaseModel):
 
     mensaje: str
+
+class LoginResponse(BaseModel):
+    usuario: UsuarioAutenticado
+    csrf_token: str

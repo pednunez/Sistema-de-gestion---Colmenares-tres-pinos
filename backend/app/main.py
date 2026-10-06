@@ -2,7 +2,7 @@ from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.dependencies import obtener_usuario_actual, requerir_admin
-from app.database import probar_conexion
+from app.database import probar_conexion, settings
 
 from app.routers.apiarios import router as apiarios_router
 from app.routers.colmenas import router as colmenas_router
@@ -29,11 +29,7 @@ app = FastAPI(
 # ==========================================================
 
 app.add_middleware(CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-    ],
-    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1)(:\d+)?",
+    allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -97,3 +93,8 @@ def comprobar_database():
         "estado": "Conexion exitosa",
         "postgresql": version
     }
+
+@app.get("/health", tags=["Estado"])
+def health():
+    """Comprueba disponibilidad de la API sin exponer datos del servidor."""
+    return {"status": "ok"}

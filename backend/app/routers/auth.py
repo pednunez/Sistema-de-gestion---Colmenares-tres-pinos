@@ -1,4 +1,7 @@
 import logging
+import secrets
+from fastapi import Request, Response
+from sqlalchemy import update
 
 from fastapi import (
     APIRouter,
@@ -9,8 +12,8 @@ from fastapi import (
 from sqlalchemy.orm import Session
 
 from app.core.auth import crear_access_token
-from app.core.dependencies import obtener_usuario_actual
-from app.database import get_db
+from app.core.dependencies import obtener_usuario_actual, validar_origen
+from app.database import get_db, settings
 from app.models.usuario import Usuario
 
 from app.schemas.auth import (
@@ -18,7 +21,7 @@ from app.schemas.auth import (
     MensajeResponse,
     RestablecerPasswordRequest,
     SolicitarRecuperacionPasswordRequest,
-    TokenResponse,
+    LoginResponse,
     UsuarioAutenticado
 )
 
@@ -49,12 +52,15 @@ router = APIRouter(
 
 @router.post(
     "/login",
-    response_model=TokenResponse
+    response_model=LoginResponse
 )
 def login(
     datos: LoginRequest,
+    request: Request,
+    response: Response,
     db: Session = Depends(get_db)
 ):
+    validar_origen(request)
     usuario = auth_service.autenticar_usuario(
         db,
         datos.email,
@@ -67,16 +73,42 @@ def login(
             detail="Correo o contraseña incorrectos"
         )
 
+    csrf = secrets.token_urlsafe(32)
     token = crear_access_token(
         usuario_id=usuario.id,
         email=usuario.email,
-        rol=usuario.rol
+        rol=usuario.rol,
+        version_sesion=usuario.version_sesion,
+        csrf_token=csrf
     )
+    response.headers["Cache-Control"] = "no-store"
+    response.set_cookie(settings.SESSION_COOKIE_NAME, token,
+        max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60, path="/",
+        secure=settings.SESSION_COOKIE_SECURE, httponly=True,
+        samesite=settings.SESSION_COOKIE_SAMESITE)
+    return LoginResponse(usuario=UsuarioAutenticado(id=usuario.id, nombre=usuario.nombre,
+        email=usuario.email, rol=usuario.rol), csrf_token=csrf)
 
-    return TokenResponse(
-        access_token=token,
-        token_type="bearer"
-    )
+
+@router.get("/csrf")
+def obtener_csrf(request: Request, response: Response,
+                 usuario: Usuario = Depends(obtener_usuario_actual)):
+    response.headers["Cache-Control"] = "no-store"
+    return {"csrf_token": request.state.csrf_token}
+
+
+@router.post("/logout", response_model=MensajeResponse)
+def logout(response: Response, usuario: Usuario = Depends(obtener_usuario_actual),
+           db: Session = Depends(get_db)):
+    # Revoca todas las sesiones de esta cuenta, incluso copias de la cookie.
+    db.execute(update(Usuario).where(Usuario.id == usuario.id).values(
+        version_sesion=Usuario.version_sesion + 1))
+    db.commit()
+    response.delete_cookie(settings.SESSION_COOKIE_NAME, path="/",
+        secure=settings.SESSION_COOKIE_SECURE, httponly=True,
+        samesite=settings.SESSION_COOKIE_SAMESITE)
+    response.headers["Cache-Control"] = "no-store"
+    return MensajeResponse(mensaje="Todas las sesiones de la cuenta fueron cerradas.")
 
 
 # ==========================================================

@@ -9,7 +9,9 @@ from app.database import settings
 def crear_access_token(
     usuario_id: int,
     email: str,
-    rol: str
+    rol: str,
+    version_sesion: int = 0,
+    csrf_token: str = ""
 ) -> str:
 
     expiracion = datetime.now(timezone.utc) + timedelta(
@@ -20,7 +22,9 @@ def crear_access_token(
         "sub": str(usuario_id),
         "email": email,
         "rol": rol,
-        "exp": expiracion
+        "exp": expiracion,
+        "ver": version_sesion,
+        "csrf": csrf_token
     }
 
     token = jwt.encode(
@@ -38,7 +42,8 @@ def decodificar_access_token(token: str) -> dict | None:
         payload = jwt.decode(
             token,
             settings.JWT_SECRET_KEY,
-            algorithms=[settings.JWT_ALGORITHM]
+            algorithms=[settings.JWT_ALGORITHM],
+            options={"require": ["sub", "exp", "ver"]}
         )
 
         return payload

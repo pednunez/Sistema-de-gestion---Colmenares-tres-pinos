@@ -1,0 +1,1 @@
+ALTER TABLE public.usuarios ADD COLUMN IF NOT EXISTS version_sesion INTEGER NOT NULL DEFAULT 0;

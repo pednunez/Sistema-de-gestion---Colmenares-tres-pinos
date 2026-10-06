@@ -2,6 +2,7 @@ from datetime import datetime
 
 from sqlalchemy import (
     BigInteger,
+    Integer,
     Boolean,
     DateTime,
     String,
@@ -64,6 +65,8 @@ class Usuario(Base):
         Text,
         nullable=False
     )
+
+    version_sesion: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default=text("0"))
 
     # ======================================================
     # RF-03 - TOKEN DE RECUPERACIÓN

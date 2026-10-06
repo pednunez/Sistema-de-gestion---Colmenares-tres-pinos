@@ -373,6 +373,7 @@ def restablecer_password(
     # CAMBIAR CONTRASEÑA
     # ------------------------------------------------------
 
+    usuario.version_sesion += 1
     usuario.password_hash = (
         nuevo_hash
     )

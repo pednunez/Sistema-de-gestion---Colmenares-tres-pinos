@@ -1,4 +1,6 @@
 from pathlib import Path
+from typing import Literal
+from pydantic import model_validator
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import URL
@@ -56,6 +58,19 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
 
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
+    SESSION_COOKIE_NAME: str = "colmenares_session"
+    SESSION_COOKIE_SECURE: bool = True
+    SESSION_COOKIE_SAMESITE: Literal["lax", "strict", "none"] = "lax"
+    CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
+
+    @model_validator(mode="after")
+    def validar_cookie(self):
+        if self.SESSION_COOKIE_SAMESITE == "none" and not self.SESSION_COOKIE_SECURE:
+            raise ValueError("SameSite=None requiere Secure")
+        if "*" in self.CORS_ORIGINS:
+            raise ValueError("CORS requiere origenes explicitos")
+        return self
+
 
     # ------------------------------------------------------
     # ARCHIVO .env

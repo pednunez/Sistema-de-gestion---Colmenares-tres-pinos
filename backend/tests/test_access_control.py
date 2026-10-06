@@ -24,7 +24,7 @@ from app.models.usuario import Usuario
 class FakeSession:
     def __init__(self):
         self.user = SimpleNamespace(id=1, nombre='Test', email='test@example.invalid',
-                                    rol='APICULTOR', activo=True)
+                                    rol='APICULTOR', activo=True, version_sesion=0)
         self.queries = 0
 
     def scalar(self, query):
@@ -77,7 +77,7 @@ class AccessControlTests(unittest.TestCase):
         self.assertEqual(len(self.paths), 13)
 
     def token(self, expired=False):
-        return jwt.encode({'sub': '1', 'rol': 'ADMIN',
+        return jwt.encode({'sub': '1', 'rol': 'ADMIN', 'ver': 0,
                            'exp': datetime.now(timezone.utc) + timedelta(minutes=-1 if expired else 5)},
                           settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
 
