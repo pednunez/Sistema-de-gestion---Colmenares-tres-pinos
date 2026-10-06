@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.orm import Session
 
-from app.core.dependencies import obtener_usuario_actual
+from app.core.dependencies import obtener_usuario_actual, verificar_autor_o_admin
 from app.database import get_db
 from app.models.usuario import Usuario
 
@@ -192,6 +192,8 @@ def actualizar_inspeccion(
         )
 
     # Guardamos los datos ANTES de modificar
+    verificar_autor_o_admin(usuario_actual, inspeccion.usuario_id)
+
     datos_anteriores = inspeccion_a_dict(
         inspeccion
     )
@@ -287,6 +289,8 @@ def eliminar_inspeccion(
         )
 
     # Guardamos estado anterior
+    verificar_autor_o_admin(usuario_actual, inspeccion.usuario_id)
+
     datos_anteriores = inspeccion_a_dict(
         inspeccion
     )

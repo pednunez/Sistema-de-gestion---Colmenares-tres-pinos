@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.orm import Session
 
-from app.core.dependencies import obtener_usuario_actual
+from app.core.dependencies import obtener_usuario_actual, verificar_autor_o_admin
 from app.database import get_db
 from app.models.usuario import Usuario
 
@@ -222,6 +222,8 @@ def actualizar_tratamiento(
         )
 
     # Estado antes del cambio
+    verificar_autor_o_admin(usuario_actual, tratamiento.usuario_id)
+
     datos_anteriores = tratamiento_a_dict(
         tratamiento
     )
@@ -367,6 +369,8 @@ def cancelar_tratamiento(
         )
 
     # Datos antes de cancelar
+    verificar_autor_o_admin(usuario_actual, tratamiento.usuario_id)
+
     datos_anteriores = tratamiento_a_dict(
         tratamiento
     )

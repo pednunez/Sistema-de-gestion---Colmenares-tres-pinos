@@ -2,6 +2,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.apiario import Apiario
+from app.models.colmena import Colmena
 from app.schemas.apiario import ApiarioCreate, ApiarioUpdate
 
 
@@ -88,8 +89,28 @@ def eliminar_apiario(
 ):
     from datetime import datetime, timezone
 
+    # El alta/traslado de colmenas bloquea esta misma fila hasta el commit.
+    apiario = db.scalar(
+        select(Apiario)
+        .where(Apiario.id == apiario.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if apiario is None or not apiario.activo:
+        db.rollback()
+        raise ValueError("El apiario ya no está activo")
+    tiene_colmenas = db.scalar(
+        select(Colmena.id)
+        .where(Colmena.apiario_id == apiario.id, Colmena.activo == True)
+        .limit(1)
+    )
+    if tiene_colmenas is not None:
+        db.rollback()
+        raise ValueError("No se puede dar de baja un apiario con colmenas activas")
+
     apiario.activo = False
     apiario.fecha_eliminacion = datetime.now(timezone.utc)
+    apiario.fecha_actualizacion = apiario.fecha_eliminacion
 
     db.commit()
 

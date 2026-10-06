@@ -13,13 +13,23 @@ from app.schemas.colmena import ColmenaCreate, ColmenaUpdate
 # LISTAR COLMENAS ACTIVAS
 # ==========================================================
 
-def listar_colmenas(db: Session):
+def listar_colmenas(
+    db: Session,
+    apiario_id: int | None = None,
+    offset: int = 0,
+    limit: int | None = None
+):
     consulta = (
         select(Colmena)
         .where(Colmena.activo == True)
         .order_by(Colmena.id)
     )
 
+    if apiario_id is not None:
+        consulta = consulta.where(Colmena.apiario_id == apiario_id)
+    consulta = consulta.offset(offset)
+    if limit is not None:
+        consulta = consulta.limit(limit)
     return db.scalars(consulta).all()
 
 
@@ -48,8 +58,7 @@ def obtener_colmena_por_codigo(
     codigo: str
 ):
     consulta = select(Colmena).where(
-        Colmena.codigo == codigo,
-        Colmena.activo == True
+        Colmena.codigo == codigo
     )
 
     return db.scalar(consulta)
@@ -79,9 +88,12 @@ def obtener_apiario_activo(
     db: Session,
     apiario_id: int
 ):
-    consulta = select(Apiario).where(
-        Apiario.id == apiario_id,
-        Apiario.activo == True
+    # Coordina altas y traslados con la baja del apiario.
+    consulta = (
+        select(Apiario)
+        .where(Apiario.id == apiario_id, Apiario.activo == True)
+        .with_for_update()
+        .execution_options(populate_existing=True)
     )
 
     return db.scalar(consulta)

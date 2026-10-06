@@ -3,11 +3,12 @@ from uuid import UUID
 
 import qrcode
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 
-from app.core.dependencies import obtener_usuario_actual
+from app.core.dependencies import requerir_admin
 from app.database import get_db
 from app.models.usuario import Usuario
 
@@ -64,9 +65,15 @@ def colmena_a_dict(colmena):
     response_model=list[ColmenaResponse]
 )
 def listar_colmenas(
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    apiario_id: int | None = Query(default=None, gt=0),
+    offset: int = Query(default=0, ge=0),
+    limit: int | None = Query(default=None, ge=1, le=500)
 ):
-    return colmena_service.listar_colmenas(db)
+    # Sin parametros conserva la lista completa que consume el frontend actual.
+    return colmena_service.listar_colmenas(
+        db, apiario_id=apiario_id, offset=offset, limit=limit
+    )
 
 
 # ==========================================================
@@ -205,7 +212,7 @@ def obtener_colmena(
 def crear_colmena(
     datos: ColmenaCreate,
     db: Session = Depends(get_db),
-    usuario: Usuario = Depends(obtener_usuario_actual)
+    usuario: Usuario = Depends(requerir_admin)
 ):
 
     apiario = colmena_service.obtener_apiario_activo(
@@ -215,7 +222,7 @@ def crear_colmena(
 
     if apiario is None:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="El apiario indicado no existe o está inactivo"
         )
 
@@ -230,10 +237,16 @@ def crear_colmena(
             detail="Ya existe una colmena con ese código"
         )
 
-    colmena = colmena_service.crear_colmena(
-        db,
-        datos
-    )
+    try:
+        colmena = colmena_service.crear_colmena(db, datos)
+    except IntegrityError as error:
+        db.rollback()
+        if getattr(error.orig, "sqlstate", None) != "23505":
+            raise
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Ya existe una colmena con ese código o identificador"
+        ) from error
 
     auditoria_service.registrar_auditoria(
         db,
@@ -262,7 +275,7 @@ def actualizar_colmena(
     colmena_id: int,
     datos: ColmenaUpdate,
     db: Session = Depends(get_db),
-    usuario: Usuario = Depends(obtener_usuario_actual)
+    usuario: Usuario = Depends(requerir_admin)
 ):
 
     colmena = colmena_service.obtener_colmena(
@@ -287,7 +300,7 @@ def actualizar_colmena(
 
         if apiario is None:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="El apiario indicado no existe o está inactivo"
             )
 
@@ -307,11 +320,16 @@ def actualizar_colmena(
                 detail="Ya existe una colmena con ese código"
             )
 
-    colmena_actualizada = colmena_service.actualizar_colmena(
-        db,
-        colmena,
-        datos
-    )
+    try:
+        colmena_actualizada = colmena_service.actualizar_colmena(db, colmena, datos)
+    except IntegrityError as error:
+        db.rollback()
+        if getattr(error.orig, "sqlstate", None) != "23505":
+            raise
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Ya existe una colmena con ese código o identificador"
+        ) from error
 
     auditoria_service.registrar_auditoria(
         db,
@@ -341,7 +359,7 @@ def actualizar_colmena(
 def eliminar_colmena(
     colmena_id: int,
     db: Session = Depends(get_db),
-    usuario: Usuario = Depends(obtener_usuario_actual)
+    usuario: Usuario = Depends(requerir_admin)
 ):
 
     colmena = colmena_service.obtener_colmena(

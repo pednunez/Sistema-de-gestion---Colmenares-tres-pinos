@@ -2,7 +2,7 @@ from datetime import date, datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 # ==========================================================
@@ -73,6 +73,13 @@ class ColmenaCreate(ColmenaBase):
 # ==========================================================
 
 class ColmenaUpdate(BaseModel):
+
+    @model_validator(mode="after")
+    def validar_campos_obligatorios(self):
+        for campo in ("apiario_id", "codigo", "estado", "cantidad_marcos"):
+            if campo in self.model_fields_set and getattr(self, campo) is None:
+                raise ValueError(f"{campo} no puede ser nulo")
+        return self
 
     apiario_id: int | None = Field(
         default=None,

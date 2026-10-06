@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.core.dependencies import obtener_usuario_actual
+from app.core.dependencies import requerir_admin
 from app.database import get_db
 from app.models.usuario import Usuario
 from app.schemas.apiario import (
@@ -86,7 +86,7 @@ def obtener_apiario(
 def crear_apiario(
     datos: ApiarioCreate,
     db: Session = Depends(get_db),
-    usuario: Usuario = Depends(obtener_usuario_actual)
+    usuario: Usuario = Depends(requerir_admin)
 ):
     apiario = apiario_service.crear_apiario(
         db,
@@ -120,7 +120,7 @@ def actualizar_apiario(
     apiario_id: int,
     datos: ApiarioUpdate,
     db: Session = Depends(get_db),
-    usuario: Usuario = Depends(obtener_usuario_actual)
+    usuario: Usuario = Depends(requerir_admin)
 ):
     apiario = apiario_service.obtener_apiario(
         db,
@@ -167,7 +167,7 @@ def actualizar_apiario(
 def eliminar_apiario(
     apiario_id: int,
     db: Session = Depends(get_db),
-    usuario: Usuario = Depends(obtener_usuario_actual)
+    usuario: Usuario = Depends(requerir_admin)
 ):
     apiario = apiario_service.obtener_apiario(
         db,
@@ -182,10 +182,13 @@ def eliminar_apiario(
 
     datos_anteriores = apiario_a_dict(apiario)
 
-    apiario_eliminado = apiario_service.eliminar_apiario(
-        db,
-        apiario
-    )
+    try:
+        apiario_eliminado = apiario_service.eliminar_apiario(db, apiario)
+    except ValueError as error:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=str(error)
+        ) from error
 
     auditoria_service.registrar_auditoria(
         db,
