@@ -103,6 +103,25 @@ def crear_inspeccion(
     db: Session,
     datos: InspeccionCreate
 ):
+
+    # ------------------------------------------------------
+    # VALIDAR QUE LA COLMENA EXISTA Y ESTÉ ACTIVA
+    # ------------------------------------------------------
+
+    colmena = obtener_colmena_activa(
+        db,
+        datos.colmena_id
+    )
+
+    if colmena is None:
+        raise ValueError(
+            "La colmena indicada no existe o está inactiva"
+        )
+
+    # ------------------------------------------------------
+    # CREAR INSPECCIÓN
+    # ------------------------------------------------------
+
     inspeccion = Inspeccion(
 
         # --------------------------------------------------
@@ -110,6 +129,7 @@ def crear_inspeccion(
         # --------------------------------------------------
 
         colmena_id=datos.colmena_id,
+
         usuario_id=datos.usuario_id,
 
         # --------------------------------------------------
@@ -137,12 +157,34 @@ def crear_inspeccion(
         cantidad_marcos=datos.cantidad_marcos,
 
         # --------------------------------------------------
+        # RF-27 - MIEL
+        # --------------------------------------------------
+
+        miel=datos.miel,
+
+        # --------------------------------------------------
+        # RF-28 - ALIMENTACIÓN SUMINISTRADA
+        # --------------------------------------------------
+
+        alimentacion_suministrada=(
+            datos.alimentacion_suministrada
+        ),
+
+        # --------------------------------------------------
+        # RF-31 - POSTURA
+        # --------------------------------------------------
+
+        postura=datos.postura,
+
+        # --------------------------------------------------
         # ESTADO SANITARIO
         # --------------------------------------------------
 
         signos_enfermedad=datos.signos_enfermedad,
 
-        enfermedad_observada=datos.enfermedad_observada,
+        enfermedad_observada=(
+            datos.enfermedad_observada
+        ),
 
         # --------------------------------------------------
         # OBSERVACIONES
@@ -151,11 +193,70 @@ def crear_inspeccion(
         observaciones=datos.observaciones
     )
 
+    # ------------------------------------------------------
+    # ACTUALIZAR CANTIDAD ACTUAL DE MARCOS DE LA COLMENA
+    # ------------------------------------------------------
+    #
+    # Si el apicultor registró la cantidad de marcos durante
+    # una NUEVA inspección, ese número representa el estado
+    # actual observado de la colmena.
+    #
+    # Ejemplo:
+    #
+    # Antes:
+    # Colmena C-001 -> 10 marcos
+    #
+    # Nueva inspección:
+    # cantidad_marcos = 8
+    #
+    # Después:
+    # Colmena C-001 -> 8 marcos actuales
+    #
+    # La inspección conserva igualmente el valor 8 como
+    # registro histórico.
+    # ------------------------------------------------------
+
+    if datos.cantidad_marcos is not None:
+
+        colmena.cantidad_marcos = (
+            datos.cantidad_marcos
+        )
+
+        colmena.fecha_actualizacion = (
+            datetime.now(
+                timezone.utc
+            )
+        )
+
+    # ------------------------------------------------------
+    # AGREGAR INSPECCIÓN
+    # ------------------------------------------------------
+
     db.add(
         inspeccion
     )
 
-    db.commit()
+    # ------------------------------------------------------
+    # GUARDAR TODO EN LA MISMA TRANSACCIÓN
+    # ------------------------------------------------------
+    #
+    # Se guarda:
+    #
+    # 1. La nueva inspección.
+    # 2. La cantidad actual de marcos de la colmena.
+    #
+    # Si ocurre un error, rollback revierte ambos cambios.
+    # ------------------------------------------------------
+
+    try:
+
+        db.commit()
+
+    except Exception:
+
+        db.rollback()
+
+        raise
 
     db.refresh(
         inspeccion
@@ -173,6 +274,7 @@ def actualizar_inspeccion(
     inspeccion: Inspeccion,
     datos: InspeccionUpdate
 ):
+
     # ------------------------------------------------------
     # SOLO TOMAR LOS CAMPOS ENVIADOS
     # ------------------------------------------------------
@@ -185,8 +287,15 @@ def actualizar_inspeccion(
     # ACTUALIZAR CAMPOS DINÁMICAMENTE
     # ------------------------------------------------------
     #
-    # Esto también permite actualizar cantidad_marcos
-    # automáticamente porque ya existe en InspeccionUpdate.
+    # Como los campos:
+    #
+    # cantidad_marcos
+    # miel
+    # alimentacion_suministrada
+    # postura
+    #
+    # ya existen en InspeccionUpdate, también serán
+    # actualizados automáticamente cuando sean enviados.
     # ------------------------------------------------------
 
     for campo, valor in datos_actualizados.items():
@@ -198,6 +307,16 @@ def actualizar_inspeccion(
         )
 
     # ------------------------------------------------------
+    # IMPORTANTE:
+    #
+    # NO actualizamos aquí colmena.cantidad_marcos.
+    #
+    # Una inspección que se modifica puede ser una
+    # inspección histórica y no necesariamente representa
+    # el estado actual de la colmena.
+    # ------------------------------------------------------
+
+    # ------------------------------------------------------
     # ACTUALIZAR FECHA DE MODIFICACIÓN
     # ------------------------------------------------------
 
@@ -207,7 +326,19 @@ def actualizar_inspeccion(
         )
     )
 
-    db.commit()
+    # ------------------------------------------------------
+    # GUARDAR CAMBIOS
+    # ------------------------------------------------------
+
+    try:
+
+        db.commit()
+
+    except Exception:
+
+        db.rollback()
+
+        raise
 
     db.refresh(
         inspeccion
@@ -229,6 +360,15 @@ def eliminar_inspeccion(
     db: Session,
     inspeccion: Inspeccion
 ):
+
+    # ------------------------------------------------------
+    # FECHA ACTUAL
+    # ------------------------------------------------------
+
+    ahora = datetime.now(
+        timezone.utc
+    )
+
     # ------------------------------------------------------
     # BAJA LÓGICA
     # ------------------------------------------------------
@@ -239,23 +379,27 @@ def eliminar_inspeccion(
     # FECHA DE ELIMINACIÓN
     # ------------------------------------------------------
 
-    inspeccion.fecha_eliminacion = (
-        datetime.now(
-            timezone.utc
-        )
-    )
+    inspeccion.fecha_eliminacion = ahora
 
     # ------------------------------------------------------
     # FECHA DE ÚLTIMA ACTUALIZACIÓN
     # ------------------------------------------------------
 
-    inspeccion.fecha_actualizacion = (
-        datetime.now(
-            timezone.utc
-        )
-    )
+    inspeccion.fecha_actualizacion = ahora
 
-    db.commit()
+    # ------------------------------------------------------
+    # GUARDAR CAMBIOS
+    # ------------------------------------------------------
+
+    try:
+
+        db.commit()
+
+    except Exception:
+
+        db.rollback()
+
+        raise
 
     db.refresh(
         inspeccion

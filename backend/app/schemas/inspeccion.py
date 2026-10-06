@@ -100,6 +100,61 @@ class InspeccionBase(BaseModel):
     )
 
     # ------------------------------------------------------
+    # RF-27 - MIEL
+    # ------------------------------------------------------
+    #
+    # Registra la información de miel observada durante
+    # la inspección.
+    #
+    # Por el momento se utiliza texto porque la escala
+    # definitiva todavía no está cerrada.
+    #
+    # max_length=50 evita valores excesivamente largos.
+    # ------------------------------------------------------
+
+    miel: str | None = Field(
+        default=None,
+        max_length=50
+    )
+
+    # ------------------------------------------------------
+    # RF-28 - ALIMENTACIÓN SUMINISTRADA
+    # ------------------------------------------------------
+    #
+    # Permite registrar la alimentación entregada a la
+    # colmena durante la inspección.
+    #
+    # Ejemplos:
+    #
+    # "Jarabe"
+    # "Pasta proteica"
+    # "Alimento suplementario"
+    # "No suministrada"
+    #
+    # Se mantiene como texto porque todavía no tenemos
+    # una lista cerrada de tipos de alimentación.
+    # ------------------------------------------------------
+
+    alimentacion_suministrada: str | None = Field(
+        default=None,
+        max_length=500
+    )
+
+    # ------------------------------------------------------
+    # RF-31 - POSTURA
+    # ------------------------------------------------------
+    #
+    # True  -> se observó postura
+    # False -> no se observó postura
+    # None  -> no fue registrada
+    #
+    # Se deja opcional para mantener compatibilidad con
+    # las inspecciones antiguas.
+    # ------------------------------------------------------
+
+    postura: bool | None = None
+
+    # ------------------------------------------------------
     # SIGNOS DE ENFERMEDAD
     # ------------------------------------------------------
 
@@ -132,13 +187,33 @@ class InspeccionCreate(InspeccionBase):
 
 class InspeccionUpdate(BaseModel):
 
+    # ------------------------------------------------------
+    # ESTADO GENERAL
+    # ------------------------------------------------------
+
     estado_general: EstadoGeneral | None = None
+
+    # ------------------------------------------------------
+    # REINA OBSERVADA
+    # ------------------------------------------------------
 
     reina_observada: bool | None = None
 
+    # ------------------------------------------------------
+    # PRESENCIA DE CRÍA
+    # ------------------------------------------------------
+
     presencia_cria: bool | None = None
 
+    # ------------------------------------------------------
+    # NIVEL DE POBLACIÓN
+    # ------------------------------------------------------
+
     nivel_poblacion: Nivel | None = None
+
+    # ------------------------------------------------------
+    # RESERVAS DE ALIMENTO
+    # ------------------------------------------------------
 
     reservas_alimento: Nivel | None = None
 
@@ -151,9 +226,45 @@ class InspeccionUpdate(BaseModel):
         ge=0
     )
 
+    # ------------------------------------------------------
+    # RF-27 - ACTUALIZAR MIEL
+    # ------------------------------------------------------
+
+    miel: str | None = Field(
+        default=None,
+        max_length=50
+    )
+
+    # ------------------------------------------------------
+    # RF-28 - ACTUALIZAR ALIMENTACIÓN SUMINISTRADA
+    # ------------------------------------------------------
+
+    alimentacion_suministrada: str | None = Field(
+        default=None,
+        max_length=500
+    )
+
+    # ------------------------------------------------------
+    # RF-31 - ACTUALIZAR POSTURA
+    # ------------------------------------------------------
+
+    postura: bool | None = None
+
+    # ------------------------------------------------------
+    # SIGNOS DE ENFERMEDAD
+    # ------------------------------------------------------
+
     signos_enfermedad: bool | None = None
 
+    # ------------------------------------------------------
+    # ENFERMEDAD OBSERVADA
+    # ------------------------------------------------------
+
     enfermedad_observada: str | None = None
+
+    # ------------------------------------------------------
+    # OBSERVACIONES
+    # ------------------------------------------------------
 
     observaciones: str | None = None
 

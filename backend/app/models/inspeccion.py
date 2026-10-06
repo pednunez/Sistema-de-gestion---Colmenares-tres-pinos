@@ -67,13 +67,6 @@ class Inspeccion(Base):
     # ======================================================
     # ESTADO GENERAL
     # ======================================================
-    #
-    # Valores que actualmente maneja el schema:
-    #
-    # BUENO
-    # REGULAR
-    # CRITICO
-    # ======================================================
 
     estado_general: Mapped[str | None] = mapped_column(
         String(20),
@@ -101,13 +94,6 @@ class Inspeccion(Base):
     # ======================================================
     # NIVEL DE POBLACIÓN
     # ======================================================
-    #
-    # Actualmente:
-    #
-    # BAJO
-    # MEDIO
-    # ALTO
-    # ======================================================
 
     nivel_poblacion: Mapped[str | None] = mapped_column(
         String(20),
@@ -127,32 +113,67 @@ class Inspeccion(Base):
     # CANTIDAD DE MARCOS OBSERVADOS
     # ======================================================
     #
-    # RF-25 / RF-40 / RF-41
-    #
     # Guarda cuántos marcos tenía la colmena al momento
     # exacto de realizar esta inspección.
     #
-    # Ejemplo:
-    #
-    # 06-10-2026 -> 10 marcos
-    # 15-10-2026 -> 8 marcos
-    # 22-10-2026 -> 11 marcos
-    #
-    # Así podemos conservar el historial aunque la cantidad
-    # actual de marcos de la colmena cambie posteriormente.
-    #
-    # nullable=True:
-    #
-    # Lo dejamos opcional porque ya existen inspecciones
-    # antiguas en la base de datos que fueron creadas antes
-    # de implementar este campo.
-    #
-    # De esta manera esas inspecciones podrán tener NULL,
-    # en lugar de inventar que tenían 0 marcos.
+    # nullable=True porque existen inspecciones antiguas
+    # donde todavía no se registraba este dato.
     # ======================================================
 
     cantidad_marcos: Mapped[int | None] = mapped_column(
         Integer,
+        nullable=True
+    )
+
+    # ======================================================
+    # RF-27 - MIEL
+    # ======================================================
+    #
+    # Permite registrar información relacionada con la
+    # presencia o nivel de miel observado en la inspección.
+    #
+    # Se deja como texto para permitir definir posteriormente
+    # la escala exacta sin modificar nuevamente la estructura.
+    # ======================================================
+
+    miel: Mapped[str | None] = mapped_column(
+        String(50),
+        nullable=True
+    )
+
+    # ======================================================
+    # RF-28 - ALIMENTACIÓN SUMINISTRADA
+    # ======================================================
+    #
+    # Registra si durante la inspección se suministró
+    # alimentación y permite indicar el tipo o detalle.
+    #
+    # Ejemplos:
+    # - Jarabe
+    # - Pasta proteica
+    # - Alimento suplementario
+    # - No suministrada
+    # ======================================================
+
+    alimentacion_suministrada: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True
+    )
+
+    # ======================================================
+    # RF-31 - POSTURA
+    # ======================================================
+    #
+    # True  -> se observó postura
+    # False -> no se observó postura
+    # None  -> no fue registrada
+    #
+    # Se mantiene nullable=True para compatibilidad con
+    # inspecciones históricas.
+    # ======================================================
+
+    postura: Mapped[bool | None] = mapped_column(
+        Boolean,
         nullable=True
     )
 
