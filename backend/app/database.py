@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import URL
 from sqlalchemy.orm import sessionmaker, declarative_base
@@ -5,12 +7,32 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 # ==========================================================
+# RUTA BASE DEL BACKEND
+# ==========================================================
+#
+# __file__ apunta a:
+# backend/app/database.py
+#
+# parent       -> backend/app
+# parent.parent -> backend
+#
+# Por eso BASE_DIR queda apuntando directamente a la carpeta:
+# backend/
+# ==========================================================
+
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+
+# ==========================================================
 # CONFIGURACIÓN DEL SISTEMA
 # ==========================================================
-# Esta clase obtiene las variables almacenadas en el archivo
-# .env ubicado dentro de la carpeta backend.
 #
-# Aquí NO escribimos contraseñas ni claves secretas directamente.
+# Esta clase obtiene las variables almacenadas en:
+#
+# backend/.env
+#
+# Esto evita problemas aunque FastAPI se ejecute desde
+# la carpeta raíz del proyecto.
 # ==========================================================
 
 class Settings(BaseSettings):
@@ -25,18 +47,8 @@ class Settings(BaseSettings):
     DB_PORT: int
     DB_NAME: str
 
-
     # ------------------------------------------------------
     # CONFIGURACIÓN JWT
-    # ------------------------------------------------------
-    # JWT_SECRET_KEY:
-    # Clave privada utilizada para firmar los tokens.
-    #
-    # JWT_ALGORITHM:
-    # Algoritmo utilizado para firmar el token.
-    #
-    # ACCESS_TOKEN_EXPIRE_MINUTES:
-    # Tiempo que permanecerá válido el token.
     # ------------------------------------------------------
 
     JWT_SECRET_KEY: str
@@ -45,13 +57,23 @@ class Settings(BaseSettings):
 
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
 
-
     # ------------------------------------------------------
-    # CONFIGURACIÓN DEL ARCHIVO .env
+    # ARCHIVO .env
+    # ------------------------------------------------------
+    #
+    # Aquí ya no usamos:
+    #
+    # env_file=".env"
+    #
+    # porque eso depende de la carpeta desde la que
+    # se ejecuta Python.
+    #
+    # Ahora usamos una ruta absoluta construida desde
+    # la ubicación real de database.py.
     # ------------------------------------------------------
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=BASE_DIR / ".env",
         env_file_encoding="utf-8"
     )
 
@@ -66,31 +88,12 @@ settings = Settings()
 # ==========================================================
 # BASE PARA LOS MODELOS SQLALCHEMY
 # ==========================================================
-# Todos nuestros modelos utilizan esta Base:
-#
-# class Apiario(Base)
-# class Colmena(Base)
-# class Usuario(Base)
-# class Inspeccion(Base)
-# etc.
-#
-# Esto permite que SQLAlchemy reconozca nuestras clases ORM.
-# ==========================================================
 
 Base = declarative_base()
 
 
 # ==========================================================
 # URL DE CONEXIÓN A POSTGRESQL
-# ==========================================================
-# Construimos la conexión utilizando las variables del .env.
-#
-# Ejemplo conceptual:
-#
-# postgresql+psycopg://usuario:clave@localhost:5432/base
-#
-# Utilizamos URL.create() para manejar de manera segura
-# caracteres especiales que pueda contener la contraseña.
 # ==========================================================
 
 DATABASE_URL = URL.create(
@@ -106,12 +109,6 @@ DATABASE_URL = URL.create(
 # ==========================================================
 # MOTOR DE CONEXIÓN
 # ==========================================================
-# engine administra las conexiones entre FastAPI/SQLAlchemy
-# y PostgreSQL.
-#
-# pool_pre_ping=True permite comprobar si una conexión sigue
-# activa antes de utilizarla.
-# ==========================================================
 
 engine = create_engine(
     DATABASE_URL,
@@ -121,16 +118,6 @@ engine = create_engine(
 
 # ==========================================================
 # SESIONES DE BASE DE DATOS
-# ==========================================================
-# SessionLocal crea sesiones independientes para realizar
-# operaciones sobre PostgreSQL.
-#
-# Por ejemplo:
-#
-# SELECT
-# INSERT
-# UPDATE
-# DELETE
 # ==========================================================
 
 SessionLocal = sessionmaker(
@@ -142,13 +129,6 @@ SessionLocal = sessionmaker(
 
 # ==========================================================
 # DEPENDENCIA DE BASE DE DATOS PARA FASTAPI
-# ==========================================================
-# Esta función será utilizada en nuestros routers:
-#
-# db: Session = Depends(get_db)
-#
-# Abre una sesión para cada petición y la cierra
-# automáticamente al finalizar.
 # ==========================================================
 
 def get_db():
@@ -164,17 +144,6 @@ def get_db():
 
 # ==========================================================
 # PRUEBA DE CONEXIÓN
-# ==========================================================
-# Esta función es la que actualmente utilizamos en:
-#
-# GET /database
-#
-# Ejecuta:
-#
-# SELECT version();
-#
-# para comprobar que FastAPI puede comunicarse
-# correctamente con PostgreSQL.
 # ==========================================================
 
 def probar_conexion():

@@ -9,6 +9,10 @@ from app.models.colmena import Colmena
 from app.schemas.colmena import ColmenaCreate, ColmenaUpdate
 
 
+# ==========================================================
+# LISTAR COLMENAS ACTIVAS
+# ==========================================================
+
 def listar_colmenas(db: Session):
     consulta = (
         select(Colmena)
@@ -19,7 +23,14 @@ def listar_colmenas(db: Session):
     return db.scalars(consulta).all()
 
 
-def obtener_colmena(db: Session, colmena_id: int):
+# ==========================================================
+# OBTENER COLMENA POR ID
+# ==========================================================
+
+def obtener_colmena(
+    db: Session,
+    colmena_id: int
+):
     consulta = select(Colmena).where(
         Colmena.id == colmena_id,
         Colmena.activo == True
@@ -28,7 +39,14 @@ def obtener_colmena(db: Session, colmena_id: int):
     return db.scalar(consulta)
 
 
-def obtener_colmena_por_codigo(db: Session, codigo: str):
+# ==========================================================
+# OBTENER COLMENA POR CÓDIGO
+# ==========================================================
+
+def obtener_colmena_por_codigo(
+    db: Session,
+    codigo: str
+):
     consulta = select(Colmena).where(
         Colmena.codigo == codigo,
         Colmena.activo == True
@@ -53,7 +71,14 @@ def obtener_colmena_por_qr(
     return db.scalar(consulta)
 
 
-def obtener_apiario_activo(db: Session, apiario_id: int):
+# ==========================================================
+# OBTENER APIARIO ACTIVO
+# ==========================================================
+
+def obtener_apiario_activo(
+    db: Session,
+    apiario_id: int
+):
     consulta = select(Apiario).where(
         Apiario.id == apiario_id,
         Apiario.activo == True
@@ -61,6 +86,10 @@ def obtener_apiario_activo(db: Session, apiario_id: int):
 
     return db.scalar(consulta)
 
+
+# ==========================================================
+# CREAR COLMENA
+# ==========================================================
 
 def crear_colmena(
     db: Session,
@@ -71,6 +100,10 @@ def crear_colmena(
         codigo=datos.codigo,
         estado=datos.estado,
         fecha_instalacion=datos.fecha_instalacion,
+
+        # RF-25 / RF-40 / RF-41
+        cantidad_marcos=datos.cantidad_marcos,
+
         observaciones=datos.observaciones
     )
 
@@ -80,6 +113,10 @@ def crear_colmena(
 
     return colmena
 
+
+# ==========================================================
+# ACTUALIZAR COLMENA
+# ==========================================================
 
 def actualizar_colmena(
     db: Session,
@@ -93,11 +130,19 @@ def actualizar_colmena(
     for campo, valor in datos_actualizados.items():
         setattr(colmena, campo, valor)
 
+    colmena.fecha_actualizacion = datetime.now(
+        timezone.utc
+    )
+
     db.commit()
     db.refresh(colmena)
 
     return colmena
 
+
+# ==========================================================
+# ELIMINAR / DAR DE BAJA COLMENA
+# ==========================================================
 
 def eliminar_colmena(
     db: Session,
@@ -105,7 +150,14 @@ def eliminar_colmena(
 ):
     colmena.activo = False
     colmena.estado = "BAJA"
-    colmena.fecha_eliminacion = datetime.now(timezone.utc)
+
+    colmena.fecha_eliminacion = datetime.now(
+        timezone.utc
+    )
+
+    colmena.fecha_actualizacion = datetime.now(
+        timezone.utc
+    )
 
     db.commit()
     db.refresh(colmena)

@@ -33,7 +33,8 @@ router = APIRouter(
 
 def valor_json(valor):
     """
-    Convierte tipos especiales a valores compatibles con JSON.
+    Convierte tipos especiales de Python a valores
+    compatibles con JSON para almacenarlos en auditoría.
     """
 
     if isinstance(valor, (datetime, date)):
@@ -53,15 +54,17 @@ def valor_json(valor):
 
 def transferencia_a_dict(transferencia):
     """
-    Convierte automáticamente todas las columnas
-    de una transferencia a un diccionario.
+    Convierte las columnas de una transferencia
+    SQLAlchemy a un diccionario compatible con JSON.
     """
 
     return {
         columna.key: valor_json(
             getattr(transferencia, columna.key)
         )
-        for columna in sa_inspect(transferencia).mapper.column_attrs
+        for columna in sa_inspect(
+            transferencia
+        ).mapper.column_attrs
     }
 
 
@@ -76,7 +79,9 @@ def transferencia_a_dict(transferencia):
 def listar_transferencias(
     db: Session = Depends(get_db)
 ):
-    return transferencia_service.listar_transferencias(db)
+    return transferencia_service.listar_transferencias(
+        db
+    )
 
 
 # ==========================================================
@@ -91,9 +96,11 @@ def obtener_transferencia(
     transferencia_id: int,
     db: Session = Depends(get_db)
 ):
-    transferencia = transferencia_service.obtener_transferencia(
-        db,
-        transferencia_id
+    transferencia = (
+        transferencia_service.obtener_transferencia(
+            db,
+            transferencia_id
+        )
     )
 
     if transferencia is None:
@@ -117,51 +124,120 @@ def obtener_transferencia(
 def crear_transferencia(
     datos: TransferenciaMarcoCreate,
     db: Session = Depends(get_db),
-    usuario_actual: Usuario = Depends(obtener_usuario_actual)
+    usuario_actual: Usuario = Depends(
+        obtener_usuario_actual
+    )
 ):
 
     # ------------------------------------------------------
-    # VALIDAR QUE ORIGEN Y DESTINO SEAN DIFERENTES
+    # VALIDAR ORIGEN Y DESTINO DIFERENTES
     # ------------------------------------------------------
 
-    if datos.colmena_origen_id == datos.colmena_destino_id:
+    if (
+        datos.colmena_origen_id
+        == datos.colmena_destino_id
+    ):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="La colmena de origen y destino deben ser diferentes"
+            detail=(
+                "La colmena de origen y destino "
+                "deben ser diferentes"
+            )
+        )
+
+    # ------------------------------------------------------
+    # VALIDAR CANTIDAD DE MARCOS
+    # ------------------------------------------------------
+
+    if datos.cantidad_marcos <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "La cantidad de marcos debe ser "
+                "mayor que cero"
+            )
         )
 
     # ------------------------------------------------------
     # VALIDAR COLMENA DE ORIGEN
     # ------------------------------------------------------
 
-    colmena_origen = transferencia_service.obtener_colmena_activa(
-        db,
-        datos.colmena_origen_id
+    colmena_origen = (
+        transferencia_service.obtener_colmena_activa(
+            db,
+            datos.colmena_origen_id
+        )
     )
 
     if colmena_origen is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="La colmena de origen no existe o está inactiva"
+            detail=(
+                "La colmena de origen no existe "
+                "o está inactiva"
+            )
         )
 
     # ------------------------------------------------------
     # VALIDAR COLMENA DE DESTINO
     # ------------------------------------------------------
 
-    colmena_destino = transferencia_service.obtener_colmena_activa(
-        db,
-        datos.colmena_destino_id
+    colmena_destino = (
+        transferencia_service.obtener_colmena_activa(
+            db,
+            datos.colmena_destino_id
+        )
     )
 
     if colmena_destino is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="La colmena de destino no existe o está inactiva"
+            detail=(
+                "La colmena de destino no existe "
+                "o está inactiva"
+            )
         )
 
     # ------------------------------------------------------
-    # USUARIO REAL OBTENIDO DESDE JWT
+    # VALIDAR MARCOS DISPONIBLES
+    # ------------------------------------------------------
+    #
+    # Esta primera validación permite entregar un mensaje
+    # claro al usuario antes de intentar la transferencia.
+    #
+    # El servicio vuelve a validar la disponibilidad,
+    # porque es allí donde se realiza la operación real.
+    # ------------------------------------------------------
+
+    marcos_disponibles = (
+        colmena_origen.cantidad_marcos
+        if colmena_origen.cantidad_marcos is not None
+        else 0
+    )
+
+    if (
+        marcos_disponibles
+        < datos.cantidad_marcos
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "La colmena de origen no tiene "
+                "suficientes marcos disponibles. "
+                f"Tiene {marcos_disponibles} y se "
+                f"intentan transferir "
+                f"{datos.cantidad_marcos}."
+            )
+        )
+
+    # ------------------------------------------------------
+    # USUARIO REAL OBTENIDO DESDE EL JWT
+    # ------------------------------------------------------
+    #
+    # No confiamos en el usuario_id recibido desde
+    # el frontend.
+    #
+    # Se reemplaza por el ID del usuario autenticado.
     # ------------------------------------------------------
 
     datos_seguros = datos.model_copy(
@@ -173,11 +249,32 @@ def crear_transferencia(
     # ------------------------------------------------------
     # CREAR TRANSFERENCIA
     # ------------------------------------------------------
+    #
+    # El servicio:
+    #
+    # 1. vuelve a validar los marcos disponibles;
+    # 2. descuenta del origen;
+    # 3. suma al destino;
+    # 4. crea la transferencia;
+    # 5. guarda todo en una misma transacción.
+    #
+    # Los errores de negocio generados por el servicio
+    # se convierten en HTTP 400.
+    # ------------------------------------------------------
 
-    transferencia = transferencia_service.crear_transferencia(
-        db,
-        datos_seguros
-    )
+    try:
+        transferencia = (
+            transferencia_service.crear_transferencia(
+                db,
+                datos_seguros
+            )
+        )
+
+    except ValueError as error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(error)
+        ) from error
 
     # ------------------------------------------------------
     # AUDITORÍA AUTOMÁTICA
@@ -196,5 +293,9 @@ def crear_transferencia(
             )
         )
     )
+
+    # ------------------------------------------------------
+    # RESPUESTA
+    # ------------------------------------------------------
 
     return transferencia
