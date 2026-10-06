@@ -1,6 +1,7 @@
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.core.dependencies import obtener_usuario_actual, requerir_admin
 from app.database import probar_conexion
 
 from app.routers.apiarios import router as apiarios_router
@@ -45,13 +46,31 @@ app.add_middleware(CORSMiddleware,
 
 app.include_router(auth_router)
 
-app.include_router(apiarios_router)
-app.include_router(colmenas_router)
+app.include_router(
+    apiarios_router,
+    dependencies=[Depends(obtener_usuario_actual)]
+)
+app.include_router(
+    colmenas_router,
+    dependencies=[Depends(obtener_usuario_actual)]
+)
 app.include_router(usuarios_router)
-app.include_router(inspecciones_router)
-app.include_router(tratamientos_router)
-app.include_router(transferencias_marcos_router)
-app.include_router(historial_router)
+app.include_router(
+    inspecciones_router,
+    dependencies=[Depends(obtener_usuario_actual)]
+)
+app.include_router(
+    tratamientos_router,
+    dependencies=[Depends(obtener_usuario_actual)]
+)
+app.include_router(
+    transferencias_marcos_router,
+    dependencies=[Depends(obtener_usuario_actual)]
+)
+app.include_router(
+    historial_router,
+    dependencies=[Depends(obtener_usuario_actual)]
+)
 app.include_router(auditoria_router)
 
 
@@ -70,7 +89,7 @@ def inicio():
 # PRUEBA DE CONEXIÓN A POSTGRESQL
 # ==========================================================
 
-@app.get("/database")
+@app.get("/database", dependencies=[Depends(requerir_admin)])
 def comprobar_database():
     version = probar_conexion()
 
