@@ -1,5 +1,7 @@
 import logging
 import secrets
+from app.schemas.auditoria import AuditoriaCreate
+from app.services import auditoria as auditoria_service
 from fastapi import Request, Response
 from sqlalchemy import update
 
@@ -67,6 +69,11 @@ def login(
         datos.password
     )
 
+    # Un intento fallido no almacena correo ingresado, password ni token.
+    auditoria_service.registrar_auditoria(db, AuditoriaCreate(
+        usuario_id=usuario.id if usuario else None,
+        entidad="sesion", entidad_id=usuario.id if usuario else None,
+        accion="CREAR", datos_nuevos={"evento": "LOGIN", "resultado": "EXITO" if usuario else "FALLO"}))
     if usuario is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

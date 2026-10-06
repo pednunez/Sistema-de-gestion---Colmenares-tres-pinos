@@ -6,13 +6,13 @@ import test_password_recovery as recovery
 from app.main import app
 from app.database import settings
 
-async def call(path, data=None, cookie=None, csrf=None, origin=None, bearer=None):
+async def call(path, data=None, cookie=None, csrf=None, origin=None, bearer=None, method=None):
     messages=[]
     headers=[(b'content-type',b'application/json')]
     for key,value in [('cookie',cookie),('x-csrf-token',csrf),('origin',origin),('authorization',('Bearer '+bearer) if bearer else None)]:
         if value is not None: headers.append((key.encode(),value.encode()))
     body=json.dumps(data).encode() if data is not None else b''
-    scope=dict(type='http',asgi={'version':'3.0'},http_version='1.1',method='POST' if data is not None else 'GET',scheme='https',path=path,raw_path=path.encode(),query_string=b'',root_path='',headers=headers,client=('127.0.0.1',1234),server=('test',443))
+    scope=dict(type='http',asgi={'version':'3.0'},http_version='1.1',method=method or ('POST' if data is not None else 'GET'),scheme='https',path=path,raw_path=path.encode(),query_string=b'',root_path='',headers=headers,client=('127.0.0.1',1234),server=('test',443))
     async def receive(): return {'type':'http.request','body':body,'more_body':False}
     async def send(message): messages.append(message)
     await app(scope,receive,send)

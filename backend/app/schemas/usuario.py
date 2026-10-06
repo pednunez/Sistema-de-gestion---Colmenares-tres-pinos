@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 RolUsuario = Literal[
@@ -55,6 +55,13 @@ class UsuarioUpdate(BaseModel):
     )
 
     rol: RolUsuario | None = None
+
+    @model_validator(mode="after")
+    def rechazar_nulos_obligatorios(self):
+        for campo in ("nombre", "email", "rol"):
+            if campo in self.model_fields_set and getattr(self, campo) is None:
+                raise ValueError(f"{campo} no puede ser null")
+        return self
 
 
 class UsuarioResponse(UsuarioBase):

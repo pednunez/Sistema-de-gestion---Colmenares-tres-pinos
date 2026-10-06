@@ -22,6 +22,19 @@ from sqlalchemy.pool import NullPool, StaticPool
 from app.main import app
 from app.database import engine as configured_engine, get_db
 from app.models.usuario import Usuario
+from app.models.auditoria import Auditoria
+from sqlalchemy.ext.compiler import compiles
+from sqlalchemy import BigInteger
+from sqlalchemy.dialects.postgresql import JSONB
+
+@compiles(BigInteger, "sqlite")
+def sqlite_bigint(element, compiler, **kw):
+    return "INTEGER"
+
+@compiles(JSONB, "sqlite")
+def sqlite_json(element, compiler, **kw):
+    return "JSON"
+
 from app.core.security import generar_hash_password, verificar_password
 from app.services import auth, correo
 
@@ -61,13 +74,18 @@ class RecoveryTests(unittest.TestCase):
             self.connection.execute(text(
                 'CREATE TEMPORARY TABLE usuarios (LIKE public.usuarios INCLUDING ALL) ON COMMIT PRESERVE ROWS'))
             self.connection.execute(text('ALTER TABLE pg_temp.usuarios ADD COLUMN IF NOT EXISTS version_sesion INTEGER NOT NULL DEFAULT 0'))
+            self.connection.execute(text('CREATE TEMPORARY TABLE auditoria (LIKE public.auditoria INCLUDING ALL) ON COMMIT PRESERVE ROWS'))
+            self.connection.execute(text('ALTER TABLE pg_temp.auditoria ADD FOREIGN KEY (usuario_id) REFERENCES pg_temp.usuarios(id)'))
             self.connection.commit()
             self.assertTrue(self.connection.execute(text(
                 "SELECT 'usuarios'::regclass::oid = 'pg_temp.usuarios'::regclass::oid")).scalar())
+            self.assertTrue(self.connection.execute(text(
+                "SELECT 'auditoria'::regclass::oid = 'pg_temp.auditoria'::regclass::oid")).scalar())
             self.connection.commit()
         else:
             self.engine = create_engine('sqlite://', connect_args={'check_same_thread': False}, poolclass=StaticPool)
             Usuario.__table__.create(self.engine)
+            Auditoria.__table__.create(self.engine)
             self.connection = self.engine.connect()
         self.addCleanup(self.engine.dispose)
         self.addCleanup(self.connection.close)

@@ -12,9 +12,10 @@ from unittest.mock import patch
 import jwt
 
 # Configuracion exclusiva del proceso de pruebas; nunca utiliza credenciales reales.
-os.environ.update(DB_USER='test', DB_PASSWORD='test', DB_HOST='localhost',
-                  DB_PORT='5432', DB_NAME='test', JWT_SECRET_KEY='test-key-' * 8,
-                  JWT_ALGORITHM='HS256')
+if os.getenv('RF03_POSTGRES') != '1' and os.getenv('INVENTARIO_POSTGRES') != '1':
+    os.environ.update(DB_USER='test', DB_PASSWORD='test', DB_HOST='localhost',
+                      DB_PORT='5432', DB_NAME='test', JWT_SECRET_KEY='test-key-' * 8,
+                      JWT_ALGORITHM='HS256')
 
 from app.main import app
 from app.database import engine, get_db, settings

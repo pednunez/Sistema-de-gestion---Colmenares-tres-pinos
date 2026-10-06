@@ -39,7 +39,9 @@ def obtener_auditoria(
 
 def registrar_auditoria(
     db: Session,
-    datos: AuditoriaCreate
+    datos: AuditoriaCreate,
+    *,
+    commit: bool = True
 ):
     registro = Auditoria(
         usuario_id=datos.usuario_id,
@@ -51,7 +53,10 @@ def registrar_auditoria(
     )
 
     db.add(registro)
-    db.commit()
-    db.refresh(registro)
+    if commit:
+        db.commit()
+        db.refresh(registro)
+    else:
+        db.flush()
 
     return registro

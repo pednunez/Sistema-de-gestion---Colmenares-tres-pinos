@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 
 from app.core.dependencies import requerir_admin
 from app.database import get_db
@@ -85,10 +86,13 @@ def crear_usuario(
             detail="Ya existe un usuario con ese correo"
         )
 
-    return usuario_service.crear_usuario(
-        db,
-        datos
-    )
+    try:
+        return usuario_service.crear_usuario(db, datos, actor_id=admin.id)
+    except IntegrityError as error:
+        db.rollback()
+        if getattr(error.orig, "sqlstate", None) == "23505":
+            raise HTTPException(409, "Ya existe un usuario con ese correo") from error
+        raise
 
 
 # ==========================================================
@@ -133,11 +137,13 @@ def actualizar_usuario(
                 detail="Ya existe un usuario con ese correo"
             )
 
-    return usuario_service.actualizar_usuario(
-        db,
-        usuario,
-        datos
-    )
+    try:
+        return usuario_service.actualizar_usuario(db, usuario, datos, actor_id=admin.id)
+    except IntegrityError as error:
+        db.rollback()
+        if getattr(error.orig, "sqlstate", None) == "23505":
+            raise HTTPException(409, "Ya existe un usuario con ese correo") from error
+        raise
 
 
 # ==========================================================
@@ -166,5 +172,6 @@ def eliminar_usuario(
 
     return usuario_service.eliminar_usuario(
         db,
-        usuario
+        usuario,
+        actor_id=admin.id
     )
