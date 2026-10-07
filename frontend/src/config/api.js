@@ -1,9 +1,17 @@
-// URL del backend. Se define en el archivo .env con VITE_API_URL.
-//
-// La sesión viaja en una cookie, y el navegador solo la envía si el frontend y
-// el backend usan el mismo nombre de equipo. "localhost" y "127.0.0.1" cuentan
-// como sitios distintos, así que por defecto se usa el mismo nombre con el que
-// se abrió el frontend.
-const porDefecto = `${window.location.protocol}//${window.location.hostname}:8000`;
+// En desarrollo, ambas direcciones locales deben compartir el hostname
+// para que el navegador envie la cookie SameSite=Lax.
+export function resolverApiUrl(configurada, ubicacion, desarrollo) {
+  const porDefecto = `${ubicacion.protocol}//${ubicacion.hostname}:8000`;
+  const url = new URL(configurada || porDefecto, ubicacion.origin);
+  const locales = ["localhost", "127.0.0.1"];
+  if (desarrollo && locales.includes(url.hostname) && locales.includes(ubicacion.hostname)) {
+    url.hostname = ubicacion.hostname;
+  }
+  return url.href.replace(/\/+$/, "");
+}
 
-export const API_URL = (import.meta.env.VITE_API_URL || porDefecto).replace(/\/+$/, "");
+export const API_URL = resolverApiUrl(
+  import.meta.env?.VITE_API_URL,
+  globalThis.location ?? new URL("http://localhost:5173"),
+  import.meta.env?.DEV ?? false
+);

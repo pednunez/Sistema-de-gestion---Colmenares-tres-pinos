@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AuthContext } from "./contextos";
 import { authService } from "../services/authService";
-import { alExpirarSesion, establecerSesion } from "../services/api";
+import { alExpirarSesion, establecerSesion, ApiError } from "../services/api";
 
 export function AuthProvider({ children }) {
   const [usuario, setUsuario] = useState(null);
@@ -51,9 +51,20 @@ export function AuthProvider({ children }) {
 
   const iniciarSesion = useCallback(async (email, password) => {
     const respuesta = await authService.login(email, password);
+    // Confirmar que el navegador guardo/envio la cookie antes de abrir el panel.
+    let datosUsuario;
+    try {
+      datosUsuario = await authService.usuarioActual();
+    } catch (error) {
+      establecerSesion(false);
+      if (error.estado === 401) {
+        throw new ApiError("El acceso fue aceptado, pero no se pudo mantener la sesión. Revisa la configuración del navegador y vuelve a intentarlo.");
+      }
+      throw error;
+    }
     establecerSesion(true, respuesta.csrf_token);
     setMotivoSalida("");
-    setUsuario(respuesta.usuario);
+    setUsuario(datosUsuario);
   }, []);
 
   // Si el backend no confirma el cierre, la sesión sigue abierta y se propaga el error.
