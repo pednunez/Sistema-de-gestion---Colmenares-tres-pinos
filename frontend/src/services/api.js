@@ -1,8 +1,8 @@
 // Capa de acceso HTTP: el único archivo que llama a fetch.
-// Agrega el token, traduce los errores de FastAPI a mensajes claros (RF-62)
-// y avisa cuando la sesión expira.
+// La sesión viaja en una cookie que maneja el navegador; aquí se envía el
+// token anti-CSRF, se traducen los errores de FastAPI a mensajes claros (RF-62)
+// y se avisa cuando la sesión expira.
 import { API_URL } from "../config/api";
-import { obtenerToken } from "./tokenStorage";
 
 export class ApiError extends Error {
   constructor(mensaje, estado = 0, detalle = null) {
@@ -13,11 +13,22 @@ export class ApiError extends Error {
   }
 }
 
+// El token anti-CSRF se guarda solo en memoria. Tras recargar la página se
+// vuelve a pedir al backend.
+let csrfToken = "";
+let haySesion = false;
 let manejarSesionExpirada = null;
+
+export function establecerSesion(activa, csrf = "") {
+  haySesion = activa;
+  csrfToken = activa ? csrf : "";
+}
 
 export function alExpirarSesion(funcion) {
   manejarSesionExpirada = funcion;
 }
+
+const METODOS_SIN_CSRF = ["GET", "HEAD", "OPTIONS"];
 
 const MENSAJES_POR_ESTADO = {
   400: "La solicitud no es válida. Revisa los datos ingresados.",
@@ -41,42 +52,63 @@ function mensajeDeValidacion(detalle) {
   return null;
 }
 
-async function solicitar(ruta, { metodo = "GET", cuerpo, tipoRespuesta = "json" } = {}) {
-  const token = obtenerToken();
+async function enviar(ruta, metodo, cuerpo) {
   const headers = {};
   if (cuerpo !== undefined) headers["Content-Type"] = "application/json";
-  if (token) headers.Authorization = `Bearer ${token}`;
+  if (csrfToken && !METODOS_SIN_CSRF.includes(metodo)) headers["X-CSRF-Token"] = csrfToken;
 
-  let respuesta;
   try {
-    respuesta = await fetch(`${API_URL}${ruta}`, {
+    return await fetch(`${API_URL}${ruta}`, {
       method: metodo,
       headers,
+      credentials: "include",
       body: cuerpo === undefined ? undefined : JSON.stringify(cuerpo),
     });
   } catch {
     throw new ApiError("No se pudo conectar con el servidor. Revisa tu conexión a internet.");
   }
+}
+
+async function renovarCsrf() {
+  const respuesta = await enviar("/auth/csrf", "GET");
+  if (!respuesta.ok) return false;
+  csrfToken = (await respuesta.json()).csrf_token ?? "";
+  return Boolean(csrfToken);
+}
+
+async function solicitar(ruta, { metodo = "GET", cuerpo, tipoRespuesta = "json" } = {}) {
+  let respuesta = await enviar(ruta, metodo, cuerpo);
 
   if (!respuesta.ok) {
-    const datos = await respuesta.json().catch(() => null);
-    const detalle = datos?.detail ?? null;
+    let datos = await respuesta.json().catch(() => null);
 
-    if (respuesta.status === 401 && token) {
-      manejarSesionExpirada?.();
-      throw new ApiError(MENSAJES_POR_ESTADO[401], 401, detalle);
+    // Si el token anti-CSRF quedó desactualizado, se renueva y se reintenta una vez.
+    const csrfInvalido =
+      respuesta.status === 403 && typeof datos?.detail === "string" && datos.detail.includes("CSRF");
+    if (csrfInvalido && haySesion && (await renovarCsrf())) {
+      respuesta = await enviar(ruta, metodo, cuerpo);
+      datos = respuesta.ok ? null : await respuesta.json().catch(() => null);
     }
 
-    let mensaje;
-    if (respuesta.status >= 500) mensaje = MENSAJE_SERVIDOR;
-    else if (typeof detalle === "string") mensaje = detalle;
-    else
-      mensaje =
-        mensajeDeValidacion(detalle) ??
-        MENSAJES_POR_ESTADO[respuesta.status] ??
-        "No se pudo completar la operación.";
+    if (!respuesta.ok) {
+      const detalle = datos?.detail ?? null;
 
-    throw new ApiError(mensaje, respuesta.status, detalle);
+      if (respuesta.status === 401 && haySesion) {
+        manejarSesionExpirada?.();
+        throw new ApiError(MENSAJES_POR_ESTADO[401], 401, detalle);
+      }
+
+      let mensaje;
+      if (respuesta.status >= 500) mensaje = MENSAJE_SERVIDOR;
+      else if (typeof detalle === "string") mensaje = detalle;
+      else
+        mensaje =
+          mensajeDeValidacion(detalle) ??
+          MENSAJES_POR_ESTADO[respuesta.status] ??
+          "No se pudo completar la operación.";
+
+      throw new ApiError(mensaje, respuesta.status, detalle);
+    }
   }
 
   if (respuesta.status === 204) return null;

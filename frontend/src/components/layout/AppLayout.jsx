@@ -5,13 +5,27 @@ import { ErrorCarga } from "../ui/Estados";
 import { useAuth } from "../../hooks/useAuth";
 import { useDatos } from "../../hooks/useDatos";
 import { useNavegacion } from "../../hooks/useNavegacion";
+import { useAvisos } from "../../hooks/useAvisos";
 import { menuParaRol } from "../../config/menu";
 
 export default function AppLayout({ paginas, sinAcceso: SinAcceso }) {
   const { usuario, cerrarSesion } = useAuth();
   const { cargando, cargado, error, recargar } = useDatos();
   const { vista, clave, navegar } = useNavegacion();
+  const avisos = useAvisos();
   const [menuMovil, setMenuMovil] = useState(false);
+  const [cerrando, setCerrando] = useState(false);
+
+  const salir = async () => {
+    if (cerrando) return;
+    setCerrando(true);
+    try {
+      await cerrarSesion();
+    } catch (err) {
+      setCerrando(false);
+      avisos.error(`No se pudo cerrar la sesión. ${err.message}`);
+    }
+  };
 
   const items = menuParaRol(usuario.rol);
   const itemActual = items.find((item) => item.id === vista);
@@ -27,7 +41,8 @@ export default function AppLayout({ paginas, sinAcceso: SinAcceso }) {
     vistaActiva: vista,
     onNavegar: irA,
     usuario,
-    onCerrarSesion: cerrarSesion,
+    onCerrarSesion: salir,
+    cerrando,
   };
 
   return (

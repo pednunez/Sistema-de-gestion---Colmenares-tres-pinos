@@ -1,48 +1,70 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AuthContext } from "./contextos";
 import { authService } from "../services/authService";
-import { alExpirarSesion } from "../services/api";
-import { borrarToken, guardarToken, obtenerToken } from "../services/tokenStorage";
+import { alExpirarSesion, establecerSesion } from "../services/api";
 
 export function AuthProvider({ children }) {
   const [usuario, setUsuario] = useState(null);
-  const [verificando, setVerificando] = useState(() => Boolean(obtenerToken()));
+  const [verificando, setVerificando] = useState(true);
   const [motivoSalida, setMotivoSalida] = useState("");
 
-  const cerrarSesion = useCallback((motivo = "") => {
-    borrarToken();
+  const limpiarSesion = useCallback((motivo = "") => {
+    establecerSesion(false);
     setUsuario(null);
     setMotivoSalida(motivo);
   }, []);
 
-  // Si cualquier petición recibe 401, se cierra la sesión y se informa el motivo.
+  // Si cualquier petición recibe 401, se vuelve al login y se informa el motivo.
   useEffect(() => {
-    alExpirarSesion(() => cerrarSesion("Tu sesión expiró. Vuelve a iniciar sesión."));
+    alExpirarSesion(() => limpiarSesion("Tu sesión expiró. Vuelve a iniciar sesión."));
     return () => alExpirarSesion(null);
-  }, [cerrarSesion]);
+  }, [limpiarSesion]);
 
-  // Al abrir o recargar la página, se valida el token guardado.
+  // Al abrir o recargar la página, se comprueba si la cookie de sesión sigue vigente.
   useEffect(() => {
-    if (!obtenerToken()) return;
-    authService
-      .usuarioActual()
-      .then(setUsuario)
-      .catch(() => borrarToken())
-      .finally(() => setVerificando(false));
+    // Limpieza del token que guardaba la versión anterior del frontend.
+    try {
+      localStorage.removeItem("access_token");
+      sessionStorage.removeItem("access_token");
+    } catch {
+      // El almacenamiento puede estar bloqueado; no afecta a la sesión por cookie.
+    }
+
+    let vigente = true;
+    (async () => {
+      try {
+        const datosUsuario = await authService.usuarioActual();
+        const { csrf_token } = await authService.csrf();
+        if (!vigente) return;
+        establecerSesion(true, csrf_token);
+        setUsuario(datosUsuario);
+      } catch {
+        // Sin sesión vigente: se muestra el login.
+      } finally {
+        if (vigente) setVerificando(false);
+      }
+    })();
+    return () => {
+      vigente = false;
+    };
   }, []);
 
-  const iniciarSesion = useCallback(async (email, password, recordar) => {
-    const { access_token } = await authService.login(email, password);
-    guardarToken(access_token, recordar);
-    try {
-      const datosUsuario = await authService.usuarioActual();
-      setMotivoSalida("");
-      setUsuario(datosUsuario);
-    } catch (error) {
-      borrarToken();
-      throw error;
-    }
+  const iniciarSesion = useCallback(async (email, password) => {
+    const respuesta = await authService.login(email, password);
+    establecerSesion(true, respuesta.csrf_token);
+    setMotivoSalida("");
+    setUsuario(respuesta.usuario);
   }, []);
+
+  // Si el backend no confirma el cierre, la sesión sigue abierta y se propaga el error.
+  const cerrarSesion = useCallback(async () => {
+    try {
+      await authService.logout();
+    } catch (error) {
+      if (error.estado !== 401) throw error;
+    }
+    limpiarSesion();
+  }, [limpiarSesion]);
 
   const valor = useMemo(
     () => ({

@@ -1,7 +1,7 @@
 import { LogOut, X } from "lucide-react";
 import { texto, ROL } from "../../utils/etiquetas";
 
-export default function BarraLateral({ items, vistaActiva, onNavegar, usuario, onCerrarSesion, onCerrar }) {
+export default function BarraLateral({ items, vistaActiva, onNavegar, usuario, onCerrarSesion, cerrando = false, onCerrar }) {
   return (
     <div className="flex h-full flex-col bg-slate-950 text-white">
       <div className="flex h-20 items-center justify-between border-b border-slate-800 px-6">
@@ -50,10 +50,11 @@ export default function BarraLateral({ items, vistaActiva, onNavegar, usuario, o
         <button
           type="button"
           onClick={() => onCerrarSesion()}
+          disabled={cerrando}
           className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-slate-400 transition hover:bg-slate-900 hover:text-white"
         >
           <LogOut size={19} aria-hidden="true" />
-          Cerrar sesión
+          {cerrando ? "Cerrando sesión..." : "Cerrar sesión"}
         </button>
       </div>
     </div>

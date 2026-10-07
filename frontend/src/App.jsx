@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Loader2 } from "lucide-react";
 
 import { AuthProvider } from "./context/AuthProvider";
@@ -9,6 +10,7 @@ import { vistaInicial } from "./config/menu";
 
 import AppLayout from "./components/layout/AppLayout";
 import LoginPage from "./pages/LoginPage";
+import RestablecerPasswordPage from "./pages/RestablecerPasswordPage";
 import DashboardPage from "./pages/DashboardPage";
 import ApiariosPage from "./pages/ApiariosPage";
 import ColmenasPage from "./pages/ColmenasPage";
@@ -32,8 +34,37 @@ const PAGINAS = {
   usuarios: UsuariosPage,
 };
 
+const RUTA_RESTABLECER = "/restablecer-password";
+
+// El enlace del correo de recuperación apunta a /restablecer-password?token=...
+function leerEnlaceDeRecuperacion() {
+  const ruta = window.location.pathname.replace(/\/+$/, "");
+  if (ruta !== RUTA_RESTABLECER) return null;
+  return { token: new URLSearchParams(window.location.search).get("token") ?? "" };
+}
+
 function Contenido() {
   const { usuario, verificando } = useAuth();
+  const [recuperacion, setRecuperacion] = useState(leerEnlaceDeRecuperacion);
+  const [login, setLogin] = useState({ pantalla: "login", mensaje: "" });
+
+  // Al salir de la pantalla de recuperación se quita el token de la barra de direcciones.
+  const irAlLogin = (pantalla = "login", mensaje = "") => {
+    window.history.replaceState(null, "", "/");
+    setLogin({ pantalla, mensaje });
+    setRecuperacion(null);
+  };
+
+  if (recuperacion) {
+    return (
+      <RestablecerPasswordPage
+        token={recuperacion.token}
+        onListo={() => irAlLogin("login", "Contraseña actualizada. Ingresa con tu contraseña nueva.")}
+        onPedirOtroEnlace={() => irAlLogin("recuperar")}
+        onIrAlLogin={() => irAlLogin()}
+      />
+    );
+  }
 
   if (verificando) {
     return (
@@ -44,7 +75,7 @@ function Contenido() {
     );
   }
 
-  if (!usuario) return <LoginPage />;
+  if (!usuario) return <LoginPage key={login.pantalla + login.mensaje} pantallaInicial={login.pantalla} mensajeExito={login.mensaje} />;
 
   return (
     <DatosProvider key={usuario.id}>
