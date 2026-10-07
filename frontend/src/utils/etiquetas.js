@@ -37,6 +37,21 @@ export const TIPO_MARCO = {
   OTRO: { texto: "Otro" },
 };
 
+// Contenido de cada marco al revisarlo en una inspección.
+export const CONTENIDO_MARCO = {
+  MIEL_Y_CRIA: { texto: "Miel y cría" },
+  SOLO_CRIA: { texto: "Solo cría" },
+  SOLO_MIEL: { texto: "Solo miel" },
+  CERA_ESTIRADA: { texto: "Cera estirada" },
+  CERA_ESTAMPADA: { texto: "Cera estampada" },
+  SIN_MARCO: { texto: "Sin marco" },
+};
+
+export const UBICACION_MARCO = {
+  CAMARA_CRIA: { texto: "Cámara de cría" },
+  ALZA: { texto: "Alza" },
+};
+
 export const ESTADO_TRATAMIENTO = {
   PLANIFICADO: { texto: "Planificado", tono: "azul" },
   EN_CURSO: { texto: "En curso", tono: "ambar" },

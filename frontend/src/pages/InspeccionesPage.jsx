@@ -4,6 +4,7 @@ import Boton from "../components/ui/Boton";
 import Confirmar from "../components/ui/Confirmar";
 import Insignia, { InsigniaDe } from "../components/ui/Insignia";
 import { Seleccion } from "../components/ui/Campo";
+import Alerta from "../components/ui/Alerta";
 import { Cargando, EstadoVacio } from "../components/ui/Estados";
 import { BarraFiltros, Buscador, Dato, EncabezadoModulo } from "../components/ui/Estructura";
 import FormularioInspeccion from "../components/inspecciones/FormularioInspeccion";
@@ -12,6 +13,7 @@ import { useAvisos } from "../hooks/useAvisos";
 import { useDatos } from "../hooks/useDatos";
 import { useNavegacion } from "../hooks/useNavegacion";
 import { inspeccionesService } from "../services/inspeccionesService";
+import { transferenciasService } from "../services/transferenciasService";
 import { ESTADO_GENERAL, NIVEL, opciones, siNo, texto } from "../utils/etiquetas";
 import { formatearFechaHora } from "../utils/formato";
 
@@ -29,6 +31,7 @@ export default function InspeccionesPage() {
   const [visibles, setVisibles] = useState(POR_PAGINA);
   const [formulario, setFormulario] = useState(parametros.nuevaPara ? { colmenaInicial: parametros.nuevaPara } : null);
   const [aDarDeBaja, setADarDeBaja] = useState(null);
+  const [transferenciasFallidas, setTransferenciasFallidas] = useState(null);
 
   const filtradas = useMemo(() => {
     const termino = busqueda.trim().toLowerCase();
@@ -43,18 +46,45 @@ export default function InspeccionesPage() {
 
   const puedeGestionar = (inspeccion) => esAdmin || inspeccion.usuario_id === usuario.id;
 
-  const guardar = async (valores) => {
-    const { colmena_id, ...cambios } = valores;
+  // Las transferencias marcadas en la revisión de marcos se guardan después de la
+  // inspección, que es la que deja en la colmena la cantidad de marcos de la que se descuentan.
+  const guardar = async (valores, transferencias = []) => {
     if (formulario?.inspeccion) {
+      // Al editar, el backend no permite cambiar la colmena.
+      const cambios = { ...valores };
+      delete cambios.colmena_id;
       await inspeccionesService.actualizar(formulario.inspeccion.id, cambios);
       avisos.exito("Inspección actualizada.");
-    } else {
-      // El backend reemplaza usuario_id por el usuario del token; se envía porque el esquema lo exige.
-      await inspeccionesService.crear({ ...valores, colmena_id, usuario_id: usuario.id });
-      avisos.exito(`Inspección de la colmena ${codigoColmena(colmena_id)} registrada.`);
+      await recargar();
+      setFormulario(null);
+      return;
     }
-    await recargar();
+
+    // El backend reemplaza usuario_id por el usuario de la sesión; se envía porque el esquema lo exige.
+    const inspeccion = await inspeccionesService.crear({ ...valores, usuario_id: usuario.id });
+
+    // Desde aquí la inspección ya existe: un fallo en una transferencia no debe
+    // hacer que el formulario se reenvíe y la duplique.
+    const fallidas = [];
+    for (const transferencia of transferencias) {
+      try {
+        await transferenciasService.crear({ ...transferencia, usuario_id: usuario.id, inspeccion_id: inspeccion.id });
+      } catch (error) {
+        fallidas.push({ ...transferencia, mensaje: error.message });
+      }
+    }
+
+    await recargar().catch(() => {});
     setFormulario(null);
+
+    const guardadas = transferencias.length - fallidas.length;
+    const codigo = codigoColmena(valores.colmena_id);
+    avisos.exito(
+      guardadas > 0
+        ? `Inspección de ${codigo} registrada con ${guardadas} ${guardadas === 1 ? "transferencia" : "transferencias"}.`
+        : `Inspección de ${codigo} registrada.`
+    );
+    setTransferenciasFallidas(fallidas.length > 0 ? { codigo, fallidas } : null);
   };
 
   const darDeBaja = async () => {
@@ -72,6 +102,31 @@ export default function InspeccionesPage() {
           Registrar inspección
         </Boton>
       </EncabezadoModulo>
+
+      {transferenciasFallidas && (
+        <div className="mb-5">
+          <Alerta
+            accion={
+              <Boton variante="secundario" tamano="sm" onClick={() => setTransferenciasFallidas(null)}>
+                Entendido
+              </Boton>
+            }
+          >
+            <p className="font-semibold">
+              La inspección de {transferenciasFallidas.codigo} quedó registrada, pero no se pudieron guardar estas
+              transferencias:
+            </p>
+            <ul className="mt-2 list-disc pl-5">
+              {transferenciasFallidas.fallidas.map((fallida) => (
+                <li key={`${fallida.ubicacion}-${fallida.numero_marco}`}>
+                  {fallida.observaciones.replace(/\.$/, "")}, hacia {codigoColmena(fallida.colmena_destino_id)}.{" "}
+                  {fallida.mensaje}
+                </li>
+              ))}
+            </ul>
+          </Alerta>
+        </div>
+      )}
 
       <BarraFiltros>
         <Buscador valor={busqueda} onCambiar={setBusqueda} placeholder="Buscar por código de colmena" etiqueta="Buscar por código de colmena" />
@@ -111,6 +166,7 @@ export default function InspeccionesPage() {
                     </p>
                     <p className="text-sm text-slate-500">
                       {formatearFechaHora(inspeccion.fecha_inspeccion)} · {nombreUsuario(inspeccion.usuario_id)}
+                      {inspeccion.cantidad_marcos != null && ` · ${inspeccion.cantidad_marcos} marcos`}
                     </p>
                   </div>
                   <InsigniaDe mapa={ESTADO_GENERAL} valor={inspeccion.estado_general} porDefecto="Sin estado" />
