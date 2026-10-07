@@ -38,8 +38,11 @@ export function AuthProvider({ children }) {
         if (!vigente) return;
         establecerSesion(true, csrf_token);
         setUsuario(datosUsuario);
-      } catch {
-        // Sin sesión vigente: se muestra el login.
+      } catch (error) {
+        // Una caida de red o del servidor no significa que la clave sea incorrecta.
+        if (vigente && error.estado !== 401) {
+          setMotivoSalida(`No se pudo comprobar tu sesión. ${error.message}`);
+        }
       } finally {
         if (vigente) setVerificando(false);
       }

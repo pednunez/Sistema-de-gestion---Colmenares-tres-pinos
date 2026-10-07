@@ -2,7 +2,7 @@
 // La sesión viaja en una cookie que maneja el navegador; aquí se envía el
 // token anti-CSRF, se traducen los errores de FastAPI a mensajes claros (RF-62)
 // y se avisa cuando la sesión expira.
-import { API_URL } from "../config/api";
+import { API_URL } from "../config/api.js";
 
 export class ApiError extends Error {
   constructor(mensaje, estado = 0, detalle = null) {
@@ -69,9 +69,24 @@ async function enviar(ruta, metodo, cuerpo) {
   }
 }
 
+function notificarSesionExpirada() {
+  if (!haySesion) return;
+  establecerSesion(false);
+  manejarSesionExpirada?.();
+}
+
 async function renovarCsrf() {
   const respuesta = await enviar("/auth/csrf", "GET");
-  if (!respuesta.ok) return false;
+  if (respuesta.status === 401) {
+    notificarSesionExpirada();
+    throw new ApiError(MENSAJES_POR_ESTADO[401], 401);
+  }
+  if (!respuesta.ok) {
+    throw new ApiError(
+      respuesta.status >= 500 ? MENSAJE_SERVIDOR : "No se pudo comprobar la sesión. Intenta nuevamente.",
+      respuesta.status
+    );
+  }
   csrfToken = (await respuesta.json()).csrf_token ?? "";
   return Boolean(csrfToken);
 }
@@ -93,8 +108,8 @@ async function solicitar(ruta, { metodo = "GET", cuerpo, tipoRespuesta = "json" 
     if (!respuesta.ok) {
       const detalle = datos?.detail ?? null;
 
-      if (respuesta.status === 401 && haySesion) {
-        manejarSesionExpirada?.();
+      if (respuesta.status === 401 && haySesion && ruta !== "/auth/login") {
+        notificarSesionExpirada();
         throw new ApiError(MENSAJES_POR_ESTADO[401], 401, detalle);
       }
 
