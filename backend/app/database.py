@@ -128,7 +128,8 @@ DATABASE_URL = URL.create(
 
 engine = create_engine(
     DATABASE_URL,
-    pool_pre_ping=True
+    pool_pre_ping=True,
+    connect_args={"application_name": "colmenares_backend"}
 )
 
 
