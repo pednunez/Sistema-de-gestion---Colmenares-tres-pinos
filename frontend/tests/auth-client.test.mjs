@@ -80,3 +80,12 @@ test('a second CSRF rejection does not create an infinite retry',async()=>{
  await assert.rejects(api.patch('/usuarios/1',{}),e=>e.estado===403);
  assert.equal(expired,0);assert.equal(calls.length,3);
 });
+
+test('logout recovers CSRF when memory was reset but the cookie is still valid',async()=>{
+ establecerSesion(false);
+ responses({status:403,body:{detail:'Token CSRF invalido'}},{body:{csrf_token:'current-cookie-csrf'}},{body:{mensaje:'Sesiones cerradas'}});
+ assert.deepEqual(await api.post('/auth/logout'),{mensaje:'Sesiones cerradas'});
+ assert.equal(calls.length,3);
+ assert.equal(calls[2].options.headers['X-CSRF-Token'],'current-cookie-csrf');
+ assert.ok(calls.every(call=>call.options.credentials==='include'));
+});

@@ -97,10 +97,11 @@ async function solicitar(ruta, { metodo = "GET", cuerpo, tipoRespuesta = "json" 
   if (!respuesta.ok) {
     let datos = await respuesta.json().catch(() => null);
 
-    // Si el token anti-CSRF quedó desactualizado, se renueva y se reintenta una vez.
+    // La cookie puede seguir vigente aunque se pierda el estado en memoria.
+    // Ante rechazo CSRF, consultar la sesion al backend y reintentar solo una vez.
     const csrfInvalido =
       respuesta.status === 403 && typeof datos?.detail === "string" && datos.detail.includes("CSRF");
-    if (csrfInvalido && haySesion && (await renovarCsrf())) {
+    if (csrfInvalido && !METODOS_SIN_CSRF.includes(metodo) && (await renovarCsrf())) {
       respuesta = await enviar(ruta, metodo, cuerpo);
       datos = respuesta.ok ? null : await respuesta.json().catch(() => null);
     }
