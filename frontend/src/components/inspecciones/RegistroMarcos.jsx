@@ -57,7 +57,8 @@ export default function RegistroMarcos({ titulo, caja, onCambiar, colmenaId, err
         )}
       </div>
 
-      <ol className="grid gap-x-6 gap-y-2 lg:grid-cols-2">
+      {/* En pantallas anchas, del 1 al 5 a la izquierda y del 6 al 10 a la derecha. */}
+      <ol className="grid gap-x-6 gap-y-2 lg:grid-flow-col lg:grid-cols-2 lg:grid-rows-[repeat(5,auto)]">
         {caja.map((marco) => (
           <li key={marco.numero} className="grid content-start gap-2 border-t border-slate-100 pt-2">
             <div className="grid grid-cols-[4.75rem_1fr_auto] items-center gap-2">

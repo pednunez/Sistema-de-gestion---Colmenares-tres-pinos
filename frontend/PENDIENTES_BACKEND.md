@@ -22,23 +22,34 @@ El frontend ya registra los 10 marcos de la cámara de cría y, si la colmena ti
 
 - `ubicacion`: `CAMARA_CRIA` o `ALZA`.
 - `numero`: 1 a 10.
-- `contenido`: `MIEL_Y_CRIA`, `SOLO_CRIA`, `SOLO_MIEL`, `CERA_ESTIRADA`, `CERA_ESTAMPADA` o `SIN_MARCO` (posición sin marco).
+- `contenido`: `MIEL_Y_CRIA`, `SOLO_CRIA`, `SOLO_MIEL`, `CERA_ESTIRADA`, `CERA_ESTAMPADA`, `CERA_UNTADA` o `SIN_MARCO` (posición sin marco).
 - `cantidad_marcos`: marcos presentes al revisar (no cuenta `SIN_MARCO`). Va `null` y `marcos` va vacío si no se registró el detalle.
 - Si se registra una caja, van sus 10 posiciones.
 
 Falta también devolver `tiene_alza` y `marcos` en `InspeccionResponse`, para mostrar el detalle en el historial y permitir editarlo.
 
-## 2. Transferencias dentro de la inspección
+## 2. Tiras de medicamento en la inspección (bloquea el guardado)
+
+Cuando la inspección registra signos de enfermedad, el frontend pide cuántas tiras de medicamento se aplicaron y envía en `POST` y `PATCH /inspecciones/`:
+
+```json
+{ "tiras_medicamento": 2 }
+```
+
+- Entero de 1 a 3, o `null` si no se aplicaron o no hay signos de enfermedad.
+- Hoy el backend lo ignora porque `InspeccionCreate` e `InspeccionUpdate` no lo definen. Falta agregarlo al modelo, a los esquemas (con validación de 1 a 3) y a `InspeccionResponse`.
+
+## 3. Transferencias dentro de la inspección
 
 Hoy el frontend crea la inspección y después hace un `POST /transferencias-marcos/` por cada marco marcado con «Transferir» (cantidad 1). Funciona, pero:
 
 - **No es atómico:** si una transferencia falla, la inspección ya quedó guardada. Lo ideal es que el backend cree las transferencias a partir de `marcos[].transferido_a_colmena_id` en la misma transacción de la inspección.
 - **Sin vínculo:** el frontend envía `inspeccion_id`, `ubicacion`, `numero_marco` y `contenido` en cada transferencia, pero `TransferenciaMarcoCreate` no los define y se pierden. Por ahora el detalle queda como texto en `observaciones`.
-- **Tipo de marco:** se traduce el contenido a `tipo_marco` así: cría o miel y cría → `CRIA`; solo miel → `MIEL`; cera estirada o estampada → `VACIO`.
+- **Tipo de marco:** se traduce el contenido a `tipo_marco` así: cría o miel y cría → `CRIA`; solo miel → `MIEL`; cera estirada, estampada o untada → `VACIO`.
 
 Si el backend pasa a crear las transferencias, avisar para quitar esas llamadas del frontend y no duplicarlas.
 
-## 3. Otros pendientes
+## 4. Otros pendientes
 
 - **Contenido del QR:** sigue apuntando a `/colmenas/qr/{uuid}` del backend, que devuelve JSON. Definirlo con el equipo móvil antes de imprimir etiquetas.
 - **Elementos inactivos (RF-45):** los listados no permiten consultar registros dados de baja.

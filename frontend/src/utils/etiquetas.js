@@ -53,6 +53,7 @@ export const CONTENIDO_MARCO = {
   SOLO_MIEL: { texto: "Solo miel" },
   CERA_ESTIRADA: { texto: "Cera estirada" },
   CERA_ESTAMPADA: { texto: "Cera estampada" },
+  CERA_UNTADA: { texto: "Cera untada" },
   SIN_MARCO: { texto: "Sin marco" },
 };
 

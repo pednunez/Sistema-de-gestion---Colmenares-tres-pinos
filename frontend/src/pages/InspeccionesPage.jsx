@@ -187,6 +187,11 @@ export default function InspeccionesPage() {
                     {inspeccion.enfermedad_observada && (
                       <span className="ml-2 text-sm text-slate-700">{inspeccion.enfermedad_observada}</span>
                     )}
+                    {inspeccion.tiras_medicamento != null && (
+                      <span className="ml-2 text-sm text-slate-700">
+                        · {inspeccion.tiras_medicamento} {inspeccion.tiras_medicamento === 1 ? "tira" : "tiras"} de medicamento
+                      </span>
+                    )}
                   </div>
                 )}
                 {inspeccion.alimentacion_suministrada && (

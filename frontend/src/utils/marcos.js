@@ -42,6 +42,7 @@ const TIPO_POR_CONTENIDO = {
   SOLO_MIEL: "MIEL",
   CERA_ESTIRADA: "VACIO",
   CERA_ESTAMPADA: "VACIO",
+  CERA_UNTADA: "VACIO",
 };
 
 function cajasRegistradas({ camara, tieneAlza, alza }) {

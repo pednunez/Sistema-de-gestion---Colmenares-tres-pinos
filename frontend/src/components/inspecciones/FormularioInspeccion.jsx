@@ -26,6 +26,14 @@ const OPCIONES_SI_NO = [
 
 const OPCIONES_NIVEL = [...opciones(NIVEL), { valor: null, texto: "No revisado" }];
 
+// Tiras de medicamento aplicadas cuando hay signos de enfermedad.
+const OPCIONES_TIRAS = [
+  { valor: 1, texto: "1" },
+  { valor: 2, texto: "2" },
+  { valor: 3, texto: "3" },
+  { valor: null, texto: "No se aplicaron" },
+];
+
 const LARGO_MAXIMO_MIEL = 50;
 const LARGO_MAXIMO_ALIMENTACION = 500;
 
@@ -56,6 +64,7 @@ export default function FormularioInspeccion({ inspeccion, colmenaInicial, onGua
     alimentacion_suministrada: inspeccion?.alimentacion_suministrada ?? "",
     signos_enfermedad: inspeccion?.signos_enfermedad ?? false,
     enfermedad_observada: inspeccion?.enfermedad_observada ?? "",
+    tiras_medicamento: inspeccion?.tiras_medicamento ?? null,
     observaciones: inspeccion?.observaciones ?? "",
     camara: crearCaja(),
     tieneAlza: false,
@@ -90,6 +99,7 @@ export default function FormularioInspeccion({ inspeccion, colmenaInicial, onGua
         alimentacion_suministrada: textoONulo(v.alimentacion_suministrada),
         signos_enfermedad: v.signos_enfermedad,
         enfermedad_observada: v.signos_enfermedad ? textoONulo(v.enfermedad_observada) : null,
+        tiras_medicamento: v.signos_enfermedad ? v.tiras_medicamento : null,
         observaciones: textoONulo(v.observaciones),
       };
       if (esEdicion) return onGuardar(datos, []);
@@ -213,6 +223,15 @@ export default function FormularioInspeccion({ inspeccion, colmenaInicial, onGua
             onChange={(e) => cambiar("enfermedad_observada", e.target.value)}
             error={errores.enfermedad_observada}
             placeholder="Por ejemplo: varroa visible en zánganos"
+          />
+        )}
+
+        {valores.signos_enfermedad && (
+          <Segmentado
+            etiqueta="Tiras de medicamento aplicadas"
+            opciones={OPCIONES_TIRAS}
+            valor={valores.tiras_medicamento}
+            onCambiar={(valor) => cambiar("tiras_medicamento", valor)}
           />
         )}
 
