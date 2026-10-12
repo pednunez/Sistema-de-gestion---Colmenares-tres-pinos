@@ -44,4 +44,4 @@ Si el backend pasa a crear las transferencias, avisar para quitar esas llamadas 
 - **Elementos inactivos (RF-45):** los listados no permiten consultar registros dados de baja.
 - **Nombres de usuarios para el apicultor:** `/usuarios` es solo para ADMIN, así que un apicultor ve "Usuario #id" como responsable de registros ajenos.
 - **Paginación de colmenas:** la respuesta no incluye el total de registros.
-- **Campos de inspección sin pantalla todavía:** `miel`, `alimentacion_suministrada` y `postura` ya existen en el backend; el frontend aún no los pide.
+- **Escala de miel:** el frontend guarda en `miel` uno de estos valores: `SIN_MIEL`, `POCA`, `MEDIA` o `ABUNDANTE`. Si el backend o la app móvil definen otra escala, avisar para alinearla.

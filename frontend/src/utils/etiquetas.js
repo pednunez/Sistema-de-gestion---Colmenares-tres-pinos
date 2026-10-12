@@ -37,6 +37,15 @@ export const TIPO_MARCO = {
   OTRO: { texto: "Otro" },
 };
 
+// Cantidad de miel observada en la inspección (RF-27). El backend guarda texto
+// libre; se usa esta escala para que los registros sean comparables.
+export const NIVEL_MIEL = {
+  SIN_MIEL: { texto: "Sin miel" },
+  POCA: { texto: "Poca" },
+  MEDIA: { texto: "Media" },
+  ABUNDANTE: { texto: "Abundante" },
+};
+
 // Contenido de cada marco al revisarlo en una inspección.
 export const CONTENIDO_MARCO = {
   MIEL_Y_CRIA: { texto: "Miel y cría" },

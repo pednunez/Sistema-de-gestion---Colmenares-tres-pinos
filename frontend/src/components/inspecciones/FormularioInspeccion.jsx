@@ -7,7 +7,7 @@ import SelectorColmena from "../colmenas/SelectorColmena";
 import RegistroMarcos from "./RegistroMarcos";
 import { useFormulario } from "../../hooks/useFormulario";
 import { useDatos } from "../../hooks/useDatos";
-import { ESTADO_GENERAL, NIVEL, opciones } from "../../utils/etiquetas";
+import { ESTADO_GENERAL, NIVEL, NIVEL_MIEL, opciones } from "../../utils/etiquetas";
 import { textoONulo } from "../../utils/validacion";
 import {
   crearCaja,
@@ -26,6 +26,17 @@ const OPCIONES_SI_NO = [
 
 const OPCIONES_NIVEL = [...opciones(NIVEL), { valor: null, texto: "No revisado" }];
 
+const LARGO_MAXIMO_MIEL = 50;
+const LARGO_MAXIMO_ALIMENTACION = 500;
+
+// Si una inspección antigua guardó otro texto en "miel", se agrega como opción
+// para no perderlo al editar.
+function opcionesMiel(valorActual) {
+  const base = [...opciones(NIVEL_MIEL), { valor: null, texto: "No revisado" }];
+  if (valorActual && !NIVEL_MIEL[valorActual]) return [{ valor: valorActual, texto: valorActual }, ...base];
+  return base;
+}
+
 // Al registrar una inspección se revisan los marcos uno por uno. Las transferencias
 // marcadas en esa revisión se guardan junto con la inspección.
 export default function FormularioInspeccion({ inspeccion, colmenaInicial, onGuardar, onCerrar }) {
@@ -40,6 +51,9 @@ export default function FormularioInspeccion({ inspeccion, colmenaInicial, onGua
     presencia_cria: inspeccion?.presencia_cria ?? null,
     nivel_poblacion: inspeccion?.nivel_poblacion ?? null,
     reservas_alimento: inspeccion?.reservas_alimento ?? null,
+    postura: inspeccion?.postura ?? null,
+    miel: inspeccion?.miel ?? null,
+    alimentacion_suministrada: inspeccion?.alimentacion_suministrada ?? "",
     signos_enfermedad: inspeccion?.signos_enfermedad ?? false,
     enfermedad_observada: inspeccion?.enfermedad_observada ?? "",
     observaciones: inspeccion?.observaciones ?? "",
@@ -54,6 +68,9 @@ export default function FormularioInspeccion({ inspeccion, colmenaInicial, onGua
     estado_general: !v.estado_general && "Indica el estado general de la colmena.",
     enfermedad_observada:
       v.signos_enfermedad && !v.enfermedad_observada.trim() && "Describe brevemente lo que observaste.",
+    alimentacion_suministrada:
+      v.alimentacion_suministrada.trim().length > LARGO_MAXIMO_ALIMENTACION &&
+      `Máximo ${LARGO_MAXIMO_ALIMENTACION} caracteres.`,
     camara: !esEdicion && validarCaja(v.camara, "de la cámara de cría", v.colmena_id, { obligatoria: v.tieneAlza }),
     alza: !esEdicion && v.tieneAlza && validarCaja(v.alza, "del alza", v.colmena_id, { obligatoria: true }),
   });
@@ -68,6 +85,9 @@ export default function FormularioInspeccion({ inspeccion, colmenaInicial, onGua
         presencia_cria: v.presencia_cria,
         nivel_poblacion: v.nivel_poblacion,
         reservas_alimento: v.reservas_alimento,
+        postura: v.postura,
+        miel: v.miel ? String(v.miel).slice(0, LARGO_MAXIMO_MIEL) : null,
+        alimentacion_suministrada: textoONulo(v.alimentacion_suministrada),
         signos_enfermedad: v.signos_enfermedad,
         enfermedad_observada: v.signos_enfermedad ? textoONulo(v.enfermedad_observada) : null,
         observaciones: textoONulo(v.observaciones),
@@ -143,6 +163,18 @@ export default function FormularioInspeccion({ inspeccion, colmenaInicial, onGua
             onCambiar={(valor) => cambiar("presencia_cria", valor)}
           />
           <Segmentado
+            etiqueta="¿Hay postura?"
+            opciones={OPCIONES_SI_NO}
+            valor={valores.postura}
+            onCambiar={(valor) => cambiar("postura", valor)}
+          />
+          <Segmentado
+            etiqueta="Miel"
+            opciones={opcionesMiel(inspeccion?.miel)}
+            valor={valores.miel}
+            onCambiar={(valor) => cambiar("miel", valor)}
+          />
+          <Segmentado
             etiqueta="Población"
             opciones={OPCIONES_NIVEL}
             valor={valores.nivel_poblacion}
@@ -155,6 +187,16 @@ export default function FormularioInspeccion({ inspeccion, colmenaInicial, onGua
             onCambiar={(valor) => cambiar("reservas_alimento", valor)}
           />
         </div>
+
+        <Entrada
+          etiqueta="Alimentación suministrada"
+          value={valores.alimentacion_suministrada}
+          onChange={(e) => cambiar("alimentacion_suministrada", e.target.value)}
+          error={errores.alimentacion_suministrada}
+          ayuda={errores.alimentacion_suministrada ? undefined : "Déjalo vacío si no se alimentó la colmena."}
+          placeholder="Por ejemplo: jarabe 1:1, 2 litros"
+          maxLength={LARGO_MAXIMO_ALIMENTACION}
+        />
 
         <Segmentado
           etiqueta="¿Hay signos de enfermedad?"

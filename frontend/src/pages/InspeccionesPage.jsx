@@ -14,7 +14,7 @@ import { useDatos } from "../hooks/useDatos";
 import { useNavegacion } from "../hooks/useNavegacion";
 import { inspeccionesService } from "../services/inspeccionesService";
 import { transferenciasService } from "../services/transferenciasService";
-import { ESTADO_GENERAL, NIVEL, opciones, siNo, texto } from "../utils/etiquetas";
+import { ESTADO_GENERAL, NIVEL, NIVEL_MIEL, opciones, siNo, texto } from "../utils/etiquetas";
 import { formatearFechaHora } from "../utils/formato";
 
 const POR_PAGINA = 30;
@@ -172,9 +172,11 @@ export default function InspeccionesPage() {
                   <InsigniaDe mapa={ESTADO_GENERAL} valor={inspeccion.estado_general} porDefecto="Sin estado" />
                 </div>
 
-                <dl className="mt-4 grid grid-cols-2 gap-4 text-sm lg:grid-cols-4">
+                <dl className="mt-4 grid grid-cols-2 gap-4 text-sm sm:grid-cols-3">
                   <Dato nombre="Reina observada">{siNo(inspeccion.reina_observada)}</Dato>
                   <Dato nombre="Presencia de cría">{siNo(inspeccion.presencia_cria)}</Dato>
+                  <Dato nombre="Postura">{siNo(inspeccion.postura)}</Dato>
+                  <Dato nombre="Miel">{texto(NIVEL_MIEL, inspeccion.miel, "No revisado")}</Dato>
                   <Dato nombre="Población">{texto(NIVEL, inspeccion.nivel_poblacion, "No revisado")}</Dato>
                   <Dato nombre="Reservas de alimento">{texto(NIVEL, inspeccion.reservas_alimento, "No revisado")}</Dato>
                 </dl>
@@ -186,6 +188,11 @@ export default function InspeccionesPage() {
                       <span className="ml-2 text-sm text-slate-700">{inspeccion.enfermedad_observada}</span>
                     )}
                   </div>
+                )}
+                {inspeccion.alimentacion_suministrada && (
+                  <p className="mt-3 text-sm text-slate-600">
+                    <span className="font-medium text-slate-800">Alimentación:</span> {inspeccion.alimentacion_suministrada}
+                  </p>
                 )}
                 {inspeccion.observaciones && <p className="mt-3 text-sm text-slate-600">{inspeccion.observaciones}</p>}
 
