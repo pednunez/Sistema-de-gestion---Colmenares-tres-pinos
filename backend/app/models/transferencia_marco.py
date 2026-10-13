@@ -1,11 +1,13 @@
+from datetime import datetime
 
 from sqlalchemy import (
     BigInteger,
-    CheckConstraint,
+    DateTime,
     ForeignKey,
     Integer,
     String,
-    UniqueConstraint
+    Text,
+    text
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -13,40 +15,23 @@ from app.database import Base
 
 
 # ==========================================================
-# MODELO: DETALLE DE MARCOS DE UNA INSPECCIÓN
+# MODELO: TRANSFERENCIAS DE MARCOS
+# PROYECTO: COLMENARES TRES PINOS
+# ==========================================================
+#
+# Registra los movimientos de marcos realizados entre
+# diferentes colmenas.
+#
+# Conserva el origen, destino, responsable, cantidad
+# y características de la transferencia.
+#
+# Los campos específicos de la inspección se
+# incorporarán posteriormente con otra migración.
 # ==========================================================
 
-class InspeccionMarco(Base):
+class TransferenciaMarco(Base):
 
-    __tablename__ = "inspeccion_marcos"
-
-    # ======================================================
-    # RESTRICCIONES DE INTEGRIDAD
-    # ======================================================
-
-    __table_args__ = (
-        UniqueConstraint(
-            "inspeccion_id",
-            "ubicacion",
-            "numero",
-            name="uq_inspeccion_marco_posicion"
-        ),
-        CheckConstraint(
-            "numero BETWEEN 1 AND 10",
-            name="ck_inspeccion_marco_numero"
-        ),
-        CheckConstraint(
-            "ubicacion IN ('CAMARA_CRIA', 'ALZA')",
-            name="ck_inspeccion_marco_ubicacion"
-        ),
-        CheckConstraint(
-            "contenido IN ("
-            "'MIEL_Y_CRIA', 'SOLO_CRIA', 'SOLO_MIEL', "
-            "'CERA_ESTIRADA', 'CERA_ESTAMPADA', "
-            "'CERA_UNTADA', 'SIN_MARCO')",
-            name="ck_inspeccion_marco_contenido"
-        ),
-    )
+    __tablename__ = "transferencias_marcos"
 
     # ======================================================
     # IDENTIFICADOR
@@ -54,60 +39,98 @@ class InspeccionMarco(Base):
 
     id: Mapped[int] = mapped_column(
         BigInteger,
-        primary_key=True,
-        autoincrement=True
+        primary_key=True
     )
 
     # ======================================================
-    # INSPECCIÓN A LA QUE PERTENECE
+    # COLMENA DE ORIGEN
     # ======================================================
 
-    inspeccion_id: Mapped[int] = mapped_column(
+    colmena_origen_id: Mapped[int] = mapped_column(
         BigInteger,
-        ForeignKey("inspecciones.id"),
-        nullable=False,
-        index=True
-    )
-
-    # ======================================================
-    # UBICACIÓN DEL MARCO
-    # ======================================================
-    # CAMARA_CRIA o ALZA
-    # ======================================================
-
-    ubicacion: Mapped[str] = mapped_column(
-        String(20),
+        ForeignKey("colmenas.id"),
         nullable=False
     )
 
     # ======================================================
-    # POSICIÓN DEL MARCO
-    # ======================================================
-    # Número del 1 al 10 dentro de su caja.
+    # COLMENA DE DESTINO
     # ======================================================
 
-    numero: Mapped[int] = mapped_column(
+    colmena_destino_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("colmenas.id"),
+        nullable=False
+    )
+
+    # ======================================================
+    # USUARIO RESPONSABLE
+    # ======================================================
+
+    usuario_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("usuarios.id"),
+        nullable=False
+    )
+
+    # ======================================================
+    # FECHA DE TRANSFERENCIA
+    # ======================================================
+
+    fecha_transferencia: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=text("CURRENT_TIMESTAMP")
+    )
+
+    # ======================================================
+    # CANTIDAD DE MARCOS TRANSFERIDOS
+    # ======================================================
+
+    cantidad_marcos: Mapped[int] = mapped_column(
         Integer,
         nullable=False
     )
 
     # ======================================================
-    # CONTENIDO OBSERVADO
+    # TIPO DE MARCO
+    # ======================================================
+    #
+    # CRIA
+    # MIEL
+    # POLEN
+    # VACIO
+    # OTRO
     # ======================================================
 
-    contenido: Mapped[str] = mapped_column(
+    tipo_marco: Mapped[str | None] = mapped_column(
         String(30),
-        nullable=False
+        nullable=True
     )
 
     # ======================================================
-    # COLMENA A LA QUE SE TRANSFIERE
-    # ======================================================
-    # NULL cuando el marco no fue transferido.
+    # MOTIVO DE LA TRANSFERENCIA
     # ======================================================
 
-    transferido_a_colmena_id: Mapped[int | None] = mapped_column(
-        BigInteger,
-        ForeignKey("colmenas.id"),
+    motivo: Mapped[str | None] = mapped_column(
+        String(255),
         nullable=True
+    )
+
+    # ======================================================
+    # OBSERVACIONES
+    # ======================================================
+
+    observaciones: Mapped[str | None] = mapped_column(
+        Text,
+        nullable=True
+    )
+
+    # ======================================================
+    # FECHA DE CREACIÓN
+    # ======================================================
+
+    fecha_creacion: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=text("CURRENT_TIMESTAMP")
     )
