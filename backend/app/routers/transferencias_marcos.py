@@ -262,19 +262,51 @@ def crear_transferencia(
     # se convierten en HTTP 400.
     # ------------------------------------------------------
 
+    # ======================================================
+    # CREAR TRANSFERENCIA Y AUDITORÍA
+    # EN UNA SOLA TRANSACCIÓN
+    # ======================================================
+
     try:
-        transferencia = (
-            transferencia_service.crear_transferencia(
-                db,
-                datos_seguros
-            )
+        # Crear sin confirmar la transacción.
+        transferencia = transferencia_service.crear_transferencia(
+            db,
+            datos_seguros,
+            commit=False,
         )
 
+        # Registrar auditoría sin confirmar.
+        auditoria_service.registrar_auditoria(
+            db,
+            AuditoriaCreate(
+                usuario_id=usuario_actual.id,
+                entidad="TRANSFERENCIA_MARCO",
+                entidad_id=transferencia.id,
+                accion="CREAR",
+                datos_anteriores=None,
+                datos_nuevos=transferencia_a_dict(transferencia),
+            ),
+            commit=False,
+        )
+
+        # Confirmar ambas operaciones juntas.
+        db.commit()
+
+        # Recuperar los valores definitivos.
+        db.refresh(transferencia)
+
+        return transferencia
+
     except ValueError as error:
+        db.rollback()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(error)
+            detail=str(error),
         ) from error
+
+    except Exception:
+        db.rollback()
+        raise
 
     # ------------------------------------------------------
     # AUDITORÍA AUTOMÁTICA
