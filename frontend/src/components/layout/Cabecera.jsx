@@ -1,4 +1,5 @@
 import { Menu, RefreshCw } from "lucide-react";
+import EstadoServidor from "../ui/EstadoServidor";
 import { texto, ROL } from "../../utils/etiquetas";
 
 export default function Cabecera({ titulo, usuario, actualizando, onActualizar, onAbrirMenu }) {
@@ -20,6 +21,7 @@ export default function Cabecera({ titulo, usuario, actualizando, onActualizar, 
       </div>
 
       <div className="flex items-center gap-3">
+        <EstadoServidor />
         <button
           type="button"
           onClick={onActualizar}

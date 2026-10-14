@@ -22,6 +22,7 @@ export function simularBackend({ usuario = ADMIN, datos = {}, respuestas = {} } 
     if (respuestas[clave]) return respuestas[clave](llamada, json);
     if (u.pathname === "/auth/me") return usuario ? json(usuario) : json({ detail: "Sesion invalida" }, 401);
     if (u.pathname === "/auth/csrf") return json({ csrf_token: "csrf-prueba" });
+    if (u.pathname === "/health") return json({ status: "ok" });
     if (llamada.metodo === "GET") return json(datos[u.pathname] ?? []);
     return json({ id: 99 }, llamada.metodo === "POST" ? 201 : 200);
   });

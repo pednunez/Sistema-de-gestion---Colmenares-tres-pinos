@@ -62,7 +62,9 @@ function mensajeDeValidacion(detalle) {
 
 // Cada petición lleva su propio X-Correlation-ID. Devuelve la respuesta junto
 // con ese identificador para registrar el error si algo falla.
-async function enviar(ruta, metodo, cuerpo) {
+// Con "silencioso" no se registra la falta de conexión: lo usa la verificación
+// periódica de /health, que ya muestra ese estado en pantalla.
+async function enviar(ruta, metodo, cuerpo, silencioso = false) {
   const correlationId = nuevoCorrelationId();
   const headers = { "X-Correlation-ID": correlationId };
   if (cuerpo !== undefined) headers["Content-Type"] = "application/json";
@@ -77,7 +79,7 @@ async function enviar(ruta, metodo, cuerpo) {
     });
     return { respuesta, correlationId };
   } catch {
-    registrarError({
+    if (!silencioso) registrarError({
       tipo: "API",
       mensaje: "Sin conexión con el servidor",
       correlationId,
@@ -128,8 +130,8 @@ async function renovarCsrf() {
   return Boolean(csrfToken);
 }
 
-async function solicitar(ruta, { metodo = "GET", cuerpo, tipoRespuesta = "json" } = {}) {
-  let { respuesta, correlationId } = await enviar(ruta, metodo, cuerpo);
+async function solicitar(ruta, { metodo = "GET", cuerpo, tipoRespuesta = "json", silencioso = false } = {}) {
+  let { respuesta, correlationId } = await enviar(ruta, metodo, cuerpo, silencioso);
 
   if (!respuesta.ok) {
     let datos = await respuesta.json().catch(() => null);
@@ -148,7 +150,7 @@ async function solicitar(ruta, { metodo = "GET", cuerpo, tipoRespuesta = "json" 
 
       // Un 401 sin sesión es lo esperable al abrir la app sin haber ingresado:
       // no es un error que haya que registrar.
-      if (respuesta.status !== 401 || haySesion) {
+      if (!silencioso && (respuesta.status !== 401 || haySesion)) {
         registrarError({
           tipo: "API",
           nivel: respuesta.status >= 500 ? "error" : "aviso",
@@ -189,4 +191,6 @@ export const api = {
   patch: (ruta, cuerpo) => solicitar(ruta, { metodo: "PATCH", cuerpo }),
   delete: (ruta) => solicitar(ruta, { metodo: "DELETE" }),
   blob: (ruta) => solicitar(ruta, { tipoRespuesta: "blob" }),
+  // Consulta que no deja registro si no hay conexión (estado del servidor).
+  sondear: (ruta) => solicitar(ruta, { silencioso: true }),
 };
