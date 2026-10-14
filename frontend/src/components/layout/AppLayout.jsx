@@ -2,6 +2,7 @@ import { useState } from "react";
 import BarraLateral from "./BarraLateral";
 import Cabecera from "./Cabecera";
 import { ErrorCarga } from "../ui/Estados";
+import LimiteErrores from "../ui/LimiteErrores";
 import { useAuth } from "../../hooks/useAuth";
 import { useDatos } from "../../hooks/useDatos";
 import { useNavegacion } from "../../hooks/useNavegacion";
@@ -74,7 +75,10 @@ export default function AppLayout({ paginas, sinAcceso: SinAcceso }) {
               <ErrorCarga mensaje={`No fue posible cargar los datos. ${error}`} onReintentar={recargar} />
             </div>
           )}
-          <Pagina key={clave} />
+          {/* Si una pantalla falla, el menú sigue disponible para ir a otra. */}
+          <LimiteErrores key={clave}>
+            <Pagina />
+          </LimiteErrores>
         </main>
       </div>
     </div>

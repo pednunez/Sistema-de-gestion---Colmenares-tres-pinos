@@ -9,6 +9,7 @@ import { useAuth } from "./hooks/useAuth";
 import { vistaInicial } from "./config/menu";
 
 import AppLayout from "./components/layout/AppLayout";
+import LimiteErrores from "./components/ui/LimiteErrores";
 import LoginPage from "./pages/LoginPage";
 import RestablecerPasswordPage from "./pages/RestablecerPasswordPage";
 import DashboardPage from "./pages/DashboardPage";
@@ -88,10 +89,12 @@ function Contenido() {
 
 export default function App() {
   return (
-    <AvisosProvider>
-      <AuthProvider>
-        <Contenido />
-      </AuthProvider>
-    </AvisosProvider>
+    <LimiteErrores pantallaCompleta>
+      <AvisosProvider>
+        <AuthProvider>
+          <Contenido />
+        </AuthProvider>
+      </AvisosProvider>
+    </LimiteErrores>
   );
 }

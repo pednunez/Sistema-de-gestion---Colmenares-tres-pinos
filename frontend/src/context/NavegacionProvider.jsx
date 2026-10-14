@@ -1,7 +1,8 @@
 // Navegación entre vistas con parámetros, por ejemplo abrir el detalle de
 // una colmena desde el dashboard. Cada navegación vuelve a montar la vista.
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { NavegacionContext } from "./contextos";
+import { establecerContexto } from "../services/registroErrores";
 
 export function NavegacionProvider({ vistaInicial, children }) {
   const [estado, setEstado] = useState({ vista: vistaInicial, parametros: {}, clave: 0 });
@@ -10,6 +11,11 @@ export function NavegacionProvider({ vistaInicial, children }) {
     setEstado((actual) => ({ vista, parametros, clave: actual.clave + 1 }));
     window.scrollTo(0, 0);
   }, []);
+
+  // Los errores registrados indican en qué pantalla ocurrieron.
+  useEffect(() => {
+    establecerContexto({ vista: estado.vista });
+  }, [estado.vista]);
 
   const valor = useMemo(() => ({ ...estado, navegar }), [estado, navegar]);
 

@@ -3,14 +3,22 @@
 // token anti-CSRF, se traducen los errores de FastAPI a mensajes claros (RF-62)
 // y se avisa cuando la sesión expira.
 import { API_URL } from "../config/api.js";
+import { codigoCorto, nuevoCorrelationId, registrarError } from "./registroErrores.js";
 
 export class ApiError extends Error {
-  constructor(mensaje, estado = 0, detalle = null) {
+  constructor(mensaje, estado = 0, detalle = null, correlationId = null) {
     super(mensaje);
     this.name = "ApiError";
     this.estado = estado;
     this.detalle = detalle;
+    this.correlationId = correlationId;
   }
+}
+
+// En fallas del servidor o de conexión se agrega un código corto para que el
+// usuario pueda reportarlo y se encuentre el error en los logs.
+function conCodigo(mensaje, correlationId) {
+  return correlationId ? `${mensaje} Código de seguimiento: ${codigoCorto(correlationId)}.` : mensaje;
 }
 
 // El token anti-CSRF se guarda solo en memoria. Tras recargar la página se
@@ -52,20 +60,37 @@ function mensajeDeValidacion(detalle) {
   return null;
 }
 
+// Cada petición lleva su propio X-Correlation-ID. Devuelve la respuesta junto
+// con ese identificador para registrar el error si algo falla.
 async function enviar(ruta, metodo, cuerpo) {
-  const headers = {};
+  const correlationId = nuevoCorrelationId();
+  const headers = { "X-Correlation-ID": correlationId };
   if (cuerpo !== undefined) headers["Content-Type"] = "application/json";
   if (csrfToken && !METODOS_SIN_CSRF.includes(metodo)) headers["X-CSRF-Token"] = csrfToken;
 
   try {
-    return await fetch(`${API_URL}${ruta}`, {
+    const respuesta = await fetch(`${API_URL}${ruta}`, {
       method: metodo,
       headers,
       credentials: "include",
       body: cuerpo === undefined ? undefined : JSON.stringify(cuerpo),
     });
+    return { respuesta, correlationId };
   } catch {
-    throw new ApiError("No se pudo conectar con el servidor. Revisa tu conexión a internet.");
+    registrarError({
+      tipo: "API",
+      mensaje: "Sin conexión con el servidor",
+      correlationId,
+      metodo,
+      endpoint: ruta,
+      estado: 0,
+    });
+    throw new ApiError(
+      conCodigo("No se pudo conectar con el servidor. Revisa tu conexión a internet.", correlationId),
+      0,
+      null,
+      correlationId
+    );
   }
 }
 
@@ -76,15 +101,27 @@ function notificarSesionExpirada() {
 }
 
 async function renovarCsrf() {
-  const respuesta = await enviar("/auth/csrf", "GET");
+  const { respuesta, correlationId } = await enviar("/auth/csrf", "GET");
   if (respuesta.status === 401) {
     notificarSesionExpirada();
-    throw new ApiError(MENSAJES_POR_ESTADO[401], 401);
+    throw new ApiError(MENSAJES_POR_ESTADO[401], 401, null, correlationId);
   }
   if (!respuesta.ok) {
+    registrarError({
+      tipo: "API",
+      mensaje: "No se pudo renovar el token CSRF",
+      correlationId,
+      metodo: "GET",
+      endpoint: "/auth/csrf",
+      estado: respuesta.status,
+    });
     throw new ApiError(
-      respuesta.status >= 500 ? MENSAJE_SERVIDOR : "No se pudo comprobar la sesión. Intenta nuevamente.",
-      respuesta.status
+      respuesta.status >= 500
+        ? conCodigo(MENSAJE_SERVIDOR, correlationId)
+        : "No se pudo comprobar la sesión. Intenta nuevamente.",
+      respuesta.status,
+      null,
+      correlationId
     );
   }
   csrfToken = (await respuesta.json()).csrf_token ?? "";
@@ -92,7 +129,7 @@ async function renovarCsrf() {
 }
 
 async function solicitar(ruta, { metodo = "GET", cuerpo, tipoRespuesta = "json" } = {}) {
-  let respuesta = await enviar(ruta, metodo, cuerpo);
+  let { respuesta, correlationId } = await enviar(ruta, metodo, cuerpo);
 
   if (!respuesta.ok) {
     let datos = await respuesta.json().catch(() => null);
@@ -102,20 +139,34 @@ async function solicitar(ruta, { metodo = "GET", cuerpo, tipoRespuesta = "json" 
     const csrfInvalido =
       respuesta.status === 403 && typeof datos?.detail === "string" && datos.detail.includes("CSRF");
     if (csrfInvalido && !METODOS_SIN_CSRF.includes(metodo) && (await renovarCsrf())) {
-      respuesta = await enviar(ruta, metodo, cuerpo);
+      ({ respuesta, correlationId } = await enviar(ruta, metodo, cuerpo));
       datos = respuesta.ok ? null : await respuesta.json().catch(() => null);
     }
 
     if (!respuesta.ok) {
       const detalle = datos?.detail ?? null;
 
+      // Un 401 sin sesión es lo esperable al abrir la app sin haber ingresado:
+      // no es un error que haya que registrar.
+      if (respuesta.status !== 401 || haySesion) {
+        registrarError({
+          tipo: "API",
+          nivel: respuesta.status >= 500 ? "error" : "aviso",
+          mensaje: typeof detalle === "string" ? detalle : `HTTP ${respuesta.status}`,
+          correlationId,
+          metodo,
+          endpoint: ruta,
+          estado: respuesta.status,
+        });
+      }
+
       if (respuesta.status === 401 && haySesion && ruta !== "/auth/login") {
         notificarSesionExpirada();
-        throw new ApiError(MENSAJES_POR_ESTADO[401], 401, detalle);
+        throw new ApiError(MENSAJES_POR_ESTADO[401], 401, detalle, correlationId);
       }
 
       let mensaje;
-      if (respuesta.status >= 500) mensaje = MENSAJE_SERVIDOR;
+      if (respuesta.status >= 500) mensaje = conCodigo(MENSAJE_SERVIDOR, correlationId);
       else if (typeof detalle === "string") mensaje = detalle;
       else
         mensaje =
@@ -123,7 +174,7 @@ async function solicitar(ruta, { metodo = "GET", cuerpo, tipoRespuesta = "json" 
           MENSAJES_POR_ESTADO[respuesta.status] ??
           "No se pudo completar la operación.";
 
-      throw new ApiError(mensaje, respuesta.status, detalle);
+      throw new ApiError(mensaje, respuesta.status, detalle, correlationId);
     }
   }
 
