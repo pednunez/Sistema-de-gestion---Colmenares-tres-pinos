@@ -4,7 +4,8 @@ import Boton from "../components/ui/Boton";
 import Confirmar from "../components/ui/Confirmar";
 import { InsigniaDe } from "../components/ui/Insignia";
 import { Seleccion } from "../components/ui/Campo";
-import { Cargando, EstadoVacio } from "../components/ui/Estados";
+import { Cargando, ErrorCarga, EstadoVacio } from "../components/ui/Estados";
+import Paginador from "../components/ui/Paginador";
 import { BarraFiltros, Buscador, EncabezadoModulo } from "../components/ui/Estructura";
 import FormularioColmena from "../components/colmenas/FormularioColmena";
 import DetalleColmena from "../components/colmenas/DetalleColmena";
@@ -12,10 +13,13 @@ import { useAuth } from "../hooks/useAuth";
 import { useAvisos } from "../hooks/useAvisos";
 import { useDatos } from "../hooks/useDatos";
 import { useNavegacion } from "../hooks/useNavegacion";
+import { usePaginaColmenas } from "../hooks/usePaginaColmenas";
 import { colmenasService } from "../services/colmenasService";
 import { ESTADO_COLMENA, ESTADO_GENERAL, opciones } from "../utils/etiquetas";
 import { formatearFecha } from "../utils/formato";
 import { calcularAlertas, ultimaInspeccionPorColmena } from "../utils/alertas";
+
+const COLMENAS_POR_PAGINA = 20;
 
 export default function ColmenasPage() {
   const { esAdmin } = useAuth();
@@ -30,6 +34,13 @@ export default function ColmenasPage() {
   const [detalleId, setDetalleId] = useState(parametros.detalle ?? null);
   const [formulario, setFormulario] = useState(null);
   const [aDarDeBaja, setADarDeBaja] = useState(null);
+  const [pagina, setPagina] = useState(1);
+
+  // Cada cambio de filtro vuelve a la primera página.
+  const conFiltro = (cambiar) => (valor) => {
+    cambiar(valor);
+    setPagina(1);
+  };
 
   const { ultimas, conAlerta } = useMemo(
     () => ({
@@ -49,6 +60,28 @@ export default function ColmenasPage() {
       .sort((a, b) => a.codigo.localeCompare(b.codigo, "es", { numeric: true }));
   }, [datos.colmenas, busqueda, filtroApiario, filtroEstado, soloAtencion, conAlerta]);
 
+  // El backend pagina y filtra por apiario. La búsqueda por código, el estado y
+  // "requieren atención" no existen en el backend: con alguno de ellos activo,
+  // se filtra y pagina sobre la lista completa que ya está cargada.
+  const filtroLocal = Boolean(busqueda.trim() || filtroEstado || soloAtencion);
+  const paginaServidor = usePaginaColmenas({
+    apiarioId: filtroApiario,
+    pagina,
+    tamano: COLMENAS_POR_PAGINA,
+    activo: !filtroLocal,
+  });
+
+  const totalPaginasLocal = Math.max(1, Math.ceil(filtradas.length / COLMENAS_POR_PAGINA));
+  const visibles = filtroLocal
+    ? filtradas.slice((pagina - 1) * COLMENAS_POR_PAGINA, pagina * COLMENAS_POR_PAGINA)
+    : paginaServidor.colmenas;
+  const haySiguiente = filtroLocal ? pagina < totalPaginasLocal : paginaServidor.haySiguiente;
+
+  const recargarTodo = async () => {
+    await recargar();
+    paginaServidor.recargar();
+  };
+
   const guardar = async (valores) => {
     if (formulario?.id) {
       await colmenasService.actualizar(formulario.id, valores);
@@ -57,13 +90,13 @@ export default function ColmenasPage() {
       await colmenasService.crear(valores);
       avisos.exito(`Colmena ${valores.codigo} registrada.`);
     }
-    await recargar();
+    await recargarTodo();
     setFormulario(null);
   };
 
   const darDeBaja = async () => {
     await colmenasService.darDeBaja(aDarDeBaja.id);
-    await recargar();
+    await recargarTodo();
     avisos.exito(`Colmena ${aDarDeBaja.codigo} dada de baja. Su historial se conserva.`);
   };
 
@@ -71,7 +104,13 @@ export default function ColmenasPage() {
 
   return (
     <>
-      <EncabezadoModulo descripcion={`${filtradas.length} de ${datos.colmenas.length} colmenas registradas.`}>
+      <EncabezadoModulo
+        descripcion={
+          filtroLocal
+            ? `${filtradas.length} de ${datos.colmenas.length} colmenas coinciden con los filtros.`
+            : `${datos.colmenas.length} colmenas registradas.`
+        }
+      >
         {esAdmin && (
           <Boton icono={Plus} onClick={() => setFormulario({ apiario_id: filtroApiario || undefined })}>
             Nueva colmena
@@ -80,18 +119,18 @@ export default function ColmenasPage() {
       </EncabezadoModulo>
 
       <BarraFiltros>
-        <Buscador valor={busqueda} onCambiar={setBusqueda} placeholder="Buscar por código" etiqueta="Buscar colmena por código" />
+        <Buscador valor={busqueda} onCambiar={conFiltro(setBusqueda)} placeholder="Buscar por código" etiqueta="Buscar colmena por código" />
         <Seleccion
           aria-label="Filtrar por apiario"
           value={filtroApiario}
-          onChange={(e) => setFiltroApiario(e.target.value)}
+          onChange={(e) => conFiltro(setFiltroApiario)(e.target.value)}
           placeholder="Todos los apiarios"
           opciones={datos.apiarios.map((a) => ({ valor: String(a.id), texto: a.nombre }))}
         />
         <Seleccion
           aria-label="Filtrar por estado"
           value={filtroEstado}
-          onChange={(e) => setFiltroEstado(e.target.value)}
+          onChange={(e) => conFiltro(setFiltroEstado)(e.target.value)}
           placeholder="Todos los estados"
           opciones={opciones(ESTADO_COLMENA, ["BAJA"])}
         />
@@ -99,14 +138,22 @@ export default function ColmenasPage() {
           <input
             type="checkbox"
             checked={soloAtencion}
-            onChange={(e) => setSoloAtencion(e.target.checked)}
+            onChange={(e) => conFiltro(setSoloAtencion)(e.target.checked)}
             className="h-4 w-4 accent-amber-500"
           />
           Solo las que requieren atención
         </label>
       </BarraFiltros>
 
-      {filtradas.length === 0 ? (
+      {paginaServidor.error && (
+        <div className="mb-4">
+          <ErrorCarga mensaje={paginaServidor.error} onReintentar={paginaServidor.recargar} />
+        </div>
+      )}
+
+      {paginaServidor.cargando && visibles.length === 0 ? (
+        <Cargando texto="Cargando colmenas..." />
+      ) : visibles.length === 0 ? (
         <EstadoVacio
           icono={Boxes}
           titulo="No hay colmenas con estos filtros"
@@ -128,7 +175,7 @@ export default function ColmenasPage() {
               </tr>
             </thead>
             <tbody>
-              {filtradas.map((colmena) => {
+              {visibles.map((colmena) => {
                 const ultima = ultimas.get(colmena.id);
                 return (
                   <tr key={colmena.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
@@ -177,6 +224,18 @@ export default function ColmenasPage() {
           </table>
         </div>
       )}
+
+      <Paginador
+        pagina={pagina}
+        totalPaginas={filtroLocal ? totalPaginasLocal : undefined}
+        hayAnterior={pagina > 1}
+        haySiguiente={haySiguiente}
+        cargando={paginaServidor.cargando}
+        onCambiar={(nueva) => {
+          setPagina(nueva);
+          window.scrollTo(0, 0);
+        }}
+      />
 
       {detalleId && <DetalleColmena colmenaId={detalleId} onCerrar={() => setDetalleId(null)} />}
 

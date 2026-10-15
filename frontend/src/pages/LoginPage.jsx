@@ -5,6 +5,8 @@ import AuthLayout from "../components/auth/AuthLayout";
 import CampoPassword from "../components/auth/CampoPassword";
 import FormularioRecuperar from "../components/auth/FormularioRecuperar";
 import { useAuth } from "../hooks/useAuth";
+import { useEstadoServidor } from "../hooks/useEstadoServidor";
+import { ESTADO_SERVIDOR } from "../services/estadoService";
 import { esCorreoValido } from "../utils/validacion";
 
 export default function LoginPage({ pantallaInicial = "login", mensajeExito = "" }) {
@@ -15,6 +17,9 @@ export default function LoginPage({ pantallaInicial = "login", mensajeExito = ""
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [cargando, setCargando] = useState(false);
+  const { estado: estadoServidor } = useEstadoServidor();
+  const servidorCaido =
+    estadoServidor === ESTADO_SERVIDOR.SIN_CONEXION || estadoServidor === ESTADO_SERVIDOR.CON_PROBLEMAS;
 
   async function enviar(evento) {
     evento.preventDefault();
@@ -91,6 +96,17 @@ export default function LoginPage({ pantallaInicial = "login", mensajeExito = ""
             <div className="alert alert-info show" role="status">
               <Info size={18} />
               <span>{motivoSalida}</span>
+            </div>
+          )}
+
+          {servidorCaido && !error && (
+            <div className="alert alert-error show" role="alert">
+              <AlertCircle size={18} />
+              <span>
+                {estadoServidor === ESTADO_SERVIDOR.SIN_CONEXION
+                  ? "No hay conexión con el servidor. Revisa tu internet o intenta en unos minutos."
+                  : "El servidor no está respondiendo correctamente. Intenta en unos minutos."}
+              </span>
             </div>
           )}
 
