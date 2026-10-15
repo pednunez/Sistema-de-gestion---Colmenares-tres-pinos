@@ -1,5 +1,5 @@
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Literal
 
 from pydantic import (
@@ -413,7 +413,26 @@ class InspeccionBase(BaseModel):
 # ==========================================================
 
 class InspeccionCreate(InspeccionBase):
-    pass
+    fecha_inspeccion: datetime | None = None
+
+    @model_validator(mode="after")
+    def validar_fecha_inspeccion(self):
+        fecha = self.fecha_inspeccion
+
+        if fecha is None:
+            return self
+
+        if fecha.tzinfo is None or fecha.utcoffset() is None:
+            raise ValueError(
+                "fecha_inspeccion debe incluir zona horaria"
+            )
+
+        if fecha > datetime.now(timezone.utc):
+            raise ValueError(
+                "La fecha de inspeccion no puede ser futura"
+            )
+
+        return self
 
 
 # ==========================================================

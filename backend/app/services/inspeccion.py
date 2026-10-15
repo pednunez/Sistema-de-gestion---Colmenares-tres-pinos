@@ -1,4 +1,3 @@
-
 from datetime import datetime, timezone
 
 from sqlalchemy import select, inspect as sa_inspect
@@ -280,6 +279,23 @@ def crear_inspeccion(
         tiras_medicamento=datos.tiras_medicamento,
         observaciones=datos.observaciones,
     )
+
+    # ======================================================
+    # FECHA DE INSPECCIÓN
+    # ======================================================
+    #
+    # Si el usuario indica una fecha válida,
+    # se utiliza esa fecha.
+    #
+    # Si no indica ninguna fecha, PostgreSQL
+    # asignará automáticamente la fecha actual.
+    #
+    # La validación para rechazar fechas futuras
+    # se encuentra en InspeccionCreate.
+    # ======================================================
+
+    if datos.fecha_inspeccion is not None:
+        inspeccion.fecha_inspeccion = datos.fecha_inspeccion
 
     # 6. Registrar todas las posiciones observadas.
     inspeccion.marcos = crear_objetos_marcos(
