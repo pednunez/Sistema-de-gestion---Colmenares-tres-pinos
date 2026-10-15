@@ -1,4 +1,3 @@
-
 from datetime import datetime
 
 from sqlalchemy import (
@@ -7,15 +6,17 @@ from sqlalchemy import (
     CheckConstraint,
     DateTime,
     ForeignKey,
+    Identity,
+    Index,
     Integer,
     String,
     Text,
-    text
+    text,
 )
 from sqlalchemy.orm import (
     Mapped,
     mapped_column,
-    relationship
+    relationship,
 )
 
 from app.database import Base
@@ -48,7 +49,7 @@ class Inspeccion(Base):
     __tablename__ = "inspecciones"
 
     # ======================================================
-    # RESTRICCIONES DE INTEGRIDAD
+    # RESTRICCIONES DE INTEGRIDAD E ÍNDICES
     # ======================================================
 
     __table_args__ = (
@@ -57,14 +58,23 @@ class Inspeccion(Base):
             "tiras_medicamento BETWEEN 1 AND 3",
             name="ck_inspecciones_tiras_medicamento"
         ),
+        Index(
+            "idx_inspecciones_colmena",
+            "colmena_id",
+        ),
+        Index(
+            "idx_inspecciones_fecha",
+            "fecha_inspeccion",
+        ),
     )
 
     # ======================================================
-    # IDENTIFICADOR
+    # IDENTIFICADOR AUTOMÁTICO
     # ======================================================
 
     id: Mapped[int] = mapped_column(
         BigInteger,
+        Identity(always=True),
         primary_key=True
     )
 
@@ -100,7 +110,6 @@ class Inspeccion(Base):
 
     # ======================================================
     # ESTADO GENERAL
-    # ======================================================
     # BUENO / REGULAR / CRITICO
     # ======================================================
 
@@ -129,7 +138,6 @@ class Inspeccion(Base):
 
     # ======================================================
     # NIVEL DE POBLACIÓN
-    # ======================================================
     # BAJO / MEDIO / ALTO
     # ======================================================
 
@@ -140,7 +148,6 @@ class Inspeccion(Base):
 
     # ======================================================
     # RESERVAS DE ALIMENTO
-    # ======================================================
     # BAJO / MEDIO / ALTO
     # ======================================================
 
@@ -171,14 +178,9 @@ class Inspeccion(Base):
     # PRESENCIA DE ALZA
     # ======================================================
     #
-    # True:
-    # La colmena tenía alza.
-    #
-    # False:
-    # La colmena no tenía alza.
-    #
-    # None:
-    # No se registró información.
+    # True: la colmena tenía alza.
+    # False: la colmena no tenía alza.
+    # None: no se registró información.
     # ======================================================
 
     tiene_alza: Mapped[bool | None] = mapped_column(
@@ -252,7 +254,7 @@ class Inspeccion(Base):
     # None: no se aplicaron o no se registraron.
     #
     # La restricción de la tabla limita los valores
-    # permitidos cuando se aplique la migración.
+    # permitidos.
     # ======================================================
 
     tiras_medicamento: Mapped[int | None] = mapped_column(
@@ -312,7 +314,7 @@ class Inspeccion(Base):
     )
 
     # ======================================================
-    # NUEVO - RELACIÓN CON LOS MARCOS
+    # RELACIÓN CON LOS MARCOS
     # ======================================================
     #
     # Relación uno a muchos (1:N).
@@ -322,8 +324,7 @@ class Inspeccion(Base):
     # - 10 posiciones adicionales de alza.
     #
     # lazy="selectin":
-    # Carga los marcos relacionados eficientemente
-    # al consultar una o varias inspecciones.
+    # Carga los marcos relacionados eficientemente.
     #
     # back_populates="inspeccion":
     # Relación inversa del modelo InspeccionMarco.

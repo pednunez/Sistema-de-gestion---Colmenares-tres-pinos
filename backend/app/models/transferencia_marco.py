@@ -1,10 +1,11 @@
-
 from datetime import datetime
 
 from sqlalchemy import (
     BigInteger,
     DateTime,
     ForeignKey,
+    Identity,
+    Index,
     Integer,
     String,
     Text,
@@ -24,10 +25,10 @@ from app.database import Base
 #
 # Permite tanto:
 # 1. Transferencias manuales independientes.
-# 2. Transferencias originadas durante una inspección.
+# 2. Transferencias originadas durante una inspeccion.
 #
-# Los campos asociados a una inspección son opcionales
-# para mantener compatibles los registros históricos.
+# Los campos asociados a una inspeccion son opcionales
+# para mantener compatibles los registros historicos.
 # ==========================================================
 
 
@@ -36,11 +37,31 @@ class TransferenciaMarco(Base):
     __tablename__ = "transferencias_marcos"
 
     # ======================================================
-    # IDENTIFICADOR
+    # INDICES EXISTENTES EN POSTGRESQL
+    # ======================================================
+
+    __table_args__ = (
+        Index(
+            "idx_transferencia_destino",
+            "colmena_destino_id",
+        ),
+        Index(
+            "idx_transferencia_origen",
+            "colmena_origen_id",
+        ),
+        Index(
+            "ix_transferencias_marcos_inspeccion_id",
+            "inspeccion_id",
+        ),
+    )
+
+    # ======================================================
+    # IDENTIFICADOR AUTOMATICO
     # ======================================================
 
     id: Mapped[int] = mapped_column(
         BigInteger,
+        Identity(always=True),
         primary_key=True,
     )
 
@@ -75,11 +96,11 @@ class TransferenciaMarco(Base):
     )
 
     # ======================================================
-    # INSPECCIÓN DE ORIGEN (OPCIONAL)
+    # INSPECCION DE ORIGEN (OPCIONAL)
     # ======================================================
     #
-    # NULL: transferencia manual o histórica.
-    # ID: transferencia realizada durante una inspección.
+    # NULL: transferencia manual o historica.
+    # ID: transferencia realizada durante una inspeccion.
     # ======================================================
 
     inspeccion_id: Mapped[int | None] = mapped_column(
@@ -123,10 +144,10 @@ class TransferenciaMarco(Base):
     # DETALLE DEL MARCO TRANSFERIDO
     # ======================================================
     #
-    # Ubicación:
+    # Ubicacion:
     #   CAMARA_CRIA / ALZA
     #
-    # Número:
+    # Numero:
     #   1 a 10
     #
     # Contenido:
@@ -176,7 +197,7 @@ class TransferenciaMarco(Base):
     )
 
     # ======================================================
-    # FECHA DE CREACIÓN
+    # FECHA DE CREACION
     # ======================================================
 
     fecha_creacion: Mapped[datetime] = mapped_column(
