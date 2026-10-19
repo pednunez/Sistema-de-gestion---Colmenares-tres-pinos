@@ -8,12 +8,16 @@ from fastapi import (
 )
 from sqlalchemy.orm import Session
 
-from app.core.dependencies import obtener_usuario_actual
+from app.core.dependencies import (
+    obtener_usuario_actual,
+    requerir_admin,
+)
 from app.database import get_db
+from app.models.usuario import Usuario
 
 from app.schemas.inventario import (
-    EstadoInventario,
     InventarioIncidenciaResponse,
+    InventarioMovimientoCreate,
     InventarioMovimientoResponse,
     InventarioResumenResponse,
     InventarioStockResponse,
@@ -22,19 +26,19 @@ from app.schemas.inventario import (
 )
 
 from app.services import inventario as inventario_service
+from app.services import (
+    inventario_operaciones as operaciones_service,
+)
 
 
 # ==========================================================
 # ROUTER: INVENTARIO GENERAL
-# COLMENARES TRES PINOS
+# PROYECTO: COLMENARES TRES PINOS
 # ==========================================================
 #
 # Todas las rutas requieren autenticacion.
 #
-# En esta primera etapa solo ofrecemos consultas.
-# Las operaciones de escritura se incorporaran
-# despues de implementar sus validaciones y
-# transacciones de base de datos.
+# Las operaciones de escritura requieren rol ADMIN.
 # ==========================================================
 
 router = APIRouter(
@@ -45,17 +49,7 @@ router = APIRouter(
 
 
 # ==========================================================
-# RESUMEN GENERAL
-# ==========================================================
-#
-# GET /inventario/resumen
-#
-# Devuelve:
-# - Materiales en bodega
-# - Materiales instalados
-# - Cantidades por estado
-# - Total disponible
-# - Total general
+# CONSULTAR RESUMEN GENERAL
 # ==========================================================
 
 @router.get(
@@ -69,15 +63,7 @@ def obtener_resumen_inventario(
 
 
 # ==========================================================
-# CONSULTAR EXISTENCIAS
-# ==========================================================
-#
-# GET /inventario/stock
-#
-# Filtros opcionales:
-# - material
-# - ubicacion
-# - colmena_id
+# CONSULTAR STOCK
 # ==========================================================
 
 @router.get(
@@ -86,10 +72,10 @@ def obtener_resumen_inventario(
 )
 def listar_stock_inventario(
     material: MaterialInventario | None = Query(
-        default=None
+        default=None,
     ),
     ubicacion: UbicacionInventario | None = Query(
-        default=None
+        default=None,
     ),
     colmena_id: int | None = Query(
         default=None,
@@ -106,12 +92,7 @@ def listar_stock_inventario(
 
 
 # ==========================================================
-# HISTORIAL DE MOVIMIENTOS
-# ==========================================================
-#
-# GET /inventario/movimientos
-#
-# Muestra los movimientos mas recientes.
+# CONSULTAR HISTORIAL DE MOVIMIENTOS
 # ==========================================================
 
 @router.get(
@@ -133,13 +114,40 @@ def listar_movimientos_inventario(
 
 
 # ==========================================================
-# CONSULTAR INCIDENCIAS
+# REGISTRAR INGRESO O RETIRO DE BODEGA
 # ==========================================================
 #
-# GET /inventario/incidencias
+# POST /inventario/movimientos
 #
-# Permite consultar materiales danados, rotos,
-# pendientes, en reparacion y reparados.
+# Requiere usuario ADMIN.
+#
+# Por ahora permite:
+# - INGRESO de materiales BUENOS a BODEGA.
+# - RETIRO de materiales BUENOS desde BODEGA.
+#
+# Los traslados, danos y reparaciones se incorporaran
+# en las siguientes etapas.
+# ==========================================================
+
+@router.post(
+    "/movimientos",
+    response_model=InventarioMovimientoResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def registrar_movimiento_inventario(
+    datos: InventarioMovimientoCreate,
+    db: Session = Depends(get_db),
+    usuario_actual: Usuario = Depends(requerir_admin),
+):
+    return operaciones_service.registrar_movimiento_bodega(
+        db=db,
+        datos=datos,
+        usuario_id=usuario_actual.id,
+    )
+
+
+# ==========================================================
+# CONSULTAR INCIDENCIAS
 # ==========================================================
 
 @router.get(
@@ -161,10 +169,7 @@ def listar_incidencias_inventario(
 
 
 # ==========================================================
-# CONSULTAR UNA INCIDENCIA POR ID
-# ==========================================================
-#
-# GET /inventario/incidencias/{incidencia_id}
+# CONSULTAR INCIDENCIA POR ID
 # ==========================================================
 
 @router.get(
