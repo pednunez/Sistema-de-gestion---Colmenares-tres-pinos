@@ -27,10 +27,16 @@ from app.routers.auditoria import router as auditoria_router
 from app.routers.auth import router as auth_router
 
 # ==========================================================
-# NUEVO ROUTER: INVENTARIO GENERAL
+# INVENTARIO GENERAL
 # ==========================================================
 
 from app.routers.inventario import router as inventario_router
+
+# ==========================================================
+# STOCK DE BODEGA - FRONTEND DE PEDRO
+# ==========================================================
+
+from app.routers.stock import router as stock_router
 
 
 # ==========================================================
@@ -99,20 +105,30 @@ app.include_router(auditoria_router)
 
 
 # ==========================================================
-# NUEVO MODULO: INVENTARIO GENERAL
-# ==========================================================
-#
-# La autenticacion esta definida en el propio
-# router de inventario.
-#
-# GET /inventario/resumen
-# GET /inventario/stock
-# GET /inventario/movimientos
-# GET /inventario/incidencias
-# GET /inventario/incidencias/{incidencia_id}
+# INVENTARIO GENERAL
 # ==========================================================
 
 app.include_router(inventario_router)
+
+
+# ==========================================================
+# STOCK DE BODEGA
+# ==========================================================
+#
+# Contrato esperado por el frontend de Pedro:
+#
+# GET /stock/
+#
+# Proximamente:
+# POST /stock/movimientos/
+# GET /stock/movimientos/
+# PATCH /stock/{material}
+#
+# La autenticacion se encuentra definida
+# dentro del propio router.
+# ==========================================================
+
+app.include_router(stock_router)
 
 
 # ==========================================================
