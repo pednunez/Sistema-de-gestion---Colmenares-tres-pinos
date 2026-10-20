@@ -90,6 +90,19 @@ export const ENTIDAD = {
   USUARIO: { texto: "Usuario" },
 };
 
+// Materiales que se controlan en la bodega (módulo Stock). "puedeDanarse" indica
+// si el material lleva cuenta de unidades dañadas; un marco con cera que se
+// rompe se cuenta como marco roto (MARCO_VACIO dañado).
+export const MATERIAL_STOCK = {
+  ALZA: { texto: "Alzas", unidad: "alza", puedeDanarse: true },
+  MARCO_VACIO: { texto: "Marcos vacíos", textoDanado: "Marcos rotos", unidad: "marco", puedeDanarse: true },
+  MARCO_CERA_ESTIRADA: { texto: "Marcos con cera estirada", unidad: "marco", puedeDanarse: false },
+  MARCO_CERA_UNTADA: { texto: "Marcos con cera untada", unidad: "marco", puedeDanarse: false },
+  TECHO_AMERICANO: { texto: "Techos americanos", unidad: "techo", puedeDanarse: true },
+  ENTRETAPA: { texto: "Entretapas", unidad: "entretapa", puedeDanarse: true },
+  PISO: { texto: "Pisos", unidad: "piso", puedeDanarse: true },
+};
+
 export function texto(mapa, valor, porDefecto = "Sin registrar") {
   if (valor === null || valor === undefined || valor === "") return porDefecto;
   return mapa[valor]?.texto ?? humanizar(valor);

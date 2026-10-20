@@ -1,6 +1,6 @@
 # Pendientes del backend para el frontend de escritorio
 
-Actualizado el 07-10-2026, después de integrar el login por cookie y el registro de marcos en la inspección.
+Actualizado el 20-10-2026, al iniciar el módulo Stock (sección 5).
 
 ## 1. Detalle por marco en la inspección (bloquea el guardado)
 
@@ -56,3 +56,66 @@ Si el backend pasa a crear las transferencias, avisar para quitar esas llamadas 
 - **Nombres de usuarios para el apicultor:** `/usuarios` es solo para ADMIN, así que un apicultor ve "Usuario #id" como responsable de registros ajenos.
 - **Paginación de colmenas:** la respuesta no incluye el total de registros.
 - **Escala de miel:** el frontend guarda en `miel` uno de estos valores: `SIN_MIEL`, `POCA`, `MEDIA` o `ABUNDANTE`. Si el backend o la app móvil definen otra escala, avisar para alinearla.
+
+## 5. Módulo Stock (nuevo)
+
+El frontend tiene la pantalla Stock. Mientras `/stock/` no exista, muestra el aviso "El inventario todavía no está disponible". Se controla una sola bodega.
+
+**Permisos:** ADMIN y APICULTOR consultan; solo ADMIN registra movimientos y cambia mínimos.
+
+### Materiales (`material`)
+
+| Valor | Material | Lleva dañados |
+|---|---|---|
+| `ALZA` | Alzas | Sí |
+| `MARCO_VACIO` | Marcos vacíos (los dañados son los marcos rotos) | Sí |
+| `MARCO_CERA_ESTIRADA` | Marcos con cera estirada | No |
+| `MARCO_CERA_UNTADA` | Marcos con cera untada | No |
+| `TECHO_AMERICANO` | Techos americanos | Sí |
+| `ENTRETAPA` | Entretapas | Sí |
+| `PISO` | Pisos | Sí |
+
+### Paso 1 (ya en el frontend): inventario
+
+`GET /stock/` devuelve una fila por material:
+
+```json
+[
+  { "material": "ALZA", "disponible": 12, "danado": 3, "minimo": 5, "actualizado_en": "2026-10-20T15:00:00" },
+  { "material": "MARCO_CERA_UNTADA", "disponible": 15, "danado": 0, "minimo": null, "actualizado_en": "2026-10-20T15:00:00" }
+]
+```
+
+Si falta un material, el frontend lo muestra con 0.
+
+### Paso 2 (siguiente commit): movimientos
+
+`POST /stock/movimientos/` (solo ADMIN):
+
+```json
+{ "material": "ALZA", "tipo": "ENVIO", "cantidad": 2, "apiario_id": 1, "colmena_id": null, "observaciones": "Colmena nueva en Mandinga" }
+```
+
+| `tipo` | Efecto | Valida |
+|---|---|---|
+| `INGRESO` | + disponible | — |
+| `ENVIO` | − disponible (a apiario o colmena; `apiario_id` obligatorio) | disponible suficiente |
+| `DANO` | − disponible, + dañado | disponible suficiente |
+| `REPARACION` | − dañado, + disponible | dañado suficiente |
+| `DESCARTE` | − dañado | dañado suficiente |
+
+- `cantidad`: entero mayor que 0. El stock nunca queda negativo: si no alcanza, responder 409 o 422 con un mensaje en español.
+- `DANO` de `MARCO_CERA_ESTIRADA` o `MARCO_CERA_UNTADA` descuenta ese material y suma al dañado de `MARCO_VACIO`.
+- `REPARACION` y `DESCARTE` no aplican a los marcos con cera (sin dañados propios).
+- Registrar `usuario_id` y la fecha, y dejarlo en auditoría.
+- Responder el movimiento creado y el inventario actualizado del material.
+
+`GET /stock/movimientos/?material=&tipo=&desde=&hasta=&offset=&limit=` devuelve el historial, el más reciente primero:
+
+```json
+{ "id": 1, "material": "ALZA", "tipo": "ENVIO", "cantidad": 2, "apiario_id": 1, "colmena_id": null, "observaciones": "...", "usuario_id": 1, "fecha": "2026-10-20T15:00:00" }
+```
+
+### Paso 3: mínimos
+
+`PATCH /stock/{material}` (solo ADMIN) con `{ "minimo": 5 }` (entero ≥ 0 o `null`). El frontend avisa cuando `disponible` < `minimo`.
