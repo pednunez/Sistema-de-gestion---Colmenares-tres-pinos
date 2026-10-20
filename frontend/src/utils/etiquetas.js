@@ -103,6 +103,15 @@ export const MATERIAL_STOCK = {
   PISO: { texto: "Pisos", unidad: "piso", puedeDanarse: true },
 };
 
+// Movimientos de stock. "signo" es el efecto sobre el material: + suma, − resta.
+export const TIPO_MOVIMIENTO_STOCK = {
+  INGRESO: { texto: "Ingreso", tono: "verde", signo: "+", ayuda: "Compra o fabricación: suma al disponible." },
+  ENVIO: { texto: "Envío", tono: "azul", signo: "−", ayuda: "Material que sale a un apiario o colmena: resta del disponible." },
+  DANO: { texto: "Daño", tono: "rojo", signo: "−", ayuda: "Material que se rompió: pasa de disponible a dañado." },
+  REPARACION: { texto: "Reparación", tono: "ambar", signo: "+", ayuda: "Material reparado: pasa de dañado a disponible." },
+  DESCARTE: { texto: "Descarte", tono: "gris", signo: "−", ayuda: "Material dañado sin arreglo: sale del inventario." },
+};
+
 export function texto(mapa, valor, porDefecto = "Sin registrar") {
   if (valor === null || valor === undefined || valor === "") return porDefecto;
   return mapa[valor]?.texto ?? humanizar(valor);

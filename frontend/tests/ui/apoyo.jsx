@@ -15,6 +15,7 @@ export function simularBackend({ usuario = ADMIN, datos = {}, respuestas = {} } 
       metodo: opciones.method ?? "GET",
       cuerpo: opciones.body ? JSON.parse(opciones.body) : null,
       headers: opciones.headers ?? {},
+      params: Object.fromEntries(u.searchParams),
     };
     llamadas.push(llamada);
     const json = (cuerpo, status = 200) => new Response(JSON.stringify(cuerpo), { status });

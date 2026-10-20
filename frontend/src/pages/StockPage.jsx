@@ -1,14 +1,35 @@
-import { AlertTriangle, Frame, Package, Warehouse } from "lucide-react";
+import { useState } from "react";
+import { AlertTriangle, Frame, Package, Plus, Warehouse } from "lucide-react";
+import Boton from "../components/ui/Boton";
 import { Cargando, ErrorCarga, EstadoVacio } from "../components/ui/Estados";
 import { EncabezadoModulo, Panel, TarjetaIndicador } from "../components/ui/Estructura";
 import TarjetaMaterial from "../components/stock/TarjetaMaterial";
+import FormularioMovimiento from "../components/stock/FormularioMovimiento";
+import HistorialMovimientos from "../components/stock/HistorialMovimientos";
+import { useAuth } from "../hooks/useAuth";
+import { useAvisos } from "../hooks/useAvisos";
+import { stockService } from "../services/stockService";
+import { MATERIAL_STOCK, TIPO_MOVIMIENTO_STOCK } from "../utils/etiquetas";
 import { useInventario } from "../hooks/useInventario";
 import { cantidadCon } from "../utils/stock";
 
-// Inventario de la bodega: material disponible y material dañado por reparar.
-// Los movimientos (ingresos, envíos, daños, reparaciones) llegan en el siguiente paso.
+// Inventario de la bodega y sus movimientos. Solo el administrador registra
+// movimientos; el apicultor consulta.
 export default function StockPage() {
+  const { esAdmin } = useAuth();
+  const avisos = useAvisos();
   const { inventario, noDisponible, cargando, error, recargar } = useInventario();
+  const [formulario, setFormulario] = useState(null);
+  const [versionHistorial, setVersionHistorial] = useState(0);
+
+  const registrar = async (movimiento) => {
+    await stockService.registrarMovimiento(movimiento);
+    const { texto: nombreTipo } = TIPO_MOVIMIENTO_STOCK[movimiento.tipo];
+    avisos.exito(`${nombreTipo} registrado: ${movimiento.cantidad} · ${MATERIAL_STOCK[movimiento.material].texto.toLowerCase()}.`);
+    setFormulario(null);
+    recargar();
+    setVersionHistorial((v) => v + 1);
+  };
 
   if (cargando && !inventario) return <Cargando texto="Cargando inventario..." />;
   if (error) return <ErrorCarga mensaje={`No se pudo cargar el inventario. ${error}`} onReintentar={recargar} />;
@@ -26,7 +47,13 @@ export default function StockPage() {
 
   return (
     <>
-      <EncabezadoModulo descripcion="Material de la bodega disponible para las colmenas y material dañado por reparar." />
+      <EncabezadoModulo descripcion="Material de la bodega disponible para las colmenas y material dañado por reparar.">
+        {esAdmin && (
+          <Boton icono={Plus} onClick={() => setFormulario({})}>
+            Registrar movimiento
+          </Boton>
+        )}
+      </EncabezadoModulo>
 
       <div className="mb-6 grid grid-cols-1 gap-5 sm:grid-cols-3">
         <TarjetaIndicador titulo="Material disponible" valor={totalDisponible} detalle="unidades en bodega" icono={Package} />
@@ -54,14 +81,49 @@ export default function StockPage() {
         ) : (
           <ul className="divide-y divide-slate-100">
             {danados.map((item) => (
-              <li key={item.material} className="flex items-center justify-between px-5 py-3">
+              <li key={item.material} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
                 <span>{item.textoDanado ?? item.texto}</span>
-                <span className="font-semibold text-red-600">{cantidadCon(item.danado, item.unidad)}</span>
+                <span className="flex items-center gap-3">
+                  <span className="font-semibold text-red-600">{cantidadCon(item.danado, item.unidad)}</span>
+                  {esAdmin && (
+                    <>
+                      <Boton
+                        variante="secundario"
+                        tamano="sm"
+                        aria-label={`Reparar ${(item.textoDanado ?? item.texto).toLowerCase()}`}
+                        onClick={() => setFormulario({ tipo: "REPARACION", material: item.material })}
+                      >
+                        Reparar
+                      </Boton>
+                      <Boton
+                        variante="fantasma"
+                        tamano="sm"
+                        aria-label={`Descartar ${(item.textoDanado ?? item.texto).toLowerCase()}`}
+                        onClick={() => setFormulario({ tipo: "DESCARTE", material: item.material })}
+                      >
+                        Descartar
+                      </Boton>
+                    </>
+                  )}
+                </span>
               </li>
             ))}
           </ul>
         )}
       </Panel>
+
+      <div className="mt-6">
+        <HistorialMovimientos version={versionHistorial} />
+      </div>
+
+      {formulario && (
+        <FormularioMovimiento
+          inventario={inventario}
+          inicial={formulario}
+          onGuardar={registrar}
+          onCerrar={() => setFormulario(null)}
+        />
+      )}
     </>
   );
 }

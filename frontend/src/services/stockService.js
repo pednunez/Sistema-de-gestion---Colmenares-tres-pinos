@@ -13,4 +13,21 @@ export const stockService = {
       throw err;
     }
   },
+
+  registrarMovimiento: (movimiento) => api.post("/stock/movimientos/", movimiento),
+
+  // Historial filtrado y paginado. null si el backend aún no tiene el endpoint.
+  async listarMovimientos({ material, tipo, desde, hasta, offset = 0, limit = 20 } = {}) {
+    const params = new URLSearchParams({ offset: String(offset), limit: String(limit) });
+    if (material) params.set("material", material);
+    if (tipo) params.set("tipo", tipo);
+    if (desde) params.set("desde", desde);
+    if (hasta) params.set("hasta", hasta);
+    try {
+      return await api.get(`/stock/movimientos/?${params}`);
+    } catch (err) {
+      if (err.estado === 404) return null;
+      throw err;
+    }
+  },
 };
