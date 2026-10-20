@@ -5,6 +5,8 @@ import { Cargando, ErrorCarga, EstadoVacio } from "../components/ui/Estados";
 import { EncabezadoModulo, Panel, TarjetaIndicador } from "../components/ui/Estructura";
 import TarjetaMaterial from "../components/stock/TarjetaMaterial";
 import FormularioMovimiento from "../components/stock/FormularioMovimiento";
+import FormularioMinimo from "../components/stock/FormularioMinimo";
+import AvisoStockBajo from "../components/stock/AvisoStockBajo";
 import HistorialMovimientos from "../components/stock/HistorialMovimientos";
 import { useAuth } from "../hooks/useAuth";
 import { useAvisos } from "../hooks/useAvisos";
@@ -21,6 +23,18 @@ export default function StockPage() {
   const { inventario, noDisponible, cargando, error, recargar } = useInventario();
   const [formulario, setFormulario] = useState(null);
   const [versionHistorial, setVersionHistorial] = useState(0);
+  const [editandoMinimo, setEditandoMinimo] = useState(null);
+
+  const guardarMinimo = async (material, minimo) => {
+    await stockService.actualizarMinimo(material, minimo);
+    avisos.exito(
+      minimo === null
+        ? `Se quitó el mínimo de ${MATERIAL_STOCK[material].texto.toLowerCase()}.`
+        : `Mínimo de ${MATERIAL_STOCK[material].texto.toLowerCase()}: ${minimo}.`
+    );
+    setEditandoMinimo(null);
+    recargar();
+  };
 
   const registrar = async (movimiento) => {
     await stockService.registrarMovimiento(movimiento);
@@ -43,7 +57,7 @@ export default function StockPage() {
     );
   }
 
-  const { items, totalDisponible, totalDanado, marcosListos, danados } = inventario;
+  const { items, totalDisponible, totalDanado, marcosListos, danados, bajos } = inventario;
 
   return (
     <>
@@ -54,6 +68,12 @@ export default function StockPage() {
           </Boton>
         )}
       </EncabezadoModulo>
+
+      {bajos.length > 0 && (
+        <div className="mb-6">
+          <AvisoStockBajo bajos={bajos} />
+        </div>
+      )}
 
       <div className="mb-6 grid grid-cols-1 gap-5 sm:grid-cols-3">
         <TarjetaIndicador titulo="Material disponible" valor={totalDisponible} detalle="unidades en bodega" icono={Package} />
@@ -70,7 +90,7 @@ export default function StockPage() {
 
       <div className="mb-6 grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
         {items.map((item) => (
-          <TarjetaMaterial key={item.material} item={item} />
+          <TarjetaMaterial key={item.material} item={item} onCambiarMinimo={esAdmin ? setEditandoMinimo : undefined} />
         ))}
       </div>
 
@@ -115,6 +135,10 @@ export default function StockPage() {
       <div className="mt-6">
         <HistorialMovimientos version={versionHistorial} />
       </div>
+
+      {editandoMinimo && (
+        <FormularioMinimo item={editandoMinimo} onGuardar={guardarMinimo} onCerrar={() => setEditandoMinimo(null)} />
+      )}
 
       {formulario && (
         <FormularioMovimiento

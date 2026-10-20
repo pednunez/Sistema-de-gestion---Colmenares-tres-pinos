@@ -2,6 +2,11 @@
 // aparecen todos los materiales, aunque el backend no traiga alguno.
 import { MATERIAL_STOCK } from "./etiquetas";
 
+const minimoONulo = (valor) =>
+  valor === null || valor === undefined || valor === "" || !Number.isFinite(Number(valor))
+    ? null
+    : Math.max(0, Math.trunc(Number(valor)));
+
 const entero = (valor) => (Number.isFinite(Number(valor)) ? Math.max(0, Math.trunc(Number(valor))) : 0);
 
 export function armarInventario(filas = []) {
@@ -13,9 +18,13 @@ export function armarInventario(filas = []) {
       ...info,
       disponible: entero(fila.disponible),
       danado: info.puedeDanarse ? entero(fila.danado) : 0,
+      minimo: minimoONulo(fila.minimo),
       actualizadoEn: fila.actualizado_en ?? null,
     };
   });
+
+  // Stock bajo: el disponible quedó por debajo del mínimo definido.
+  for (const item of items) item.bajoMinimo = item.minimo !== null && item.disponible < item.minimo;
 
   const marcos = items.filter((i) => i.material.startsWith("MARCO_"));
   return {
@@ -24,6 +33,7 @@ export function armarInventario(filas = []) {
     totalDanado: items.reduce((suma, i) => suma + i.danado, 0),
     marcosListos: marcos.reduce((suma, i) => suma + i.disponible, 0),
     danados: items.filter((i) => i.danado > 0),
+    bajos: items.filter((i) => i.bajoMinimo),
   };
 }
 
@@ -112,4 +122,20 @@ export function movimientoParaEnviar(v) {
     colmena_id: esEnvio && v.colmena_id ? Number(v.colmena_id) : null,
     observaciones: observaciones || null,
   };
+}
+
+// ---------------------------------------------------------------------------
+// Mínimos
+// ---------------------------------------------------------------------------
+
+export function validarMinimo(valor) {
+  if (valor === "") return undefined; // vacío = sin mínimo
+  const n = Number(valor);
+  if (!Number.isInteger(n) || n < 0) return "El mínimo debe ser un número entero de 0 o más.";
+  if (n > MAXIMO_POR_MOVIMIENTO) return `El mínimo no puede superar ${MAXIMO_POR_MOVIMIENTO}.`;
+  return undefined;
+}
+
+export function textoStockBajo(item) {
+  return `${item.texto}: ${item.disponible} de un mínimo de ${item.minimo}`;
 }

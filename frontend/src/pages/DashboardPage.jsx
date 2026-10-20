@@ -4,7 +4,9 @@ import Boton from "../components/ui/Boton";
 import Insignia from "../components/ui/Insignia";
 import { Cargando } from "../components/ui/Estados";
 import { Panel, TarjetaIndicador } from "../components/ui/Estructura";
+import AvisoStockBajo from "../components/stock/AvisoStockBajo";
 import { useDatos } from "../hooks/useDatos";
+import { useInventario } from "../hooks/useInventario";
 import { useNavegacion } from "../hooks/useNavegacion";
 import { calcularAlertas, colmenaOperativa, ultimaInspeccionPorColmena, DIAS_SIN_INSPECCION } from "../utils/alertas";
 
@@ -18,6 +20,8 @@ const DISTRIBUCION = [
 export default function DashboardPage() {
   const { datos, cargado, nombreApiario } = useDatos();
   const { navegar } = useNavegacion();
+  // Si el backend aún no tiene stock, el inventario queda en null y no se muestra nada.
+  const { inventario } = useInventario();
 
   const resumen = useMemo(() => {
     const operativas = datos.colmenas.filter(colmenaOperativa);
@@ -52,6 +56,12 @@ export default function DashboardPage() {
 
   return (
     <>
+      {inventario?.bajos.length > 0 && (
+        <div className="mb-6">
+          <AvisoStockBajo bajos={inventario.bajos} onVer={() => navegar("stock")} />
+        </div>
+      )}
+
       <div className="mb-6 grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
         <TarjetaIndicador titulo="Apiarios" valor={datos.apiarios.length} icono={MapPinned} onClick={() => navegar("apiarios")} />
         <TarjetaIndicador titulo="Colmenas en operación" valor={total} icono={Boxes} onClick={() => navegar("colmenas")} />

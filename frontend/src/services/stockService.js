@@ -14,6 +14,9 @@ export const stockService = {
     }
   },
 
+  // minimo: entero ≥ 0, o null para quitarlo.
+  actualizarMinimo: (material, minimo) => api.patch(`/stock/${material}`, { minimo }),
+
   registrarMovimiento: (movimiento) => api.post("/stock/movimientos/", movimiento),
 
   // Historial filtrado y paginado. null si el backend aún no tiene el endpoint.
