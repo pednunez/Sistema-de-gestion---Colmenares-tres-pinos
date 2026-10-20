@@ -11,7 +11,27 @@ from pydantic import (
 
 
 # ==========================================================
-# TIPOS PERMITIDOS EN EL INVENTARIO
+# SCHEMAS DE INVENTARIO - COLMENARES TRES PINOS
+# ==========================================================
+#
+# Define las validaciones y respuestas de los
+# endpoints del inventario general.
+#
+# Mantiene compatibilidad con los materiales originales
+# e incorpora los nuevos materiales de bodega.
+# ==========================================================
+
+
+# ==========================================================
+# MATERIALES PERMITIDOS
+# ==========================================================
+#
+# Se conservan los seis materiales originales
+# y se incorporan cinco nuevos.
+#
+# Total: 11 identificadores.
+#
+# Deben coincidir con las restricciones de PostgreSQL.
 # ==========================================================
 
 MaterialInventario = Literal[
@@ -21,7 +41,17 @@ MaterialInventario = Literal[
     "TAPA",
     "TECHO_LATA",
     "TECHO_AMERICANO",
+    "MARCO_VACIO",
+    "MARCO_CERA_ESTIRADA",
+    "MARCO_CERA_UNTADA",
+    "ENTRETAPA",
+    "PISO",
 ]
+
+
+# ==========================================================
+# ESTADOS PERMITIDOS
+# ==========================================================
 
 EstadoInventario = Literal[
     "BUENO",
@@ -30,6 +60,11 @@ EstadoInventario = Literal[
     "EN_REPARACION",
     "REPARADO",
 ]
+
+
+# ==========================================================
+# UBICACIONES PERMITIDAS
+# ==========================================================
 
 UbicacionInventario = Literal[
     "BODEGA",
@@ -44,11 +79,15 @@ UbicacionInventario = Literal[
 class InventarioStockResponse(BaseModel):
 
     id: int
+
     material: MaterialInventario
+
     ubicacion: UbicacionInventario
+
     colmena_id: int | None
 
     estado: EstadoInventario
+
     cantidad: int = Field(ge=0)
 
     fecha_actualizacion: datetime
@@ -62,8 +101,13 @@ class InventarioStockResponse(BaseModel):
 # SOLICITUD DE MOVIMIENTOS
 # ==========================================================
 #
-# Los movimientos de daños y reparaciones se harán
-# mediante endpoints específicos de incidencias.
+# Estos son los movimientos del inventario general.
+#
+# Las operaciones especificas del frontend de Pedro
+# se implementaran en POST /stock/movimientos/.
+#
+# No modificamos los tipos actuales para conservar
+# compatibilidad con los endpoints existentes.
 # ==========================================================
 
 class InventarioMovimientoCreate(BaseModel):
@@ -81,12 +125,14 @@ class InventarioMovimientoCreate(BaseModel):
     estado: EstadoInventario = "BUENO"
 
     origen_ubicacion: UbicacionInventario | None = None
+
     colmena_origen_id: int | None = Field(
         default=None,
         gt=0,
     )
 
     destino_ubicacion: UbicacionInventario | None = None
+
     colmena_destino_id: int | None = Field(
         default=None,
         gt=0,
@@ -94,42 +140,64 @@ class InventarioMovimientoCreate(BaseModel):
 
     observaciones: str | None = None
 
+    # ======================================================
+    # VALIDAR MOVIMIENTO
+    # ======================================================
+
     @model_validator(mode="after")
     def validar_movimiento(self):
 
+        # ==================================================
+        # VALIDAR UBICACION DE ORIGEN
+        # ==================================================
+
         if self.origen_ubicacion == "BODEGA":
+
             if self.colmena_origen_id is not None:
                 raise ValueError(
                     "La bodega no requiere colmena de origen"
                 )
 
         elif self.origen_ubicacion == "INSTALADO":
+
             if self.colmena_origen_id is None:
                 raise ValueError(
                     "Debe indicar la colmena de origen"
                 )
 
         elif self.colmena_origen_id is not None:
+
             raise ValueError(
-                "Debe indicar la ubicación de origen"
+                "Debe indicar la ubicacion de origen"
             )
 
+        # ==================================================
+        # VALIDAR UBICACION DE DESTINO
+        # ==================================================
+
         if self.destino_ubicacion == "BODEGA":
+
             if self.colmena_destino_id is not None:
                 raise ValueError(
                     "La bodega no requiere colmena de destino"
                 )
 
         elif self.destino_ubicacion == "INSTALADO":
+
             if self.colmena_destino_id is None:
                 raise ValueError(
                     "Debe indicar la colmena de destino"
                 )
 
         elif self.colmena_destino_id is not None:
+
             raise ValueError(
-                "Debe indicar la ubicación de destino"
+                "Debe indicar la ubicacion de destino"
             )
+
+        # ==================================================
+        # VALIDAR INGRESO
+        # ==================================================
 
         if self.tipo_movimiento == "INGRESO":
 
@@ -143,6 +211,10 @@ class InventarioMovimientoCreate(BaseModel):
                     "Un ingreso requiere destino"
                 )
 
+        # ==================================================
+        # VALIDAR RETIRO
+        # ==================================================
+
         elif self.tipo_movimiento == "RETIRO":
 
             if self.origen_ubicacion is None:
@@ -154,6 +226,10 @@ class InventarioMovimientoCreate(BaseModel):
                 raise ValueError(
                     "Un retiro no debe tener destino"
                 )
+
+        # ==================================================
+        # VALIDAR TRASLADO
+        # ==================================================
 
         elif self.tipo_movimiento == "TRASLADO":
 
@@ -190,20 +266,29 @@ class InventarioMovimientoCreate(BaseModel):
 class InventarioMovimientoResponse(BaseModel):
 
     id: int
+
     material: MaterialInventario
+
     tipo_movimiento: str
+
     cantidad: int
 
     origen_ubicacion: UbicacionInventario | None
+
     colmena_origen_id: int | None
+
     origen_estado: EstadoInventario | None
 
     destino_ubicacion: UbicacionInventario | None
+
     colmena_destino_id: int | None
+
     destino_estado: EstadoInventario | None
 
     usuario_id: int
+
     observaciones: str | None
+
     fecha_creacion: datetime
 
     model_config = ConfigDict(
@@ -212,7 +297,7 @@ class InventarioMovimientoResponse(BaseModel):
 
 
 # ==========================================================
-# REGISTRAR MATERIAL DAÑADO O ROTO
+# REGISTRAR MATERIAL DANADO O ROTO
 # ==========================================================
 
 class InventarioIncidenciaCreate(BaseModel):
@@ -244,25 +329,31 @@ class InventarioIncidenciaCreate(BaseModel):
 
     observaciones: str | None = None
 
+    # ======================================================
+    # VALIDAR UBICACION DE LA INCIDENCIA
+    # ======================================================
+
     @model_validator(mode="after")
     def validar_ubicacion(self):
 
         if self.ubicacion_detectada == "BODEGA":
+
             if self.colmena_detectada_id is not None:
                 raise ValueError(
                     "En bodega no debe indicar colmena"
                 )
 
         elif self.colmena_detectada_id is None:
+
             raise ValueError(
-                "Debe indicar la colmena donde ocurrió el daño"
+                "Debe indicar la colmena donde ocurrio el dano"
             )
 
         return self
 
 
 # ==========================================================
-# ACTUALIZAR EL PROCESO DE REPARACIÓN
+# ACTUALIZAR REPARACION
 # ==========================================================
 
 class InventarioReparacionCreate(BaseModel):
@@ -287,26 +378,40 @@ class InventarioReparacionCreate(BaseModel):
 class InventarioIncidenciaResponse(BaseModel):
 
     id: int
+
     material: MaterialInventario
-    tipo_dano: Literal["DANADO", "ROTO"]
+
+    tipo_dano: Literal[
+        "DANADO",
+        "ROTO",
+    ]
 
     ubicacion_detectada: UbicacionInventario
+
     colmena_detectada_id: int | None
 
     cantidad_afectada: int
+
     cantidad_pendiente: int
+
     cantidad_en_reparacion: int
+
     cantidad_reparada: int
+
     cantidad_baja: int
 
     descripcion_dano: str
+
     detalle_reparacion: str | None
+
     observaciones: str | None
 
     usuario_reporte_id: int
 
     fecha_deteccion: datetime
+
     fecha_actualizacion: datetime
+
     fecha_cierre: datetime | None
 
     model_config = ConfigDict(
@@ -315,7 +420,13 @@ class InventarioIncidenciaResponse(BaseModel):
 
 
 # ==========================================================
-# RESUMEN GENERAL PARA EL FRONTEND
+# RESUMEN GENERAL DEL INVENTARIO
+# ==========================================================
+#
+# No suma colmenas.cantidad_marcos por separado.
+#
+# Cada material debe contarse una sola vez segun
+# su ubicacion real en inventario_stock.
 # ==========================================================
 
 class InventarioResumenMaterial(BaseModel):
@@ -323,15 +434,21 @@ class InventarioResumenMaterial(BaseModel):
     material: MaterialInventario
 
     bodega: int = Field(ge=0)
+
     instalado: int = Field(ge=0)
 
     bueno: int = Field(ge=0)
+
     danado: int = Field(ge=0)
+
     roto: int = Field(ge=0)
+
     en_reparacion: int = Field(ge=0)
+
     reparado: int = Field(ge=0)
 
     disponibles: int = Field(ge=0)
+
     total: int = Field(ge=0)
 
 
@@ -340,7 +457,9 @@ class InventarioResumenResponse(BaseModel):
     materiales: list[InventarioResumenMaterial]
 
     total_bodega: int = Field(ge=0)
+
     total_instalado: int = Field(ge=0)
 
     total_disponible: int = Field(ge=0)
+
     total_general: int = Field(ge=0)
