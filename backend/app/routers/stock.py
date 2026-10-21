@@ -1,10 +1,11 @@
 
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from fastapi import (
     APIRouter,
     Depends,
     HTTPException,
+    Query,
     status,
 )
 
@@ -34,28 +35,41 @@ from app.models.stock_minimo import StockMinimo
 from app.models.usuario import Usuario
 
 from app.schemas.auditoria import AuditoriaCreate
+
+from app.schemas.stock import (
+    MaterialStock,
+    TipoMovimientoStock,
+    StockMovimientoCreate,
+    StockMovimientoResponse,
+)
+
 from app.services import auditoria as auditoria_service
+
+from app.services import (
+    stock_movimientos as stock_movimientos_service,
+)
 
 
 # ==========================================================
 # STOCK DE BODEGA - COLMENARES TRES PINOS
 # ==========================================================
 #
-# GET /stock/
+# ENDPOINTS:
+#
+# GET   /stock/
 # PATCH /stock/{material}
+# POST  /stock/movimientos/
+# GET   /stock/movimientos/
 #
-# El GET permite consultar existencias y minimos.
+# Permisos:
 #
-# El PATCH permite configurar o eliminar un minimo.
+# GET: ADMIN y APICULTOR.
+# PATCH y POST: solo ADMIN.
 #
-# IMPORTANTE:
+# El inventario de BODEGA permanece separado
+# de los materiales INSTALADOS en colmenas.
 #
-# Este modulo trabaja con existencias de BODEGA.
-#
-# Los materiales instalados en colmenas se mantienen
-# en el inventario general y no se duplican.
 # ==========================================================
-
 
 router = APIRouter(
     prefix="/stock",
@@ -65,7 +79,7 @@ router = APIRouter(
 
 
 # ==========================================================
-# CATALOGO DE MATERIALES DEL FRONTEND DE PEDRO
+# MATERIALES DEL FRONTEND DE PEDRO
 # ==========================================================
 
 MATERIALES_STOCK = (
@@ -119,15 +133,10 @@ class StockFilaResponse(BaseModel):
 # SOLICITUD PATCH /stock/{material}
 # ==========================================================
 #
-# El campo minimo es obligatorio, pero puede ser NULL.
+# minimo = 5    -> Crear o actualizar.
+# minimo = 0    -> Configurar minimo cero.
+# minimo = null -> Eliminar configuracion.
 #
-# Ejemplos:
-#
-# {"minimo": 10}   -> Crear o actualizar
-# {"minimo": 0}    -> Establecer minimo en cero
-# {"minimo": null} -> Eliminar configuracion
-#
-# No permitimos numeros negativos.
 # ==========================================================
 
 class StockMinimoUpdate(BaseModel):
@@ -157,14 +166,16 @@ class StockMinimoResponse(BaseModel):
 
 
 # ==========================================================
-# GET /stock/
+# 1. GET /stock/
 # ==========================================================
 #
-# Disponible para usuarios autenticados.
+# Consulta las existencias disponibles y danadas
+# de los siete materiales de BODEGA.
 #
-# ADMIN y APICULTOR pueden consultar el stock.
+# Tambien consulta los minimos configurados.
 #
-# Este endpoint no modifica PostgreSQL.
+# No modifica PostgreSQL.
+#
 # ==========================================================
 
 @router.get(
@@ -176,10 +187,7 @@ def consultar_stock(
 ):
 
     # ======================================================
-    # CREAR ESTRUCTURA INICIAL
-    # ======================================================
-    #
-    # Siempre devolvemos los siete materiales.
+    # INICIALIZAR LOS SIETE MATERIALES
     # ======================================================
 
     resumen = {
@@ -225,7 +233,7 @@ def consultar_stock(
     ).all()
 
     # ======================================================
-    # CLASIFICAR LAS CANTIDADES
+    # PROCESAR CANTIDADES POR ESTADO
     # ======================================================
 
     for fila in resultados_stock:
@@ -242,6 +250,10 @@ def consultar_stock(
 
             item["danado"] += cantidad
 
+        # ==================================================
+        # FECHA DE ACTUALIZACION DEL INVENTARIO
+        # ==================================================
+
         if (
             fila.actualizado_en is not None
             and (
@@ -250,12 +262,13 @@ def consultar_stock(
                 > item["actualizado_en"]
             )
         ):
+
             item["actualizado_en"] = (
                 fila.actualizado_en
             )
 
     # ======================================================
-    # CONSULTAR MINIMOS CONFIGURADOS
+    # CONSULTAR MINIMOS DE POSTGRESQL
     # ======================================================
 
     consulta_minimos = (
@@ -276,7 +289,7 @@ def consultar_stock(
     ).all()
 
     # ======================================================
-    # ASOCIAR MINIMOS AL RESUMEN
+    # ASOCIAR MINIMOS A CADA MATERIAL
     # ======================================================
 
     for fila in resultados_minimos:
@@ -295,33 +308,169 @@ def consultar_stock(
                 > item["actualizado_en"]
             )
         ):
+
             item["actualizado_en"] = (
                 fila.actualizado_en
             )
-
-    # ======================================================
-    # DEVOLVER STOCK Y MINIMOS
-    # ======================================================
 
     return list(resumen.values())
 
 
 # ==========================================================
-# PATCH /stock/{material}
+# 2. POST /stock/movimientos/
 # ==========================================================
 #
-# Permite:
+# Registra movimientos de stock.
 #
-# 1. Crear un minimo.
-# 2. Actualizar un minimo existente.
-# 3. Eliminar un minimo usando NULL.
+# Actualmente implementado:
 #
-# Requiere rol ADMIN.
+# INGRESO.
 #
-# Cada cambio efectivo genera auditoria.
+# Los demas tipos se implementaran posteriormente.
 #
-# El minimo y la auditoria se guardan dentro
-# de una misma transaccion PostgreSQL.
+# Solo ADMIN puede registrar movimientos.
+#
+# La logica de stock y auditoria se encuentra
+# en app/services/stock_movimientos.py.
+#
+# ==========================================================
+
+@router.post(
+    "/movimientos/",
+    response_model=StockMovimientoResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def registrar_movimiento_stock(
+    datos: StockMovimientoCreate,
+    db: Session = Depends(get_db),
+    usuario_actual: Usuario = Depends(requerir_admin),
+):
+
+    return stock_movimientos_service.registrar_movimiento_stock(
+        db=db,
+        datos=datos,
+        usuario_id=usuario_actual.id,
+    )
+
+
+# ==========================================================
+# 3. GET /stock/movimientos/
+# ==========================================================
+#
+# NUEVO ENDPOINT: HISTORIAL DE MOVIMIENTOS
+#
+# Permite consultar movimientos utilizando:
+#
+# - material
+# - tipo
+# - desde
+# - hasta
+# - offset
+# - limit
+#
+# Orden: mas recientes primero.
+#
+# Permisos: ADMIN y APICULTOR.
+#
+# No modifica PostgreSQL.
+#
+# ==========================================================
+
+@router.get(
+    "/movimientos/",
+    response_model=list[StockMovimientoResponse],
+)
+def consultar_historial_stock(
+
+    # ======================================================
+    # FILTRO POR MATERIAL
+    # ======================================================
+
+    material: MaterialStock | None = Query(
+        default=None,
+    ),
+
+    # ======================================================
+    # FILTRO POR TIPO DE MOVIMIENTO
+    # ======================================================
+
+    tipo: TipoMovimientoStock | None = Query(
+        default=None,
+    ),
+
+    # ======================================================
+    # FECHA INICIAL
+    # ======================================================
+    #
+    # Formato: YYYY-MM-DD.
+    # ======================================================
+
+    desde: date | None = Query(
+        default=None,
+    ),
+
+    # ======================================================
+    # FECHA FINAL
+    # ======================================================
+
+    hasta: date | None = Query(
+        default=None,
+    ),
+
+    # ======================================================
+    # REGISTROS QUE SE OMITEN
+    # ======================================================
+
+    offset: int = Query(
+        default=0,
+        ge=0,
+    ),
+
+    # ======================================================
+    # CANTIDAD DE REGISTROS
+    # ======================================================
+    #
+    # Pedro solicita 21 registros para mostrar
+    # 20 y detectar si existe una pagina siguiente.
+    # ======================================================
+
+    limit: int = Query(
+        default=20,
+        ge=1,
+        le=101,
+    ),
+
+    db: Session = Depends(get_db),
+):
+
+    # ======================================================
+    # CONSULTAR HISTORIAL DESDE EL SERVICIO
+    # ======================================================
+
+    return stock_movimientos_service.listar_movimientos_stock(
+        db=db,
+        material=material,
+        tipo=tipo,
+        desde=desde,
+        hasta=hasta,
+        offset=offset,
+        limit=limit,
+    )
+
+
+# ==========================================================
+# 4. PATCH /stock/{material}
+# ==========================================================
+#
+# Permite configurar el minimo de un material.
+#
+# Solo ADMIN.
+#
+# Genera auditoria cuando existe un cambio.
+#
+# La configuracion y su auditoria se guardan
+# en la misma transaccion.
+#
 # ==========================================================
 
 @router.patch(
@@ -351,15 +500,8 @@ def actualizar_minimo_stock(
     try:
 
         # ==================================================
-        # BLOQUEAR ACTUALIZACIONES CONCURRENTES
-        # ==================================================
-        #
-        # Utilizamos un bloqueo transaccional exclusivo
-        # para las configuraciones de minimos.
-        #
-        # El recurso 2 es distinto del utilizado por
-        # las operaciones del inventario general.
-        # ==================================================
+        # BLOQUEO PARA CONFIGURACION DE MINIMOS
+        # ======================================================
 
         db.execute(
             text(
@@ -373,8 +515,8 @@ def actualizar_minimo_stock(
         )
 
         # ==================================================
-        # BUSCAR CONFIGURACION EXISTENTE
-        # ==================================================
+        # CONSULTAR MINIMO EXISTENTE
+        # ======================================================
 
         consulta = (
             select(StockMinimo)
@@ -393,8 +535,8 @@ def actualizar_minimo_stock(
         )
 
         # ==================================================
-        # EVITAR ESCRITURAS SIN CAMBIOS
-        # ==================================================
+        # EVITAR CAMBIOS INNECESARIOS
+        # ======================================================
 
         if minimo_anterior == datos.minimo:
 
@@ -413,13 +555,8 @@ def actualizar_minimo_stock(
             }
 
         # ==================================================
-        # ELIMINAR MINIMO
-        # ==================================================
-        #
-        # NULL significa eliminar la configuracion.
-        #
-        # No elimina materiales ni cantidades fisicas.
-        # ==================================================
+        # ELIMINAR CONFIGURACION
+        # ======================================================
 
         if datos.minimo is None:
 
@@ -429,8 +566,8 @@ def actualizar_minimo_stock(
             fecha_actualizacion = None
 
         # ==================================================
-        # CREAR O ACTUALIZAR MINIMO
-        # ==================================================
+        # CREAR O ACTUALIZAR CONFIGURACION
+        # ======================================================
 
         else:
 
@@ -451,19 +588,11 @@ def actualizar_minimo_stock(
                     datetime.now(timezone.utc)
                 )
 
-        # ==================================================
-        # GUARDAR CAMBIOS PENDIENTES
-        # ==================================================
-        #
-        # Flush envia las operaciones a PostgreSQL,
-        # pero todavia no confirma la transaccion.
-        # ==================================================
-
         db.flush()
 
         # ==================================================
         # OBTENER FECHA ACTUALIZADA
-        # ==================================================
+        # ======================================================
 
         if datos.minimo is not None:
 
@@ -475,7 +604,7 @@ def actualizar_minimo_stock(
 
         # ==================================================
         # REGISTRAR AUDITORIA
-        # ==================================================
+        # ======================================================
 
         if minimo_anterior is None:
 
@@ -509,14 +638,10 @@ def actualizar_minimo_stock(
         )
 
         # ==================================================
-        # CONFIRMAR CONFIGURACION Y AUDITORIA
-        # ==================================================
+        # CONFIRMAR MINIMO Y AUDITORIA
+        # ======================================================
 
         db.commit()
-
-        # ==================================================
-        # RESPUESTA AL FRONTEND
-        # ==================================================
 
         return {
             "material": material,
