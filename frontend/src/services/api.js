@@ -47,6 +47,9 @@ const MENSAJES_POR_ESTADO = {
   422: "Hay datos inválidos en el formulario. Revísalos e intenta nuevamente.",
 };
 
+// 501: el backend tiene la ruta, pero esa opción aún no está implementada.
+const MENSAJE_NO_IMPLEMENTADO = "Esta opción todavía no está disponible en el servidor.";
+
 const MENSAJE_SERVIDOR = "El servidor tuvo un problema. Intenta nuevamente en unos minutos.";
 
 // Pydantic devuelve una lista de errores. Los value_error traen mensajes
@@ -168,7 +171,8 @@ async function solicitar(ruta, { metodo = "GET", cuerpo, tipoRespuesta = "json",
       }
 
       let mensaje;
-      if (respuesta.status >= 500) mensaje = conCodigo(MENSAJE_SERVIDOR, correlationId);
+      if (respuesta.status === 501) mensaje = MENSAJE_NO_IMPLEMENTADO;
+      else if (respuesta.status >= 500) mensaje = conCodigo(MENSAJE_SERVIDOR, correlationId);
       else if (typeof detalle === "string") mensaje = detalle;
       else
         mensaje =

@@ -90,26 +90,37 @@ export const ENTIDAD = {
   USUARIO: { texto: "Usuario" },
 };
 
-// Materiales que se controlan en la bodega (módulo Stock). "puedeDanarse" indica
-// si el material lleva cuenta de unidades dañadas; un marco con cera que se
-// rompe se cuenta como marco roto (MARCO_VACIO dañado).
+// Materiales de la bodega central (módulo Stock). "puedeDanarse" indica si el
+// material pasa por dañado, reparación y merma. Un marco con cera que se rompe
+// se cuenta como marco roto (MARCO_VACIO dañado). El cajón lleva piso; el alza no.
 export const MATERIAL_STOCK = {
-  ALZA: { texto: "Alzas", unidad: "alza", puedeDanarse: true },
-  MARCO_VACIO: { texto: "Marcos vacíos", textoDanado: "Marcos rotos", unidad: "marco", puedeDanarse: true },
-  MARCO_CERA_ESTIRADA: { texto: "Marcos con cera estirada", unidad: "marco", puedeDanarse: false },
-  MARCO_CERA_UNTADA: { texto: "Marcos con cera untada", unidad: "marco", puedeDanarse: false },
-  TECHO_AMERICANO: { texto: "Techos americanos", unidad: "techo", puedeDanarse: true },
-  ENTRETAPA: { texto: "Entretapas", unidad: "entretapa", puedeDanarse: true },
-  PISO: { texto: "Pisos", unidad: "piso", puedeDanarse: true },
+  CAJON: { texto: "Cajones", unidad: "cajón", plural: "cajones", puedeDanarse: true },
+  ALZA: { texto: "Alzas", unidad: "alza", plural: "alzas", puedeDanarse: true },
+  PISO: { texto: "Pisos", unidad: "piso", plural: "pisos", puedeDanarse: true },
+  TECHO: { texto: "Techos", unidad: "techo", plural: "techos", puedeDanarse: true },
+  TECHO_AMERICANO: { texto: "Techos americanos", unidad: "techo americano", plural: "techos americanos", puedeDanarse: true },
+  ENTRETAPA: { texto: "Entretapas", unidad: "entretapa", plural: "entretapas", puedeDanarse: true },
+  MARCO_VACIO: { texto: "Marcos vacíos", textoDanado: "Marcos rotos", unidad: "marco", plural: "marcos", puedeDanarse: true },
+  MARCO_CERA_ESTIRADA: { texto: "Marcos con cera estirada", unidad: "marco", plural: "marcos", puedeDanarse: false },
+  MARCO_CERA_UNTADA: { texto: "Marcos con cera untada", unidad: "marco", plural: "marcos", puedeDanarse: false },
 };
 
-// Movimientos de stock. "signo" es el efecto sobre el material: + suma, − resta.
+// Movimientos de stock. Cada unidad está en un solo estado:
+// disponible → dañado → en reparación → disponible, o a merma si no tiene arreglo.
+// "signo" es el efecto sobre lo usable (disponible).
 export const TIPO_MOVIMIENTO_STOCK = {
   INGRESO: { texto: "Ingreso", tono: "verde", signo: "+", ayuda: "Compra o fabricación: suma al disponible." },
-  ENVIO: { texto: "Envío", tono: "azul", signo: "−", ayuda: "Material que sale a un apiario o colmena: resta del disponible." },
-  DANO: { texto: "Daño", tono: "rojo", signo: "−", ayuda: "Material que se rompió: pasa de disponible a dañado." },
-  REPARACION: { texto: "Reparación", tono: "ambar", signo: "+", ayuda: "Material reparado: pasa de dañado a disponible." },
-  DESCARTE: { texto: "Descarte", tono: "gris", signo: "−", ayuda: "Material dañado sin arreglo: sale del inventario." },
+  ENVIO: { texto: "Salida", tono: "azul", signo: "−", ayuda: "Material que sale de bodega hacia las colmenas: resta del disponible." },
+  DANO: { texto: "Daño", tono: "rojo", signo: "−", ayuda: "Material que se rompió: deja de estar disponible y pasa a dañado." },
+  ENVIO_REPARACION: { texto: "A reparación", tono: "ambar", signo: "", ayuda: "Material dañado que se lleva a reparar: pasa de dañado a en reparación." },
+  REPARACION: { texto: "Reparado", tono: "verde", signo: "+", ayuda: "Material que volvió reparado: pasa de en reparación a disponible." },
+  DESCARTE: { texto: "Merma", tono: "gris", signo: "", ayuda: "Material sin arreglo que se bota: sale de dañado o de en reparación." },
+};
+
+// Desde dónde sale la merma.
+export const ORIGEN_MERMA = {
+  DANADO: { texto: "Dañado" },
+  EN_REPARACION: { texto: "En reparación" },
 };
 
 export function texto(mapa, valor, porDefecto = "Sin registrar") {

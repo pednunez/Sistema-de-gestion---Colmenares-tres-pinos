@@ -7,7 +7,7 @@ import { Cargando, ErrorCarga, EstadoVacio } from "../ui/Estados";
 import { Panel } from "../ui/Estructura";
 import { useDatos } from "../../hooks/useDatos";
 import { useMovimientosStock } from "../../hooks/useMovimientosStock";
-import { MATERIAL_STOCK, TIPO_MOVIMIENTO_STOCK, opciones, texto, tono } from "../../utils/etiquetas";
+import { MATERIAL_STOCK, ORIGEN_MERMA, TIPO_MOVIMIENTO_STOCK, opciones, texto, tono } from "../../utils/etiquetas";
 import { formatearFechaHora } from "../../utils/formato";
 
 const POR_PAGINA = 20;
@@ -32,9 +32,11 @@ export default function HistorialMovimientos({ version }) {
   };
   const hayFiltros = Object.values(filtros).some(Boolean);
 
-  const destino = (m) => {
+  const detalle = (m) => {
+    if (m.tipo === "DESCARTE" && m.estado_origen) return `Desde ${texto(ORIGEN_MERMA, m.estado_origen).toLowerCase()}`;
     if (m.tipo !== "ENVIO") return "—";
-    const apiario = m.apiario_id ? nombreApiario(m.apiario_id) : "Sin apiario";
+    if (!m.apiario_id) return "Sin destino indicado";
+    const apiario = nombreApiario(m.apiario_id);
     return m.colmena_id ? `${apiario} · ${codigoColmena(m.colmena_id)}` : apiario;
   };
 
@@ -55,7 +57,7 @@ export default function HistorialMovimientos({ version }) {
         <EstadoVacio
           icono={History}
           titulo={hayFiltros ? "No hay movimientos con estos filtros" : "Todavía no hay movimientos"}
-          texto={hayFiltros ? "Ajusta o limpia los filtros." : "Aparecerán aquí los ingresos, envíos, daños, reparaciones y descartes."}
+          texto={hayFiltros ? "Ajusta o limpia los filtros." : "Aparecerán aquí los ingresos, salidas, daños, reparaciones y merma."}
         />
       </div>
     );
@@ -69,7 +71,7 @@ export default function HistorialMovimientos({ version }) {
               <th className="p-4 font-medium">Movimiento</th>
               <th className="p-4 font-medium">Material</th>
               <th className="p-4 text-right font-medium">Cantidad</th>
-              <th className="p-4 font-medium">Destino</th>
+              <th className="p-4 font-medium">Destino u origen</th>
               <th className="p-4 font-medium">Responsable</th>
               <th className="p-4 font-medium">Observaciones</th>
             </tr>
@@ -88,7 +90,7 @@ export default function HistorialMovimientos({ version }) {
                     {signo}
                     {m.cantidad}
                   </td>
-                  <td className="p-4">{destino(m)}</td>
+                  <td className="p-4">{detalle(m)}</td>
                   <td className="p-4 text-slate-600">{nombreUsuario(m.usuario_id)}</td>
                   <td className="max-w-xs p-4 text-slate-600">{m.observaciones || "—"}</td>
                 </tr>
@@ -101,7 +103,7 @@ export default function HistorialMovimientos({ version }) {
   }
 
   return (
-    <Panel titulo="Historial de movimientos" descripcion="Ingresos, envíos, daños, reparaciones y descartes.">
+    <Panel titulo="Historial de movimientos" descripcion="Ingresos, salidas, daños, reparaciones y merma.">
       {!noDisponible && (
         <div className="grid gap-3 border-b border-slate-200 p-5 sm:grid-cols-2 lg:grid-cols-4">
           <Seleccion

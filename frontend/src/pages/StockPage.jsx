@@ -1,21 +1,21 @@
 import { useState } from "react";
-import { AlertTriangle, Frame, Package, Plus, Warehouse } from "lucide-react";
+import { AlertTriangle, Frame, Package, Plus, Warehouse, Wrench } from "lucide-react";
 import Boton from "../components/ui/Boton";
 import { Cargando, ErrorCarga, EstadoVacio } from "../components/ui/Estados";
-import { EncabezadoModulo, Panel, TarjetaIndicador } from "../components/ui/Estructura";
+import { EncabezadoModulo, TarjetaIndicador } from "../components/ui/Estructura";
 import TarjetaMaterial from "../components/stock/TarjetaMaterial";
 import FormularioMovimiento from "../components/stock/FormularioMovimiento";
 import FormularioMinimo from "../components/stock/FormularioMinimo";
 import AvisoStockBajo from "../components/stock/AvisoStockBajo";
+import PanelReparaciones from "../components/stock/PanelReparaciones";
 import HistorialMovimientos from "../components/stock/HistorialMovimientos";
 import { useAuth } from "../hooks/useAuth";
 import { useAvisos } from "../hooks/useAvisos";
 import { stockService } from "../services/stockService";
 import { MATERIAL_STOCK, TIPO_MOVIMIENTO_STOCK } from "../utils/etiquetas";
 import { useInventario } from "../hooks/useInventario";
-import { cantidadCon } from "../utils/stock";
 
-// Inventario de la bodega y sus movimientos. Solo el administrador registra
+// Inventario de la bodega central y sus movimientos. Solo el administrador registra
 // movimientos; el apicultor consulta.
 export default function StockPage() {
   const { esAdmin } = useAuth();
@@ -57,11 +57,11 @@ export default function StockPage() {
     );
   }
 
-  const { items, totalDisponible, totalDanado, marcosListos, danados, bajos } = inventario;
+  const { items, totalDisponible, totalDanado, totalEnReparacion, totalMerma, marcosListos, conPendientes, bajos } = inventario;
 
   return (
     <>
-      <EncabezadoModulo descripcion="Material de la bodega disponible para las colmenas y material dañado por reparar.">
+      <EncabezadoModulo descripcion="Material de la bodega central: lo disponible para las colmenas, lo dañado y lo que está en reparación.">
         {esAdmin && (
           <Boton icono={Plus} onClick={() => setFormulario({})}>
             Registrar movimiento
@@ -75,62 +75,33 @@ export default function StockPage() {
         </div>
       )}
 
-      <div className="mb-6 grid grid-cols-1 gap-5 sm:grid-cols-3">
-        <TarjetaIndicador titulo="Material disponible" valor={totalDisponible} detalle="unidades en bodega" icono={Package} />
+      <div className="mb-6 grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
+        <TarjetaIndicador titulo="Material disponible" valor={totalDisponible} detalle="unidades listas para usar" icono={Package} />
         <TarjetaIndicador titulo="Marcos listos para usar" valor={marcosListos} detalle="vacíos, con cera estirada y untada" icono={Frame} />
         <TarjetaIndicador
-          titulo="Material dañado"
+          titulo="Dañado"
           valor={totalDanado}
-          detalle={totalDanado > 0 ? "unidades por reparar" : "nada por reparar"}
+          detalle={totalDanado > 0 ? "unidades por llevar a reparar" : "nada dañado"}
           icono={AlertTriangle}
           alerta={totalDanado > 0}
-          onClick={() => document.getElementById("danado")?.scrollIntoView({ behavior: "smooth" })}
+          onClick={() => document.getElementById("reparaciones")?.scrollIntoView({ behavior: "smooth" })}
+        />
+        <TarjetaIndicador
+          titulo="En reparación"
+          valor={totalEnReparacion}
+          detalle={`Merma acumulada: ${totalMerma}`}
+          icono={Wrench}
+          onClick={() => document.getElementById("reparaciones")?.scrollIntoView({ behavior: "smooth" })}
         />
       </div>
 
-      <div className="mb-6 grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mb-6 grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
         {items.map((item) => (
           <TarjetaMaterial key={item.material} item={item} onCambiarMinimo={esAdmin ? setEditandoMinimo : undefined} />
         ))}
       </div>
 
-      <Panel titulo="Material dañado" descripcion="Material roto que se puede reparar o descartar.">
-        <div id="danado" className="scroll-mt-24" />
-        {danados.length === 0 ? (
-          <p className="px-5 py-6 text-sm text-slate-500">No hay material dañado.</p>
-        ) : (
-          <ul className="divide-y divide-slate-100">
-            {danados.map((item) => (
-              <li key={item.material} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
-                <span>{item.textoDanado ?? item.texto}</span>
-                <span className="flex items-center gap-3">
-                  <span className="font-semibold text-red-600">{cantidadCon(item.danado, item.unidad)}</span>
-                  {esAdmin && (
-                    <>
-                      <Boton
-                        variante="secundario"
-                        tamano="sm"
-                        aria-label={`Reparar ${(item.textoDanado ?? item.texto).toLowerCase()}`}
-                        onClick={() => setFormulario({ tipo: "REPARACION", material: item.material })}
-                      >
-                        Reparar
-                      </Boton>
-                      <Boton
-                        variante="fantasma"
-                        tamano="sm"
-                        aria-label={`Descartar ${(item.textoDanado ?? item.texto).toLowerCase()}`}
-                        onClick={() => setFormulario({ tipo: "DESCARTE", material: item.material })}
-                      >
-                        Descartar
-                      </Boton>
-                    </>
-                  )}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Panel>
+      <PanelReparaciones items={conPendientes} puedeEditar={esAdmin} onAccion={setFormulario} />
 
       <div className="mt-6">
         <HistorialMovimientos version={versionHistorial} />

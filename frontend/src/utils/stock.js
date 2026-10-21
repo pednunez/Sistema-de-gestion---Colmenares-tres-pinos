@@ -1,5 +1,5 @@
-// Arma el inventario completo a partir de la respuesta del backend: siempre
-// aparecen todos los materiales, aunque el backend no traiga alguno.
+// Inventario de la bodega central y reglas de sus movimientos.
+// Cada unidad está en un solo estado: disponible, dañado, en reparación o merma.
 import { MATERIAL_STOCK } from "./etiquetas";
 
 const minimoONulo = (valor) =>
@@ -8,37 +8,45 @@ const minimoONulo = (valor) =>
     : Math.max(0, Math.trunc(Number(valor)));
 
 const entero = (valor) => (Number.isFinite(Number(valor)) ? Math.max(0, Math.trunc(Number(valor))) : 0);
+const sumar = (items, campo) => items.reduce((suma, i) => suma + i[campo], 0);
 
+// Siempre aparecen todos los materiales, aunque el backend no traiga alguno.
 export function armarInventario(filas = []) {
   const porMaterial = new Map(filas.map((fila) => [fila.material, fila]));
   const items = Object.entries(MATERIAL_STOCK).map(([material, info]) => {
     const fila = porMaterial.get(material) ?? {};
-    return {
+    const conEstados = info.puedeDanarse;
+    const item = {
       material,
       ...info,
       disponible: entero(fila.disponible),
-      danado: info.puedeDanarse ? entero(fila.danado) : 0,
+      danado: conEstados ? entero(fila.danado) : 0,
+      enReparacion: conEstados ? entero(fila.en_reparacion) : 0,
+      merma: conEstados ? entero(fila.merma) : 0,
       minimo: minimoONulo(fila.minimo),
       actualizadoEn: fila.actualizado_en ?? null,
     };
+    // Stock bajo: el disponible quedó por debajo del mínimo definido.
+    item.bajoMinimo = item.minimo !== null && item.disponible < item.minimo;
+    return item;
   });
-
-  // Stock bajo: el disponible quedó por debajo del mínimo definido.
-  for (const item of items) item.bajoMinimo = item.minimo !== null && item.disponible < item.minimo;
 
   const marcos = items.filter((i) => i.material.startsWith("MARCO_"));
   return {
     items,
-    totalDisponible: items.reduce((suma, i) => suma + i.disponible, 0),
-    totalDanado: items.reduce((suma, i) => suma + i.danado, 0),
-    marcosListos: marcos.reduce((suma, i) => suma + i.disponible, 0),
-    danados: items.filter((i) => i.danado > 0),
+    totalDisponible: sumar(items, "disponible"),
+    totalDanado: sumar(items, "danado"),
+    totalEnReparacion: sumar(items, "enReparacion"),
+    totalMerma: sumar(items, "merma"),
+    marcosListos: sumar(marcos, "disponible"),
+    conPendientes: items.filter((i) => i.danado > 0 || i.enReparacion > 0),
     bajos: items.filter((i) => i.bajoMinimo),
   };
 }
 
-export function cantidadCon(cantidad, unidad) {
-  return `${cantidad} ${cantidad === 1 ? unidad : `${unidad}s`}`;
+// "3 alzas", "1 cajón", "2 cajones".
+export function cantidadCon(cantidad, item) {
+  return `${cantidad} ${cantidad === 1 ? item.unidad : item.plural}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -46,80 +54,111 @@ export function cantidadCon(cantidad, unidad) {
 // ---------------------------------------------------------------------------
 
 export const MAXIMO_POR_MOVIMIENTO = 10000;
-const SOBRE_DANADO = ["REPARACION", "DESCARTE"];
+// Movimientos que solo aplican a material que pasa por dañado y reparación.
+const CON_ESTADOS = ["ENVIO_REPARACION", "REPARACION", "DESCARTE"];
 
-// Los marcos con cera no llevan dañados propios: no se reparan ni se descartan.
 export function materialesPara(tipo) {
   return Object.entries(MATERIAL_STOCK)
-    .filter(([, info]) => !SOBRE_DANADO.includes(tipo) || info.puedeDanarse)
+    .filter(([, info]) => !CON_ESTADOS.includes(tipo) || info.puedeDanarse)
     .map(([valor, info]) => ({ valor, texto: info.texto }));
 }
 
-// Cuánto hay del lado que el movimiento descuenta (null si solo suma).
-export function existenciaQueDescuenta(item, tipo) {
-  if (!item || tipo === "INGRESO") return null;
-  return SOBRE_DANADO.includes(tipo) ? item.danado : item.disponible;
-}
-
-// Cómo queda el material después del movimiento, para mostrarlo antes de guardar.
-export function stockResultante(item, tipo, cantidad) {
-  const n = Number(cantidad);
-  if (!item || !Number.isInteger(n) || n <= 0) return null;
-  const { disponible, danado } = item;
+// Estado del que descuenta el movimiento (null si solo suma).
+export function estadoQueDescuenta(tipo, origen) {
   switch (tipo) {
-    case "INGRESO":
-      return { disponible: disponible + n, danado };
     case "ENVIO":
-      return { disponible: disponible - n, danado };
     case "DANO":
-      // Un marco con cera roto se cuenta como marco roto (MARCO_VACIO dañado).
-      return { disponible: disponible - n, danado: item.puedeDanarse ? danado + n : danado };
+      return "disponible";
+    case "ENVIO_REPARACION":
+      return "danado";
     case "REPARACION":
-      return { disponible: disponible + n, danado: danado - n };
+      return "enReparacion";
     case "DESCARTE":
-      return { disponible, danado: danado - n };
+      return origen === "EN_REPARACION" ? "enReparacion" : origen === "DANADO" ? "danado" : null;
     default:
       return null;
   }
 }
 
+const NOMBRE_ESTADO = { disponible: "disponibles", danado: "por reparar", enReparacion: "en reparación" };
+
+export function textoExistencia(item, estado) {
+  return `${cantidadCon(item[estado], item)} ${NOMBRE_ESTADO[estado]}`;
+}
+
+// Cómo queda el material después del movimiento, para mostrarlo antes de guardar.
+export function stockResultante(item, tipo, cantidad, origen) {
+  const n = Number(cantidad);
+  if (!item || !Number.isInteger(n) || n <= 0) return null;
+  const r = { disponible: item.disponible, danado: item.danado, enReparacion: item.enReparacion, merma: item.merma };
+  switch (tipo) {
+    case "INGRESO":
+      r.disponible += n;
+      break;
+    case "ENVIO":
+      r.disponible -= n;
+      break;
+    case "DANO":
+      r.disponible -= n;
+      // Un marco con cera roto se suma a los marcos rotos, no a su propio material.
+      if (item.puedeDanarse) r.danado += n;
+      break;
+    case "ENVIO_REPARACION":
+      r.danado -= n;
+      r.enReparacion += n;
+      break;
+    case "REPARACION":
+      r.enReparacion -= n;
+      r.disponible += n;
+      break;
+    case "DESCARTE": {
+      const estado = estadoQueDescuenta(tipo, origen);
+      if (!estado) return null;
+      r[estado] -= n;
+      r.merma += n;
+      break;
+    }
+    default:
+      return null;
+  }
+  return r;
+}
+
 export function validarMovimiento(v, inventario) {
   const item = inventario?.items.find((i) => i.material === v.material);
   const cantidad = Number(v.cantidad);
-  const existencia = existenciaQueDescuenta(item, v.tipo);
+  const estado = estadoQueDescuenta(v.tipo, v.estado_origen);
 
   let errorCantidad;
   if (v.cantidad === "" || v.cantidad === null) errorCantidad = "Ingresa la cantidad.";
   else if (!Number.isInteger(cantidad) || cantidad <= 0) errorCantidad = "La cantidad debe ser un número entero mayor que 0.";
   else if (cantidad > MAXIMO_POR_MOVIMIENTO) errorCantidad = `La cantidad no puede superar ${MAXIMO_POR_MOVIMIENTO}.`;
-  else if (existencia !== null && cantidad > existencia) {
-    errorCantidad = SOBRE_DANADO.includes(v.tipo)
-      ? `Solo hay ${cantidadCon(existencia, item.unidad)} por reparar.`
-      : `Solo hay ${cantidadCon(existencia, item.unidad)} disponible${existencia === 1 ? "" : "s"}.`;
-  }
+  else if (item && estado && cantidad > item[estado]) errorCantidad = `Solo hay ${textoExistencia(item, estado)}.`;
 
   return {
     tipo: !v.tipo && "Elige el tipo de movimiento.",
     material: !v.material
       ? "Elige el material."
-      : SOBRE_DANADO.includes(v.tipo) && !MATERIAL_STOCK[v.material]?.puedeDanarse
-        ? "Este material no lleva dañados: si se rompe, cuenta como marco roto."
+      : CON_ESTADOS.includes(v.tipo) && !MATERIAL_STOCK[v.material]?.puedeDanarse
+        ? "Este material no pasa por reparación: si se rompe, cuenta como marco roto."
         : undefined,
     cantidad: errorCantidad,
-    apiario_id: v.tipo === "ENVIO" && !v.apiario_id && "Elige el apiario de destino.",
+    estado_origen: v.tipo === "DESCARTE" && !v.estado_origen && "Indica si la merma sale de dañado o de en reparación.",
     observaciones: v.observaciones.length > 500 && "Las observaciones no pueden superar los 500 caracteres.",
   };
 }
 
 export function movimientoParaEnviar(v) {
-  const esEnvio = v.tipo === "ENVIO";
+  const esSalida = v.tipo === "ENVIO";
   const observaciones = v.observaciones.trim();
   return {
     material: v.material,
     tipo: v.tipo,
     cantidad: Number(v.cantidad),
-    apiario_id: esEnvio && v.apiario_id ? Number(v.apiario_id) : null,
-    colmena_id: esEnvio && v.colmena_id ? Number(v.colmena_id) : null,
+    // El destino de una salida es opcional: el stock es de la bodega central.
+    apiario_id: esSalida && v.apiario_id ? Number(v.apiario_id) : null,
+    colmena_id: esSalida && v.colmena_id ? Number(v.colmena_id) : null,
+    estado_origen: v.tipo === "DESCARTE" ? v.estado_origen : null,
     observaciones: observaciones || null,
   };
 }

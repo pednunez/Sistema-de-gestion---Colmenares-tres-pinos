@@ -5,26 +5,27 @@ import Alerta from "../ui/Alerta";
 import { AreaTexto, Entrada, Seleccion, Segmentado } from "../ui/Campo";
 import { useFormulario } from "../../hooks/useFormulario";
 import { useDatos } from "../../hooks/useDatos";
-import { MATERIAL_STOCK, TIPO_MOVIMIENTO_STOCK, opciones } from "../../utils/etiquetas";
+import { MATERIAL_STOCK, ORIGEN_MERMA, TIPO_MOVIMIENTO_STOCK, opciones } from "../../utils/etiquetas";
 import {
   MAXIMO_POR_MOVIMIENTO,
-  cantidadCon,
-  existenciaQueDescuenta,
+  estadoQueDescuenta,
   materialesPara,
   movimientoParaEnviar,
   stockResultante,
+  textoExistencia,
   validarMovimiento,
 } from "../../utils/stock";
 import { colmenaOperativa } from "../../utils/alertas";
 
-// Registra un ingreso, envío, daño, reparación o descarte de material.
-// "inicial" permite abrirlo con el tipo y el material ya elegidos.
+// Registra un movimiento de la bodega. "inicial" permite abrirlo con el tipo,
+// el material y el origen de la merma ya elegidos.
 export default function FormularioMovimiento({ inventario, inicial = {}, onGuardar, onCerrar }) {
   const idFormulario = useId();
   const { datos } = useDatos();
   const formulario = useFormulario({
     tipo: inicial.tipo ?? "INGRESO",
     material: inicial.material ?? "",
+    estado_origen: inicial.estado_origen ?? "",
     cantidad: "",
     apiario_id: "",
     colmena_id: "",
@@ -44,25 +45,23 @@ export default function FormularioMovimiento({ inventario, inicial = {}, onGuard
   };
 
   const item = inventario.items.find((i) => i.material === valores.material);
-  const existencia = existenciaQueDescuenta(item, valores.tipo);
-  const resultado = stockResultante(item, valores.tipo, valores.cantidad);
-  const esEnvio = valores.tipo === "ENVIO";
+  const estado = estadoQueDescuenta(valores.tipo, valores.estado_origen);
+  const resultado = stockResultante(item, valores.tipo, valores.cantidad, valores.estado_origen);
+  const esSalida = valores.tipo === "ENVIO";
+  const esMerma = valores.tipo === "DESCARTE";
   const colmenasDelApiario = datos.colmenas.filter(
     (c) => colmenaOperativa(c) && String(c.apiario_id) === valores.apiario_id
   );
 
   let ayudaCantidad;
   if (item) {
-    const actual =
-      existencia === null
-        ? `Hay ${cantidadCon(item.disponible, item.unidad)} disponibles.`
-        : valores.tipo === "REPARACION" || valores.tipo === "DESCARTE"
-          ? `Hay ${cantidadCon(existencia, item.unidad)} por reparar.`
-          : `Hay ${cantidadCon(existencia, item.unidad)} disponibles.`;
-    const despues =
-      resultado && resultado.disponible >= 0 && resultado.danado >= 0
-        ? ` Después: ${resultado.disponible} disponibles${item.puedeDanarse ? `, ${resultado.danado} dañados` : ""}.`
-        : "";
+    const actual = `Hay ${textoExistencia(item, estado ?? "disponible")}.`;
+    const valido = resultado && Object.values(resultado).every((n) => n >= 0);
+    const despues = !valido
+      ? ""
+      : item.puedeDanarse
+        ? ` Después: ${resultado.disponible} disponibles, ${resultado.danado} por reparar, ${resultado.enReparacion} en reparación.`
+        : ` Después: ${resultado.disponible} disponibles.`;
     ayudaCantidad = actual + despues;
   }
 
@@ -76,7 +75,7 @@ export default function FormularioMovimiento({ inventario, inicial = {}, onGuard
       titulo="Registrar movimiento de stock"
       descripcion={TIPO_MOVIMIENTO_STOCK[valores.tipo]?.ayuda}
       onCerrar={onCerrar}
-      ancho="sm:max-w-2xl"
+      ancho="sm:max-w-3xl"
       pie={
         <>
           <Boton variante="secundario" onClick={onCerrar}>
@@ -99,6 +98,17 @@ export default function FormularioMovimiento({ inventario, inicial = {}, onGuard
           onCambiar={cambiarTipo}
           error={errores.tipo}
         />
+
+        {esMerma && (
+          <Segmentado
+            etiqueta="La merma sale de"
+            requerido
+            opciones={opciones(ORIGEN_MERMA)}
+            valor={valores.estado_origen}
+            onCambiar={(origen) => cambiar("estado_origen", origen)}
+            error={errores.estado_origen}
+          />
+        )}
 
         <div className="grid gap-4 sm:grid-cols-2">
           <Seleccion
@@ -131,25 +141,23 @@ export default function FormularioMovimiento({ inventario, inicial = {}, onGuard
           </p>
         )}
 
-        {esEnvio && (
+        {esSalida && (
           <div className="grid gap-4 sm:grid-cols-2">
             <Seleccion
-              etiqueta="Apiario de destino"
-              requerido
+              etiqueta="Apiario (opcional)"
               value={valores.apiario_id}
               onChange={(e) => cambiarApiario(e.target.value)}
-              error={errores.apiario_id}
-              placeholder="Selecciona un apiario"
+              placeholder="Sin indicar"
               opciones={datos.apiarios.map((a) => ({ valor: a.id, texto: a.nombre }))}
+              ayuda="Solo para saber a dónde fue el material."
             />
             <Seleccion
               etiqueta="Colmena (opcional)"
               value={valores.colmena_id}
               onChange={(e) => cambiar("colmena_id", e.target.value)}
               disabled={!valores.apiario_id}
-              placeholder={valores.apiario_id ? "Para el apiario en general" : "Elige primero el apiario"}
+              placeholder={valores.apiario_id ? "Sin indicar" : "Elige primero el apiario"}
               opciones={colmenasDelApiario.map((c) => ({ valor: c.id, texto: c.codigo }))}
-              ayuda="Déjalo vacío si el material es para una colmena nueva o para el apiario."
             />
           </div>
         )}

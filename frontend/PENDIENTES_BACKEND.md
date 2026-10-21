@@ -1,6 +1,6 @@
 # Pendientes del backend para el frontend de escritorio
 
-Actualizado el 20-10-2026, al iniciar el módulo Stock (sección 5).
+Actualizado el 21-10-2026: estados del módulo Stock acordados con el cliente (sección 5).
 
 ## 1. Detalle por marco en la inspección (bloquea el guardado)
 
@@ -57,65 +57,87 @@ Si el backend pasa a crear las transferencias, avisar para quitar esas llamadas 
 - **Paginación de colmenas:** la respuesta no incluye el total de registros.
 - **Escala de miel:** el frontend guarda en `miel` uno de estos valores: `SIN_MIEL`, `POCA`, `MEDIA` o `ABUNDANTE`. Si el backend o la app móvil definen otra escala, avisar para alinearla.
 
-## 5. Módulo Stock (nuevo)
+## 5. Módulo Stock
 
-El frontend tiene la pantalla Stock. Mientras `/stock/` no exista, muestra el aviso "El inventario todavía no está disponible". Se controla una sola bodega.
+Actualizado el 21-10-2026 con el documento de José del 20-10 y lo definido por el cliente.
+
+**Alcance:** el stock es solo de la **bodega central** (centro de operaciones). No se lleva stock por apiario; el material que hay en cada apiario se podrá calcular más adelante a partir de las colmenas.
 
 **Permisos:** ADMIN y APICULTOR consultan; solo ADMIN registra movimientos y cambia mínimos.
 
 ### Materiales (`material`)
 
-| Valor | Material | Lleva dañados |
+| Valor | Material | Pasa por dañado y reparación |
 |---|---|---|
-| `ALZA` | Alzas | Sí |
-| `MARCO_VACIO` | Marcos vacíos (los dañados son los marcos rotos) | Sí |
-| `MARCO_CERA_ESTIRADA` | Marcos con cera estirada | No |
-| `MARCO_CERA_UNTADA` | Marcos con cera untada | No |
+| `CAJON` | Cajones (cajón con piso) — **nuevo** | Sí |
+| `ALZA` | Alzas (cajón sin piso) | Sí |
+| `PISO` | Pisos | Sí |
+| `TECHO` | Techos (techo normal) — **nuevo** | Sí |
 | `TECHO_AMERICANO` | Techos americanos | Sí |
 | `ENTRETAPA` | Entretapas | Sí |
-| `PISO` | Pisos | Sí |
+| `MARCO_VACIO` | Marcos vacíos (sus dañados son los marcos rotos) | Sí |
+| `MARCO_CERA_ESTIRADA` | Marcos con cera estirada | No |
+| `MARCO_CERA_UNTADA` | Marcos con cera untada | No |
 
-### Paso 1 (ya en el frontend): inventario
+### Estados
 
-`GET /stock/` devuelve una fila por material:
+Cada unidad está en **un solo estado**, para que nada se cuente dos veces:
 
-```json
-[
-  { "material": "ALZA", "disponible": 12, "danado": 3, "minimo": 5, "actualizado_en": "2026-10-20T15:00:00" },
-  { "material": "MARCO_CERA_UNTADA", "disponible": 15, "danado": 0, "minimo": null, "actualizado_en": "2026-10-20T15:00:00" }
-]
+```
+DISPONIBLE --DANO--> DANADO --ENVIO_REPARACION--> EN_REPARACION --REPARACION--> DISPONIBLE
+                        \                              \
+                         +-------- DESCARTE (merma) -----+--> MERMA
 ```
 
-Si falta un material, el frontend lo muestra con 0.
+- **Disponible:** usable.
+- **Dañado:** roto, esperando ir a reparación. No es usable.
+- **En reparación:** se llevó a reparar. Deja de contar como dañado y tampoco es usable.
+- **Merma:** sin arreglo, se bota. Se informa el total acumulado.
 
-### Paso 2 (siguiente commit): movimientos
+El estado `ROTO` del backend se debe tratar como `DANADO` (o unificarse), porque en pantalla hay un solo concepto de "dañado".
 
-`POST /stock/movimientos/` (solo ADMIN):
+### GET /stock/
 
-```json
-{ "material": "ALZA", "tipo": "ENVIO", "cantidad": 2, "apiario_id": 1, "colmena_id": null, "observaciones": "Colmena nueva en Mandinga" }
-```
-
-| `tipo` | Efecto | Valida |
-|---|---|---|
-| `INGRESO` | + disponible | — |
-| `ENVIO` | − disponible (a apiario o colmena; `apiario_id` obligatorio) | disponible suficiente |
-| `DANO` | − disponible, + dañado | disponible suficiente |
-| `REPARACION` | − dañado, + disponible | dañado suficiente |
-| `DESCARTE` | − dañado | dañado suficiente |
-
-- `cantidad`: entero mayor que 0. El stock nunca queda negativo: si no alcanza, responder 409 o 422 con un mensaje en español.
-- `DANO` de `MARCO_CERA_ESTIRADA` o `MARCO_CERA_UNTADA` descuenta ese material y suma al dañado de `MARCO_VACIO`.
-- `REPARACION` y `DESCARTE` no aplican a los marcos con cera (sin dañados propios).
-- Registrar `usuario_id` y la fecha, y dejarlo en auditoría.
-- Responder el movimiento creado y el inventario actualizado del material.
-
-`GET /stock/movimientos/?material=&tipo=&desde=&hasta=&offset=&limit=` devuelve el historial, el más reciente primero:
+Una fila por material:
 
 ```json
-{ "id": 1, "material": "ALZA", "tipo": "ENVIO", "cantidad": 2, "apiario_id": 1, "colmena_id": null, "observaciones": "...", "usuario_id": 1, "fecha": "2026-10-20T15:00:00" }
+{ "material": "ALZA", "disponible": 12, "danado": 3, "en_reparacion": 2, "merma": 1, "minimo": 5, "actualizado_en": "2026-10-21T15:00:00" }
 ```
 
-### Paso 3: mínimos
+- **Cambio:** `danado` debe contar solo lo dañado que espera reparación (hoy suma `DANADO`, `ROTO` y `EN_REPARACION`).
+- **Nuevos:** `en_reparacion` (unidades en reparación) y `merma` (total acumulado).
 
-`PATCH /stock/{material}` (solo ADMIN) con `{ "minimo": 5 }` (entero ≥ 0 o `null`). El frontend avisa cuando `disponible` < `minimo`.
+### POST /stock/movimientos/ (solo ADMIN)
+
+```json
+{ "material": "ALZA", "tipo": "ENVIO_REPARACION", "cantidad": 2, "apiario_id": null, "colmena_id": null, "estado_origen": null, "observaciones": "Al taller" }
+```
+
+| `tipo` | En pantalla | Efecto | Valida |
+|---|---|---|---|
+| `INGRESO` | Ingreso | + disponible | — |
+| `ENVIO` | Salida | − disponible | disponible suficiente |
+| `DANO` | Daño | disponible → dañado | disponible suficiente |
+| `ENVIO_REPARACION` | A reparación — **nuevo** | dañado → en reparación | dañado suficiente |
+| `REPARACION` | Reparado | en reparación → disponible (**cambia**: hoy sale de dañado) | en reparación suficiente |
+| `DESCARTE` | Merma | dañado o en reparación → merma | según `estado_origen` |
+
+- `cantidad`: entero mayor que 0. El stock nunca queda negativo: responder 409 con un mensaje en español.
+- `DANO` de marcos con cera descuenta ese material y suma al dañado de `MARCO_VACIO`.
+- `ENVIO_REPARACION`, `REPARACION` y `DESCARTE` no aplican a los marcos con cera.
+- `DESCARTE` exige `estado_origen`: `DANADO` o `EN_REPARACION`. En los demás tipos va `null`.
+- **`ENVIO` (salida de bodega):** `apiario_id` y `colmena_id` son **opcionales**, solo para saber a dónde fue el material. Si viene `colmena_id`, validar que pertenezca al apiario. No suma stock en ningún apiario. Mientras no esté listo, el 501 se muestra como "Esta opción todavía no está disponible en el servidor".
+- El orden por antigüedad (FIFO) de las incidencias que ya implementaste sirve igual.
+- La respuesta puede ser solo el movimiento creado: la pantalla vuelve a consultar `GET /stock/` y el historial después de guardar.
+
+### GET /stock/movimientos/
+
+Parámetros opcionales: `material`, `tipo`, `desde`, `hasta`, `offset` y `limit`. Ordenado del más reciente al más antiguo. Cada movimiento devuelve:
+
+```json
+{ "id": 1, "material": "ALZA", "tipo": "DESCARTE", "cantidad": 1, "apiario_id": null, "colmena_id": null, "estado_origen": "EN_REPARACION", "observaciones": "...", "usuario_id": 1, "fecha": "2026-10-21T15:00:00" }
+```
+
+### PATCH /stock/{material} (solo ADMIN)
+
+`{ "minimo": 5 }`: entero ≥ 0, o `null` para quitarlo. El frontend avisa cuando `disponible` < `minimo`.
