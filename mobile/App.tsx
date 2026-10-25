@@ -1,12 +1,13 @@
 
 import React, { useRef, useState } from 'react';
+
 import {
-  View,
-  Text,
-  StyleSheet,
-  Pressable,
   Alert,
+  Pressable,
   StatusBar,
+  StyleSheet,
+  Text,
+  View,
 } from 'react-native';
 
 import {
@@ -15,23 +16,39 @@ import {
 } from 'expo-camera';
 
 import FormularioInspeccion from './FormularioInspeccion';
+import MisInspecciones from './MisInspecciones';
+import InicioModulos from './InicioModulos';
+import ColmenasLocales from './ColmenasLocales';
+
+// ==========================================
+// PANTALLAS DISPONIBLES
+// ==========================================
 
 type Pantalla =
   | 'inicio'
   | 'escaner'
   | 'colmena'
-  | 'inspeccion';
+  | 'inspeccion'
+  | 'mis-inspecciones'
+  | 'colmenas-locales';
 
 export default function App() {
+
+  // ESTADOS DE NAVEGACIÓN
   const [pantalla, setPantalla] = useState<Pantalla>('inicio');
   const [codigoQR, setCodigoQR] = useState('');
   const [cameraReady, setCameraReady] = useState(false);
 
+  // PERMISOS DE CÁMARA
   const [permission, requestPermission] = useCameraPermissions();
 
+  // EVITAR ESCANEOS REPETIDOS
   const bloqueoEscaneo = useRef(false);
 
+  // ==========================================
   // VOLVER AL INICIO
+  // ==========================================
+
   const volverInicio = () => {
     bloqueoEscaneo.current = false;
     setCameraReady(false);
@@ -39,15 +56,19 @@ export default function App() {
     setPantalla('inicio');
   };
 
+  // ==========================================
   // ABRIR ESCÁNER QR
+  // ==========================================
+
   const abrirEscaner = async () => {
+
     if (!permission?.granted) {
       const resultado = await requestPermission();
 
       if (!resultado.granted) {
         Alert.alert(
           'Permiso necesario',
-          'Debes permitir el acceso a la cámara para escanear los códigos QR.'
+          'Debes permitir el acceso a la cámara para escanear códigos QR.'
         );
         return;
       }
@@ -58,17 +79,24 @@ export default function App() {
     setPantalla('escaner');
   };
 
-  // LECTURA DEL CÓDIGO QR
+  // ==========================================
+  // PROCESAR CÓDIGO QR
+  // ==========================================
+
   const escanearQR = ({ data }: { data: string }) => {
-    if (bloqueoEscaneo.current) return;
+
+    if (bloqueoEscaneo.current) {
+      return;
+    }
 
     bloqueoEscaneo.current = true;
 
-    // Código de prueba hasta conectar FastAPI
+    // CÓDIGO DE PRUEBA HASTA INTEGRAR FASTAPI
     if (data !== 'COLMENA-PRUEBA-001') {
+
       Alert.alert(
         'QR no registrado',
-        'Se leyó el código, pero todavía no está conectado al sistema de colmenas.',
+        'El código fue leído, pero todavía no está conectado al catálogo de colmenas.',
         [
           {
             text: 'Volver a escanear',
@@ -77,11 +105,12 @@ export default function App() {
             },
           },
           {
-            text: 'Volver al inicio',
+            text: 'Ir al inicio',
             onPress: volverInicio,
           },
         ]
       );
+
       return;
     }
 
@@ -90,10 +119,84 @@ export default function App() {
     setPantalla('colmena');
   };
 
-  // PANTALLA DE ESCÁNER
+  // ==========================================
+  // PANTALLA PRINCIPAL CON MÓDULOS WEB
+  // ==========================================
+
+  if (pantalla === 'inicio') {
+
+    return (
+      <InicioModulos
+        onEscanear={() => {
+          void abrirEscaner();
+        }}
+        onInspecciones={() => {
+          setPantalla('mis-inspecciones');
+        }}
+        onColmenas={() => {
+          setPantalla('colmenas-locales');
+        }}
+      />
+    );
+  }
+
+  // ==========================================
+  // LISTADO DE COLMENAS LOCALES
+  // ==========================================
+
+  if (pantalla === 'colmenas-locales') {
+
+    return (
+      <ColmenasLocales
+        onVolver={volverInicio}
+        onEscanear={() => {
+          void abrirEscaner();
+        }}
+        onVerInspecciones={() => {
+          setPantalla('mis-inspecciones');
+        }}
+      />
+    );
+  }
+
+  // ==========================================
+  // HISTORIAL DE INSPECCIONES SQLITE
+  // ==========================================
+
+  if (pantalla === 'mis-inspecciones') {
+
+    return (
+      <MisInspecciones
+        onVolver={volverInicio}
+      />
+    );
+  }
+
+  // ==========================================
+  // FORMULARIO DE INSPECCIÓN
+  // ==========================================
+
+  if (pantalla === 'inspeccion') {
+
+    return (
+      <FormularioInspeccion
+        codigoQR={codigoQR}
+        onVolver={() => {
+          setPantalla('colmena');
+        }}
+      />
+    );
+  }
+
+  // ==========================================
+  // PANTALLA DEL ESCÁNER QR
+  // ==========================================
+
   if (pantalla === 'escaner') {
+
     return (
       <View style={styles.cameraContainer}>
+
         <StatusBar barStyle="light-content" />
 
         <CameraView
@@ -102,16 +205,24 @@ export default function App() {
           barcodeScannerSettings={{
             barcodeTypes: ['qr'],
           }}
-          onCameraReady={() => setCameraReady(true)}
-          onMountError={(error) =>
-            Alert.alert('Error de cámara', error.message)
-          }
+          onCameraReady={() => {
+            setCameraReady(true);
+          }}
+          onMountError={(error) => {
+            Alert.alert(
+              'Error de cámara',
+              error.message
+            );
+          }}
           onBarcodeScanned={
-            bloqueoEscaneo.current ? undefined : escanearQR
+            bloqueoEscaneo.current
+              ? undefined
+              : escanearQR
           }
         />
 
         <View style={styles.cameraHeader}>
+
           <Text style={styles.cameraTitle}>
             Escanear código QR
           </Text>
@@ -125,6 +236,7 @@ export default function App() {
               Iniciando cámara...
             </Text>
           )}
+
         </View>
 
         <Pressable
@@ -135,123 +247,83 @@ export default function App() {
             Volver al inicio
           </Text>
         </Pressable>
+
       </View>
     );
   }
 
-  // PANTALLA DE FORMULARIO DE INSPECCIÓN
-  if (pantalla === 'inspeccion') {
-    return (
-      <FormularioInspeccion
-        codigoQR={codigoQR}
-        onVolver={() => setPantalla('colmena')}
-      />
-    );
-  }
+  // ==========================================
+  // INFORMACIÓN DE LA COLMENA
+  // ==========================================
 
-  // PANTALLA DE INFORMACIÓN DE COLMENA
-  if (pantalla === 'colmena') {
-    return (
-      <View style={styles.container}>
-        <StatusBar barStyle="dark-content" />
-
-        <Text style={styles.icon}>🐝</Text>
-
-        <Text style={styles.title}>
-          Información de la colmena
-        </Text>
-
-        <View style={styles.card}>
-          <Text style={styles.cardLabel}>
-            Código QR identificado
-          </Text>
-
-          <Text style={styles.codigo}>
-            {codigoQR}
-          </Text>
-
-          <Text style={styles.testLabel}>
-            Registro de prueba
-          </Text>
-
-          <Text style={styles.infoText}>
-            La consulta de datos reales estará disponible
-            cuando conectemos FastAPI.
-          </Text>
-        </View>
-
-        <View style={styles.menu}>
-          <Pressable
-            style={styles.button}
-            onPress={() => setPantalla('inspeccion')}
-          >
-            <Text style={styles.buttonText}>
-              Iniciar inspección
-            </Text>
-          </Pressable>
-
-          <Pressable
-            style={styles.secondaryButton}
-            onPress={volverInicio}
-          >
-            <Text style={styles.secondaryText}>
-              Volver al inicio
-            </Text>
-          </Pressable>
-        </View>
-      </View>
-    );
-  }
-
-  // PANTALLA PRINCIPAL
   return (
     <View style={styles.container}>
+
       <StatusBar barStyle="dark-content" />
 
-      <Text style={styles.icon}>🐝</Text>
+      <Text style={styles.icon}>
+        🐝
+      </Text>
 
       <Text style={styles.title}>
-        Colmenares Tres Pinos
+        Información de la colmena
       </Text>
 
-      <Text style={styles.subtitle}>
-        Sistema de Control de Colmenas
-      </Text>
+      <View style={styles.card}>
+
+        <Text style={styles.cardLabel}>
+          Código QR identificado
+        </Text>
+
+        <Text style={styles.codigo}>
+          {codigoQR}
+        </Text>
+
+        <Text style={styles.testLabel}>
+          Registro de prueba
+        </Text>
+
+        <Text style={styles.infoText}>
+          La consulta de datos reales estará disponible
+          cuando conectemos FastAPI.
+        </Text>
+
+      </View>
 
       <View style={styles.menu}>
+
         <Pressable
           style={styles.button}
-          onPress={abrirEscaner}
+          onPress={() => {
+            setPantalla('inspeccion');
+          }}
         >
           <Text style={styles.buttonText}>
-            Escanear código QR
+            Iniciar inspección
           </Text>
         </Pressable>
 
         <Pressable
           style={styles.secondaryButton}
-          onPress={() =>
-            Alert.alert(
-              'Mis inspecciones',
-              'Funcionalidad en desarrollo. El historial estará disponible cuando conectemos el sistema.'
-            )
-          }
+          onPress={volverInicio}
         >
           <Text style={styles.secondaryText}>
-            Mis inspecciones
+            Volver al inicio
           </Text>
         </Pressable>
+
       </View>
 
-      <Text style={styles.footer}>
-        Aplicación móvil para trabajadores en terreno
-      </Text>
     </View>
   );
 }
 
+// ==========================================
 // ESTILOS DE LA APLICACIÓN
+// ==========================================
+
 const styles = StyleSheet.create({
+
   container: {
     flex: 1,
     backgroundColor: '#FFF9EC',
@@ -270,13 +342,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#3D321B',
     textAlign: 'center',
-  },
-
-  subtitle: {
-    fontSize: 16,
-    color: '#766B52',
-    textAlign: 'center',
-    marginTop: 10,
   },
 
   menu: {
@@ -313,14 +378,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 
-  footer: {
-    position: 'absolute',
-    bottom: 35,
-    fontSize: 12,
-    color: '#938972',
-    textAlign: 'center',
-  },
-
   cameraContainer: {
     flex: 1,
     backgroundColor: '#000000',
@@ -345,6 +402,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 22,
     fontWeight: 'bold',
+    textAlign: 'center',
   },
 
   cameraSubtitle: {
@@ -398,4 +456,5 @@ const styles = StyleSheet.create({
     fontSize: 13,
     marginTop: 12,
   },
+
 });
