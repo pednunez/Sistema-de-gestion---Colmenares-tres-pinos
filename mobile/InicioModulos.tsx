@@ -18,20 +18,26 @@ type Props = {
   onEscanear: () => void;
   onInspecciones: () => void;
   onColmenas: () => void;
+  onTratamientos: () => void;
 };
+
+type Accion =
+  | 'colmenas'
+  | 'inspecciones'
+  | 'tratamientos'
+  | 'qr';
 
 type Modulo = {
   nombre: string;
   detalle: string;
   icono: string;
-  accion?: 'colmenas' | 'inspecciones' | 'qr';
+  accion?: Accion;
 };
 
-// FUNCIONALIDADES OPERATIVAS DE LA WEB
 const OPERACION: Modulo[] = [
   {
     nombre: 'Colmenas',
-    detalle: 'Códigos con registros locales',
+    detalle: 'Consulta de colmenas locales',
     icono: '🐝',
     accion: 'colmenas',
   },
@@ -43,47 +49,47 @@ const OPERACION: Modulo[] = [
   },
   {
     nombre: 'Tratamientos',
-    detalle: 'Por integrar con FastAPI',
+    detalle: 'Registro sanitario local SQLite',
     icono: '💊',
+    accion: 'tratamientos',
   },
   {
     nombre: 'Transferencias',
-    detalle: 'Por integrar con FastAPI',
+    detalle: 'Por desarrollar',
     icono: '🔄',
   },
   {
     nombre: 'Stock',
-    detalle: 'Por integrar con FastAPI',
+    detalle: 'Por desarrollar',
     icono: '📦',
   },
   {
     nombre: 'Códigos QR',
-    detalle: 'Escaneo con código de prueba',
+    detalle: 'Escáner de colmenas',
     icono: '▦',
     accion: 'qr',
   },
 ];
 
-// FUNCIONALIDADES ADMINISTRATIVAS
 const ADMINISTRACION: Modulo[] = [
   {
     nombre: 'Dashboard',
-    detalle: 'Solo ADMIN. Datos del servidor pendientes',
+    detalle: 'Solo ADMIN. Pendiente',
     icono: '📊',
   },
   {
     nombre: 'Apiarios',
-    detalle: 'Solo ADMIN. Datos del servidor pendientes',
+    detalle: 'Solo ADMIN. Pendiente',
     icono: '📍',
   },
   {
     nombre: 'Auditoría',
-    detalle: 'Solo ADMIN. Requiere autenticación',
+    detalle: 'Solo ADMIN. Pendiente',
     icono: '🛡️',
   },
   {
     nombre: 'Usuarios',
-    detalle: 'Solo ADMIN. Requiere autenticación',
+    detalle: 'Solo ADMIN. Pendiente',
     icono: '👥',
   },
 ];
@@ -92,36 +98,31 @@ export default function InicioModulos({
   onEscanear,
   onInspecciones,
   onColmenas,
+  onTratamientos,
 }: Props) {
   const [total, setTotal] = useState<number | null>(null);
-  const [pendientes, setPendientes] = useState<number | null>(null);
+  const [pendientes, setPendientes] = useState<number | null>(
+    null
+  );
   const [error, setError] = useState(false);
 
-  // CONSULTAR ESTADÍSTICAS LOCALES
   useEffect(() => {
     let activo = true;
 
     listarInspeccionesLocales()
-      .then((items) => {
+      .then(items => {
         if (!activo) return;
 
         setTotal(items.length);
-
         setPendientes(
           items.filter(
-            (item) => item.estado !== 'SINCRONIZADO'
+            item => item.estado !== 'SINCRONIZADO'
           ).length
         );
       })
-      .catch((e) => {
-        console.error(
-          'No se pudo leer el resumen local:',
-          e
-        );
-
-        if (activo) {
-          setError(true);
-        }
+      .catch(e => {
+        console.error('Error consultando SQLite:', e);
+        if (activo) setError(true);
       });
 
     return () => {
@@ -129,22 +130,23 @@ export default function InicioModulos({
     };
   }, []);
 
-  // NAVEGAR A MÓDULOS DISPONIBLES
-  const ejecutar = (accion?: Modulo['accion']) => {
-    if (accion === 'colmenas') {
-      onColmenas();
-    }
-
-    if (accion === 'inspecciones') {
-      onInspecciones();
-    }
-
-    if (accion === 'qr') {
-      onEscanear();
+  const ejecutar = (accion?: Accion) => {
+    switch (accion) {
+      case 'colmenas':
+        onColmenas();
+        break;
+      case 'inspecciones':
+        onInspecciones();
+        break;
+      case 'tratamientos':
+        onTratamientos();
+        break;
+      case 'qr':
+        onEscanear();
+        break;
     }
   };
 
-  // TARJETA DE CADA MÓDULO
   const renderModulo = (item: Modulo) => {
     const contenido = (
       <>
@@ -156,13 +158,12 @@ export default function InicioModulos({
           <Text style={styles.moduloNombre}>
             {item.nombre}
           </Text>
-
           <Text style={styles.moduloDetalle}>
             {item.detalle}
           </Text>
         </View>
 
-        <Text
+        <View
           style={[
             styles.estado,
             item.accion
@@ -170,52 +171,52 @@ export default function InicioModulos({
               : styles.estadoPendiente,
           ]}
         >
-          {item.accion ? 'LOCAL' : 'PENDIENTE'}
-        </Text>
+          <Text
+            style={[
+              styles.estadoTexto,
+              item.accion
+                ? styles.estadoTextoLocal
+                : styles.estadoTextoPendiente,
+            ]}
+          >
+            {item.accion ? 'LOCAL' : 'PENDIENTE'}
+          </Text>
+        </View>
       </>
     );
 
-    if (item.accion) {
+    if (!item.accion) {
       return (
-        <Pressable
+        <View
           key={item.nombre}
-          accessibilityRole="button"
-          accessibilityLabel={`Abrir ${item.nombre}`}
-          onPress={() => ejecutar(item.accion)}
-          style={styles.modulo}
+          style={[styles.modulo, styles.inactivo]}
         >
           {contenido}
-        </Pressable>
+        </View>
       );
     }
 
     return (
-      <View
+      <Pressable
         key={item.nombre}
-        style={[
-          styles.modulo,
-          styles.moduloInactivo,
-        ]}
+        style={styles.modulo}
+        onPress={() => ejecutar(item.accion)}
       >
         {contenido}
-      </View>
+      </Pressable>
     );
   };
 
-  // PANTALLA PRINCIPAL
   return (
     <ScrollView
       style={styles.pantalla}
       contentContainerStyle={styles.contenido}
     >
- <StatusBar barStyle="light-content" />
+      <StatusBar barStyle="light-content" />
 
-      {/* CABECERA */}
       <View style={styles.cabecera}>
         <View style={styles.marca}>
-          <Text style={styles.marcaTexto}>
-            CP
-          </Text>
+          <Text style={styles.marcaTexto}>CP</Text>
         </View>
 
         <View style={styles.cabeceraTextos}>
@@ -229,18 +230,16 @@ export default function InicioModulos({
         </View>
       </View>
 
-      {/* INFORMACIÓN PRINCIPAL */}
       <Text style={styles.titulo}>
         Módulo móvil
       </Text>
 
       <Text style={styles.introduccion}>
-        Registro de terreno. Los datos locales se guardan
-        en este dispositivo; la sincronización con FastAPI
-        todavía no está implementada.
+        Registro de terreno con almacenamiento SQLite.
+        La sincronización automática con FastAPI está
+        pendiente de implementación.
       </Text>
 
-      {/* ESTADÍSTICAS */}
       <View style={styles.estadisticas}>
         <View style={styles.estadistica}>
           <Text style={styles.cifra}>
@@ -266,13 +265,11 @@ export default function InicioModulos({
       </View>
 
       {error && (
-        <Text style={styles.avisoError}>
-          No fue posible leer el resumen local.
-          Puedes abrir el historial para reintentar.
+        <Text style={styles.error}>
+          No fue posible cargar el resumen local.
         </Text>
       )}
 
-      {/* ACCIONES DE TERRENO */}
       <Text style={styles.seccion}>
         Acciones de terreno
       </Text>
@@ -295,22 +292,20 @@ export default function InicioModulos({
         </Text>
       </Pressable>
 
-      {/* MÓDULOS OPERATIVOS */}
       <Text style={styles.seccion}>
         Operación
       </Text>
 
       {OPERACION.map(renderModulo)}
 
-      {/* MÓDULOS ADMINISTRATIVOS */}
       <Text style={styles.seccion}>
         Administración
       </Text>
 
       <Text style={styles.nota}>
-        En la web, estos módulos requieren el rol ADMIN.
-        Se habilitarán cuando tengamos autenticación
-        móvil y acceso a la API.
+        En la página web, estos módulos requieren permisos
+        de administrador. No estarán habilitados hasta
+        implementar la autenticación móvil.
       </Text>
 
       {ADMINISTRACION.map(renderModulo)}
@@ -322,20 +317,15 @@ export default function InicioModulos({
   );
 }
 
-// =====================================
-// ESTILOS
-// =====================================
 const styles = StyleSheet.create({
   pantalla: {
     flex: 1,
     backgroundColor: '#F8FAFC',
   },
-
   contenido: {
     paddingHorizontal: 18,
     paddingBottom: 40,
   },
-
   cabecera: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -345,7 +335,6 @@ const styles = StyleSheet.create({
     paddingBottom: 22,
     backgroundColor: '#0F172A',
   },
-
   marca: {
     width: 48,
     height: 48,
@@ -354,44 +343,37 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-
   marcaTexto: {
     color: '#0F172A',
     fontSize: 19,
     fontWeight: '800',
   },
-
   cabeceraTextos: {
     flex: 1,
     marginLeft: 12,
   },
-
   cabeceraTitulo: {
     fontSize: 17,
     fontWeight: '700',
     color: '#FFFFFF',
   },
-
   cabeceraSubtitulo: {
     fontSize: 12,
     color: '#CBD5E1',
     marginTop: 3,
   },
-
   titulo: {
     color: '#0F172A',
     fontWeight: '800',
     fontSize: 26,
     marginTop: 25,
   },
-
   introduccion: {
     color: '#475569',
     fontSize: 14,
     lineHeight: 21,
     marginTop: 8,
   },
-
   estadisticas: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
@@ -401,36 +383,25 @@ const styles = StyleSheet.create({
     paddingVertical: 18,
     marginTop: 20,
   },
-
   estadistica: {
     flex: 1,
     alignItems: 'center',
   },
-
   cifra: {
     color: '#92400E',
     fontSize: 30,
     fontWeight: '800',
   },
-
   etiqueta: {
     color: '#64748B',
     fontSize: 12,
     textAlign: 'center',
     marginTop: 3,
   },
-
   linea: {
     width: 1,
     backgroundColor: '#E2E8F0',
   },
-
-  avisoError: {
-    color: '#B91C1C',
-    fontSize: 12,
-    marginTop: 8,
-  },
-
   seccion: {
     marginTop: 28,
     marginBottom: 12,
@@ -438,7 +409,6 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#0F172A',
   },
-
   botonPrincipal: {
     backgroundColor: '#D99A24',
     borderRadius: 12,
@@ -446,13 +416,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 10,
   },
-
   botonPrincipalTexto: {
     color: '#FFFFFF',
     fontWeight: '800',
     fontSize: 17,
   },
-
   botonSecundario: {
     backgroundColor: '#FFFFFF',
     borderColor: '#D99A24',
@@ -461,13 +429,11 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     alignItems: 'center',
   },
-
   botonSecundarioTexto: {
     color: '#775315',
     fontWeight: '700',
     fontSize: 16,
   },
-
   modulo: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -478,62 +444,61 @@ const styles = StyleSheet.create({
     padding: 15,
     marginBottom: 9,
   },
-
-  moduloInactivo: {
-    opacity: 0.68,
-  },
-
   moduloIcono: {
     fontSize: 24,
     marginRight: 12,
   },
-
   moduloContenido: {
     flex: 1,
   },
-
   moduloNombre: {
     fontSize: 15,
     fontWeight: '700',
     color: '#0F172A',
   },
-
   moduloDetalle: {
     fontSize: 12,
     color: '#64748B',
     marginTop: 4,
   },
-
   estado: {
-    fontSize: 10,
-    fontWeight: '800',
-    overflow: 'hidden',
+    borderRadius: 7,
     paddingVertical: 6,
     paddingHorizontal: 7,
-    borderRadius: 6,
   },
-
   estadoLocal: {
-    color: '#92400E',
     backgroundColor: '#FEF3C7',
   },
-
   estadoPendiente: {
-    color: '#475569',
     backgroundColor: '#F1F5F9',
   },
-
+  estadoTexto: {
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  estadoTextoLocal: {
+    color: '#92400E',
+  },
+  estadoTextoPendiente: {
+    color: '#475569',
+  },
+  inactivo: {
+    opacity: 0.68,
+  },
   nota: {
     color: '#64748B',
     fontSize: 13,
     lineHeight: 19,
     marginBottom: 12,
   },
-
   pie: {
     fontSize: 12,
     color: '#94A3B8',
     textAlign: 'center',
     marginTop: 22,
+  },
+  error: {
+    color: '#B91C1C',
+    marginTop: 10,
   },
 });

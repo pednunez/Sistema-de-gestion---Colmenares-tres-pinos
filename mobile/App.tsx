@@ -19,10 +19,7 @@ import FormularioInspeccion from './FormularioInspeccion';
 import MisInspecciones from './MisInspecciones';
 import InicioModulos from './InicioModulos';
 import ColmenasLocales from './ColmenasLocales';
-
-// ==========================================
-// PANTALLAS DISPONIBLES
-// ==========================================
+import TratamientosLocales from './TratamientosLocales';
 
 type Pantalla =
   | 'inicio'
@@ -30,25 +27,19 @@ type Pantalla =
   | 'colmena'
   | 'inspeccion'
   | 'mis-inspecciones'
-  | 'colmenas-locales';
+  | 'colmenas-locales'
+  | 'tratamientos-locales';
 
 export default function App() {
-
-  // ESTADOS DE NAVEGACIÓN
   const [pantalla, setPantalla] = useState<Pantalla>('inicio');
   const [codigoQR, setCodigoQR] = useState('');
   const [cameraReady, setCameraReady] = useState(false);
 
-  // PERMISOS DE CÁMARA
   const [permission, requestPermission] = useCameraPermissions();
 
-  // EVITAR ESCANEOS REPETIDOS
   const bloqueoEscaneo = useRef(false);
 
-  // ==========================================
   // VOLVER AL INICIO
-  // ==========================================
-
   const volverInicio = () => {
     bloqueoEscaneo.current = false;
     setCameraReady(false);
@@ -56,19 +47,15 @@ export default function App() {
     setPantalla('inicio');
   };
 
-  // ==========================================
-  // ABRIR ESCÁNER QR
-  // ==========================================
-
+  // ABRIR ESCÁNER
   const abrirEscaner = async () => {
-
     if (!permission?.granted) {
       const resultado = await requestPermission();
 
       if (!resultado.granted) {
         Alert.alert(
           'Permiso necesario',
-          'Debes permitir el acceso a la cámara para escanear códigos QR.'
+          'Debes permitir el acceso a la cámara.'
         );
         return;
       }
@@ -79,24 +66,16 @@ export default function App() {
     setPantalla('escaner');
   };
 
-  // ==========================================
-  // PROCESAR CÓDIGO QR
-  // ==========================================
-
+  // LEER QR
   const escanearQR = ({ data }: { data: string }) => {
-
-    if (bloqueoEscaneo.current) {
-      return;
-    }
+    if (bloqueoEscaneo.current) return;
 
     bloqueoEscaneo.current = true;
 
-    // CÓDIGO DE PRUEBA HASTA INTEGRAR FASTAPI
     if (data !== 'COLMENA-PRUEBA-001') {
-
       Alert.alert(
         'QR no registrado',
-        'El código fue leído, pero todavía no está conectado al catálogo de colmenas.',
+        'El código fue leído, pero todavía no está conectado al catálogo oficial de colmenas.',
         [
           {
             text: 'Volver a escanear',
@@ -110,7 +89,6 @@ export default function App() {
           },
         ]
       );
-
       return;
     }
 
@@ -119,84 +97,65 @@ export default function App() {
     setPantalla('colmena');
   };
 
-  // ==========================================
-  // PANTALLA PRINCIPAL CON MÓDULOS WEB
-  // ==========================================
-
+  // PANTALLA PRINCIPAL
   if (pantalla === 'inicio') {
-
     return (
       <InicioModulos
-        onEscanear={() => {
-          void abrirEscaner();
-        }}
-        onInspecciones={() => {
-          setPantalla('mis-inspecciones');
-        }}
-        onColmenas={() => {
-          setPantalla('colmenas-locales');
-        }}
+        onEscanear={() => void abrirEscaner()}
+        onInspecciones={() =>
+          setPantalla('mis-inspecciones')
+        }
+        onColmenas={() =>
+          setPantalla('colmenas-locales')
+        }
+        onTratamientos={() =>
+          setPantalla('tratamientos-locales')
+        }
       />
     );
   }
 
-  // ==========================================
-  // LISTADO DE COLMENAS LOCALES
-  // ==========================================
+  // TRATAMIENTOS
+  if (pantalla === 'tratamientos-locales') {
+    return (
+      <TratamientosLocales onVolver={volverInicio} />
+    );
+  }
 
+  // COLMENAS LOCALES
   if (pantalla === 'colmenas-locales') {
-
     return (
       <ColmenasLocales
         onVolver={volverInicio}
-        onEscanear={() => {
-          void abrirEscaner();
-        }}
-        onVerInspecciones={() => {
-          setPantalla('mis-inspecciones');
-        }}
+        onEscanear={() => void abrirEscaner()}
+        onVerInspecciones={() =>
+          setPantalla('mis-inspecciones')
+        }
       />
     );
   }
 
-  // ==========================================
-  // HISTORIAL DE INSPECCIONES SQLITE
-  // ==========================================
-
+  // HISTORIAL DE INSPECCIONES
   if (pantalla === 'mis-inspecciones') {
-
     return (
-      <MisInspecciones
-        onVolver={volverInicio}
-      />
+      <MisInspecciones onVolver={volverInicio} />
     );
   }
 
-  // ==========================================
   // FORMULARIO DE INSPECCIÓN
-  // ==========================================
-
   if (pantalla === 'inspeccion') {
-
     return (
       <FormularioInspeccion
         codigoQR={codigoQR}
-        onVolver={() => {
-          setPantalla('colmena');
-        }}
+        onVolver={() => setPantalla('colmena')}
       />
     );
   }
 
-  // ==========================================
-  // PANTALLA DEL ESCÁNER QR
-  // ==========================================
-
+  // ESCÁNER QR
   if (pantalla === 'escaner') {
-
     return (
       <View style={styles.cameraContainer}>
-
         <StatusBar barStyle="light-content" />
 
         <CameraView
@@ -205,15 +164,10 @@ export default function App() {
           barcodeScannerSettings={{
             barcodeTypes: ['qr'],
           }}
-          onCameraReady={() => {
-            setCameraReady(true);
-          }}
-          onMountError={(error) => {
-            Alert.alert(
-              'Error de cámara',
-              error.message
-            );
-          }}
+          onCameraReady={() => setCameraReady(true)}
+          onMountError={error =>
+            Alert.alert('Error de cámara', error.message)
+          }
           onBarcodeScanned={
             bloqueoEscaneo.current
               ? undefined
@@ -222,7 +176,6 @@ export default function App() {
         />
 
         <View style={styles.cameraHeader}>
-
           <Text style={styles.cameraTitle}>
             Escanear código QR
           </Text>
@@ -236,7 +189,6 @@ export default function App() {
               Iniciando cámara...
             </Text>
           )}
-
         </View>
 
         <Pressable
@@ -247,30 +199,22 @@ export default function App() {
             Volver al inicio
           </Text>
         </Pressable>
-
       </View>
     );
   }
 
-  // ==========================================
   // INFORMACIÓN DE LA COLMENA
-  // ==========================================
-
   return (
     <View style={styles.container}>
-
       <StatusBar barStyle="dark-content" />
 
-      <Text style={styles.icon}>
-        🐝
-      </Text>
+      <Text style={styles.icon}>🐝</Text>
 
       <Text style={styles.title}>
         Información de la colmena
       </Text>
 
       <View style={styles.card}>
-
         <Text style={styles.cardLabel}>
           Código QR identificado
         </Text>
@@ -287,16 +231,12 @@ export default function App() {
           La consulta de datos reales estará disponible
           cuando conectemos FastAPI.
         </Text>
-
       </View>
 
       <View style={styles.menu}>
-
         <Pressable
           style={styles.button}
-          onPress={() => {
-            setPantalla('inspeccion');
-          }}
+          onPress={() => setPantalla('inspeccion')}
         >
           <Text style={styles.buttonText}>
             Iniciar inspección
@@ -311,19 +251,12 @@ export default function App() {
             Volver al inicio
           </Text>
         </Pressable>
-
       </View>
-
     </View>
   );
 }
 
-// ==========================================
-// ESTILOS DE LA APLICACIÓN
-// ==========================================
-
 const styles = StyleSheet.create({
-
   container: {
     flex: 1,
     backgroundColor: '#FFF9EC',
@@ -331,38 +264,32 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 24,
   },
-
   icon: {
     fontSize: 64,
     marginBottom: 20,
   },
-
   title: {
     fontSize: 27,
     fontWeight: 'bold',
     color: '#3D321B',
     textAlign: 'center',
   },
-
   menu: {
     width: '100%',
     marginTop: 35,
     gap: 15,
   },
-
   button: {
     backgroundColor: '#D99A24',
     padding: 18,
     borderRadius: 12,
     alignItems: 'center',
   },
-
   buttonText: {
     color: '#FFFFFF',
     fontSize: 17,
     fontWeight: 'bold',
   },
-
   secondaryButton: {
     backgroundColor: '#FFFFFF',
     padding: 18,
@@ -371,23 +298,19 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#D99A24',
   },
-
   secondaryText: {
     color: '#775315',
     fontSize: 17,
     fontWeight: '600',
   },
-
   cameraContainer: {
     flex: 1,
     backgroundColor: '#000000',
   },
-
   camera: {
     flex: 1,
     width: '100%',
   },
-
   cameraHeader: {
     position: 'absolute',
     top: 75,
@@ -397,21 +320,18 @@ const styles = StyleSheet.create({
     backgroundColor: '#00000099',
     borderRadius: 12,
   },
-
   cameraTitle: {
     color: '#FFFFFF',
     fontSize: 22,
     fontWeight: 'bold',
     textAlign: 'center',
   },
-
   cameraSubtitle: {
     color: '#FFFFFF',
     fontSize: 14,
     marginTop: 8,
     textAlign: 'center',
   },
-
   backButton: {
     position: 'absolute',
     bottom: 55,
@@ -421,7 +341,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 35,
     borderRadius: 12,
   },
-
   card: {
     width: '100%',
     backgroundColor: '#FFFFFF',
@@ -430,12 +349,10 @@ const styles = StyleSheet.create({
     marginTop: 30,
     alignItems: 'center',
   },
-
   cardLabel: {
     fontSize: 15,
     color: '#766B52',
   },
-
   codigo: {
     fontSize: 21,
     fontWeight: 'bold',
@@ -443,18 +360,15 @@ const styles = StyleSheet.create({
     marginTop: 12,
     textAlign: 'center',
   },
-
   testLabel: {
     color: '#956513',
     fontSize: 14,
     marginTop: 12,
   },
-
   infoText: {
     color: '#766B52',
     textAlign: 'center',
     fontSize: 13,
     marginTop: 12,
   },
-
 });

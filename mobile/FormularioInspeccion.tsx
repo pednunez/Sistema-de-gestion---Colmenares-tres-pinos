@@ -1,132 +1,460 @@
 
-import React, { useRef, useState } from 'react';
+import React, {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 
 import {
-  View,
-  Text,
-  TextInput,
+  ActivityIndicator,
+  Alert,
   Pressable,
   ScrollView,
-  StyleSheet,
-  Alert,
   StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
 } from 'react-native';
 
 import {
-  guardarInspeccionLocal,
-} from './database/inspecciones';
+  crearCaja,
+  guardarInspeccionAvanzada,
+  limpiarObservacion,
+  listarDestinosLocales,
+  OPCIONES_MARCOS,
+  resumenMarcos,
+} from './database/inspeccionesAvanzadas';
 
-// PROPIEDADES DEL FORMULARIO
+import type {
+  EstadoGeneral,
+  InspeccionAvanzada,
+  MarcoLocal,
+  Nivel,
+  NivelMiel,
+  UbicacionMarco,
+} from './database/inspeccionesAvanzadas';
+
 type Props = {
   codigoQR: string;
   onVolver: () => void;
 };
 
-// ESTADOS PERMITIDOS PARA LA REINA
-type EstadoReina =
-  | 'Vista'
-  | 'No vista'
-  | 'Sin evaluar';
+type Respuesta = 'SI' | 'NO' | 'NR';
+
+type Opcion = {
+  valor: string;
+  texto: string;
+};
+
+const SI_NO: Opcion[] = [
+  { valor: 'SI', texto: 'Sí' },
+  { valor: 'NO', texto: 'No' },
+];
+
+const SI_NO_NR: Opcion[] = [
+  ...SI_NO,
+  { valor: 'NR', texto: 'No revisado' },
+];
+
+const ESTADOS: Opcion[] = [
+  { valor: 'BUENO', texto: 'Bueno' },
+  { valor: 'REGULAR', texto: 'Regular' },
+  { valor: 'CRITICO', texto: 'Crítico' },
+];
+
+const NIVELES: Opcion[] = [
+  { valor: 'BAJO', texto: 'Bajo' },
+  { valor: 'MEDIO', texto: 'Medio' },
+  { valor: 'ALTO', texto: 'Alto' },
+  { valor: 'NR', texto: 'No revisado' },
+];
+
+const NIVELES_MIEL: Opcion[] = [
+  { valor: 'SIN_MIEL', texto: 'Sin miel' },
+  { valor: 'POCA', texto: 'Poca' },
+  { valor: 'MEDIA', texto: 'Media' },
+  { valor: 'ABUNDANTE', texto: 'Abundante' },
+  { valor: 'NR', texto: 'No revisado' },
+];
+
+const TIRAS: Opcion[] = [
+  { valor: '0', texto: 'No se aplicaron' },
+  { valor: '1', texto: '1 tira' },
+  { valor: '2', texto: '2 tiras' },
+  { valor: '3', texto: '3 tiras' },
+];
+
+function booleano(valor: Respuesta): boolean | null {
+  if (valor === 'NR') return null;
+  return valor === 'SI';
+}
+
+// SELECTOR CONTROLADO
+function Selector({
+  titulo,
+  valor,
+  opciones,
+  onCambiar,
+}: {
+  titulo: string;
+  valor: string;
+  opciones: Opcion[];
+  onCambiar: (valor: string) => void;
+}) {
+  return (
+    <View style={styles.grupo}>
+      <Text style={styles.label}>{titulo}</Text>
+
+      <View style={styles.fila}>
+        {opciones.map(opcion => (
+          <Pressable
+            key={opcion.valor}
+            style={[
+              styles.opcion,
+              valor === opcion.valor &&
+                styles.opcionActiva,
+            ]}
+            onPress={() => onCambiar(opcion.valor)}
+          >
+            <Text style={styles.opcionTexto}>
+              {valor === opcion.valor ? '● ' : '○ '}
+              {opcion.texto}
+            </Text>
+          </Pressable>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+// CAJA CON DIEZ POSICIONES
+function RegistroCaja({
+  titulo,
+  marcos,
+  destinos,
+  cargandoDestinos,
+  onCambiar,
+}: {
+  titulo: string;
+  marcos: MarcoLocal[];
+  destinos: string[];
+  cargandoDestinos: boolean;
+  onCambiar: (
+    numero: number,
+    cambios: Partial<MarcoLocal>
+  ) => void;
+}) {
+  const registrados = marcos.filter(
+    m => m.contenido !== ''
+  ).length;
+
+  return (
+    <View style={styles.tarjeta}>
+      <Text style={styles.tituloSeccion}>
+        {titulo}
+      </Text>
+
+      <Text style={styles.ayuda}>
+        {registrados} de 10 posiciones registradas.
+      </Text>
+
+      {marcos.map(marco => {
+        const presente =
+          marco.contenido !== '' &&
+          marco.contenido !== 'SIN_MARCO';
+
+        return (
+          <View key={marco.numero} style={styles.marco}>
+            <Text style={styles.marcoTitulo}>
+              Marco {marco.numero}
+            </Text>
+
+            <View style={styles.fila}>
+              {OPCIONES_MARCOS.map(opcion => (
+                <Pressable
+                  key={opcion.valor}
+                  style={[
+                    styles.opcion,
+                    marco.contenido === opcion.valor &&
+                      styles.opcionActiva,
+                  ]}
+                  onPress={() =>
+                    onCambiar(marco.numero, {
+                      contenido: opcion.valor,
+                    })
+                  }
+                >
+                  <Text style={styles.opcionTexto}>
+                    {marco.contenido === opcion.valor
+                      ? '● '
+                      : '○ '}
+                    {opcion.texto}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+
+            {presente && (
+              <Pressable
+                style={[
+                  styles.botonBorde,
+                  marco.transferir &&
+                    styles.opcionActiva,
+                ]}
+                onPress={() =>
+                  onCambiar(marco.numero, {
+                    transferir: !marco.transferir,
+                    destino: '',
+                  })
+                }
+              >
+                <Text style={styles.textoBorde}>
+                  {marco.transferir
+                    ? '✓ Transferencia seleccionada'
+                    : 'Transferir este marco'}
+                </Text>
+              </Pressable>
+            )}
+
+            {marco.transferir && (
+              <View style={styles.destino}>
+                <Text style={styles.label}>
+                  Colmena de destino *
+                </Text>
+
+                {cargandoDestinos ? (
+                  <ActivityIndicator color="#D99A24" />
+                ) : destinos.length === 0 ? (
+                  <Text style={styles.error}>
+                    No existe otra colmena local.
+                    Desmarca esta transferencia.
+                  </Text>
+                ) : (
+                  destinos.map(codigo => (
+                    <Pressable
+                      key={codigo}
+                      style={[
+                        styles.opcion,
+                        marco.destino === codigo &&
+                          styles.opcionActiva,
+                      ]}
+                      onPress={() =>
+                        onCambiar(marco.numero, {
+                          destino: codigo,
+                        })
+                      }
+                    >
+                      <Text style={styles.opcionTexto}>
+                        {marco.destino === codigo
+                          ? '● '
+                          : '○ '}
+                        {codigo}
+                      </Text>
+                    </Pressable>
+                  ))
+                )}
+              </View>
+            )}
+          </View>
+        );
+      })}
+    </View>
+  );
+}
 
 export default function FormularioInspeccion({
   codigoQR,
   onVolver,
 }: Props) {
+  const [estado, setEstado] = useState('');
 
-  // DATOS DEL FORMULARIO
-  const [marcos, setMarcos] = useState('');
-  const [cria, setCria] = useState('');
-  const [miel, setMiel] = useState('');
+  const [reina, setReina] =
+    useState<Respuesta>('NR');
 
-  const [reina, setReina] = useState<EstadoReina>(
-    'Sin evaluar'
+  const [cria, setCria] =
+    useState<Respuesta>('NR');
+
+  const [postura, setPostura] =
+    useState<Respuesta>('NR');
+
+  const [poblacion, setPoblacion] =
+    useState('NR');
+
+  const [reservas, setReservas] =
+    useState('NR');
+
+  const [nivelMiel, setNivelMiel] =
+    useState('NR');
+
+  const [alimentacion, setAlimentacion] =
+    useState('');
+
+  const [signos, setSignos] =
+    useState(false);
+
+  const [enfermedad, setEnfermedad] =
+    useState('');
+
+  const [tiras, setTiras] =
+    useState('0');
+
+  const [observaciones, setObservaciones] =
+    useState('');
+
+  const [camara, setCamara] =
+    useState<MarcoLocal[]>(crearCaja());
+
+  const [tieneAlza, setTieneAlza] =
+    useState(false);
+
+  const [alza, setAlza] =
+    useState<MarcoLocal[]>(crearCaja());
+
+  const [destinos, setDestinos] =
+    useState<string[]>([]);
+
+  const [cargandoDestinos, setCargandoDestinos] =
+    useState(true);
+
+  const [guardando, setGuardando] =
+    useState(false);
+
+  const bloqueo = useRef(false);
+
+  useEffect(() => {
+    let activo = true;
+
+    listarDestinosLocales(codigoQR)
+      .then(lista => {
+        if (activo) setDestinos(lista);
+      })
+      .catch(error => {
+        console.error('Destinos:', error);
+        if (activo) setDestinos([]);
+      })
+      .finally(() => {
+        if (activo) setCargandoDestinos(false);
+      });
+
+    return () => {
+      activo = false;
+    };
+  }, [codigoQR]);
+
+  const cambiarMarco = (
+    ubicacion: UbicacionMarco,
+    numero: number,
+    cambios: Partial<MarcoLocal>
+  ) => {
+    const actualizar = (anteriores: MarcoLocal[]) =>
+      anteriores.map(marco => {
+        if (marco.numero !== numero) {
+          return marco;
+        }
+
+        const nuevo = {
+          ...marco,
+          ...cambios,
+        };
+
+        // SI LA POSICIÓN ESTÁ VACÍA,
+        // NO SE PUEDE TRANSFERIR.
+        if (
+          !nuevo.contenido ||
+          nuevo.contenido === 'SIN_MARCO'
+        ) {
+          return {
+            ...nuevo,
+            transferir: false,
+            destino: '',
+          };
+        }
+
+        if (!nuevo.transferir) {
+          return {
+            ...nuevo,
+            destino: '',
+          };
+        }
+
+        return nuevo;
+      });
+
+    if (ubicacion === 'CAMARA_CRIA') {
+      setCamara(actualizar);
+    } else {
+      setAlza(actualizar);
+    }
+  };
+
+  const resumen = useMemo(
+    () => resumenMarcos({
+      camara,
+      alza,
+      tieneAlza,
+    }),
+    [camara, alza, tieneAlza]
   );
 
-  const [observaciones, setObservaciones] = useState('');
+  const guardar = async () => {
+    if (bloqueo.current) return;
 
-  // CONTROL DEL GUARDADO
-  const [guardando, setGuardando] = useState(false);
-  const bloqueoGuardado = useRef(false);
+    const datos: InspeccionAvanzada = {
+      codigoQR,
 
-  // VALIDAR Y GUARDAR INSPECCIÓN
-  const guardarFormulario = async () => {
+      estadoGeneral:
+        estado
+          ? estado as EstadoGeneral
+          : null,
 
-    // EVITAR GUARDADOS DUPLICADOS
-    if (bloqueoGuardado.current) {
-      return;
-    }
+      reinaObservada: booleano(reina),
+      presenciaCria: booleano(cria),
+      postura: booleano(postura),
 
-    // VALIDACIÓN DE CAMPOS
-    const campos = [
-      {
-        nombre: 'Marcos totales',
-        valor: marcos,
-      },
-      {
-        nombre: 'Marcos con cría',
-        valor: cria,
-      },
-      {
-        nombre: 'Marcos con miel',
-        valor: miel,
-      },
-    ];
+      nivelPoblacion:
+        poblacion === 'NR'
+          ? null
+          : poblacion as Nivel,
 
-    for (const campo of campos) {
+      reservasAlimento:
+        reservas === 'NR'
+          ? null
+          : reservas as Nivel,
 
-      if (!/^\d+$/.test(campo.valor.trim())) {
-        Alert.alert(
-          'Dato inválido',
-          `${campo.nombre} debe ser un número entero positivo o cero.`
-        );
-        return;
-      }
+      nivelMiel:
+        nivelMiel === 'NR'
+          ? null
+          : nivelMiel as NivelMiel,
 
-      if (!Number.isSafeInteger(Number(campo.valor))) {
-        Alert.alert(
-          'Dato inválido',
-          `${campo.nombre} contiene un número demasiado grande.`
-        );
-        return;
-      }
-    }
+      alimentacion: alimentacion.trim(),
+      signosEnfermedad: signos,
 
-    const totalMarcos = Number(marcos);
-    const marcosCria = Number(cria);
-    const marcosMiel = Number(miel);
+      enfermedadObservada:
+        signos ? enfermedad.trim() : '',
 
-    // VALIDAR CANTIDADES
-    if (
-      marcosCria > totalMarcos ||
-      marcosMiel > totalMarcos
-    ) {
-      Alert.alert(
-        'Revisa los marcos',
-        'Los marcos con cría o miel no pueden superar el total de marcos.'
-      );
-      return;
-    }
+      tirasMedicamento:
+        signos && tiras !== '0'
+          ? Number(tiras)
+          : null,
 
-    // BLOQUEAR BOTÓN
-    bloqueoGuardado.current = true;
+      observaciones: observaciones.trim(),
+      tieneAlza,
+      camara,
+      alza,
+    };
+
+    bloqueo.current = true;
     setGuardando(true);
 
     try {
+      const id =
+        await guardarInspeccionAvanzada(datos);
 
-      // GUARDAR DATOS EN SQLITE
-      const id = await guardarInspeccionLocal({
-        codigoQR: codigoQR,
-        marcosTotales: totalMarcos,
-        marcosCria: marcosCria,
-        marcosMiel: marcosMiel,
-        reina: reina,
-        observaciones: observaciones.trim(),
-      });
-
-      // CONFIRMAR AL USUARIO
       Alert.alert(
         'Inspección guardada',
-        `La inspección N.º ${id} se guardó correctamente en el dispositivo.\n\nEstado: Pendiente de sincronización.\n\nLos datos se conservarán aunque no tengas internet.`,
+        `Inspección N.º ${id} guardada correctamente.\n\nMarcos: ${resumen.total}\nCon cría: ${resumen.cria}\nCon miel: ${resumen.miel}\nTransferencias preparadas: ${resumen.transferencias}\n\nPendiente de sincronización.`,
         [
           {
             text: 'Volver a la colmena',
@@ -134,376 +462,497 @@ export default function FormularioInspeccion({
           },
         ]
       );
-
-    } catch (error) {
-
-      console.error(
-        'Error al guardar inspección local:',
-        error
-      );
-
+    } catch (e) {
       Alert.alert(
-        'Error al guardar',
-        'No se pudo guardar la inspección en el dispositivo. Intenta nuevamente.'
+        'Datos inválidos',
+        e instanceof Error
+          ? e.message
+          : 'No se pudo guardar.'
       );
-
     } finally {
-
-      // LIBERAR BOTÓN
-      bloqueoGuardado.current = false;
+      bloqueo.current = false;
       setGuardando(false);
     }
   };
 
-  // INTERFAZ DEL FORMULARIO
   return (
     <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.content}
+      style={styles.pantalla}
+      contentContainerStyle={styles.contenido}
       keyboardShouldPersistTaps="handled"
     >
       <StatusBar barStyle="dark-content" />
 
-      {/* ENCABEZADO */}
-      <Text style={styles.icon}>
-        🐝
-      </Text>
+      <Text style={styles.icono}>🐝</Text>
 
-      <Text style={styles.title}>
+      <Text style={styles.titulo}>
         Nueva inspección
       </Text>
 
-      <Text style={styles.subtitle}>
-        Sistema de Control de Colmenas
+      <Text style={styles.subtitulo}>
+        Formulario con validaciones estrictas
       </Text>
 
-      {/* INFORMACIÓN DE LA COLMENA */}
-      <View style={styles.card}>
-
-        <Text style={styles.cardLabel}>
+      <View style={styles.tarjeta}>
+        <Text style={styles.ayuda}>
           Colmena identificada
         </Text>
 
         <Text style={styles.codigo}>
           {codigoQR}
         </Text>
-
-        <Text style={styles.testLabel}>
-          Registro de prueba
-        </Text>
-
       </View>
 
-      {/* REGISTRO DE MARCOS */}
-      <Text style={styles.section}>
-        Registro de marcos
+      <Text style={styles.tituloSeccion}>
+        Estado de la colmena
+      </Text>
+
+      <Selector
+        titulo="Estado general *"
+        valor={estado}
+        opciones={ESTADOS}
+        onCambiar={setEstado}
+      />
+
+      <Selector
+        titulo="¿Se observó la reina?"
+        valor={reina}
+        opciones={SI_NO_NR}
+        onCambiar={v => setReina(v as Respuesta)}
+      />
+
+      <Selector
+        titulo="¿Hay cría?"
+        valor={cria}
+        opciones={SI_NO_NR}
+        onCambiar={v => {
+          const respuesta = v as Respuesta;
+          setCria(respuesta);
+
+          if (respuesta === 'NO') {
+            setPostura('NO');
+          }
+        }}
+      />
+
+      <Selector
+        titulo="¿Hay postura?"
+        valor={postura}
+        opciones={
+          cria === 'NO'
+            ? [{ valor: 'NO', texto: 'No' }]
+            : SI_NO_NR
+        }
+        onCambiar={v => setPostura(v as Respuesta)}
+      />
+
+      <Selector
+        titulo="Nivel de población"
+        valor={poblacion}
+        opciones={NIVELES}
+        onCambiar={setPoblacion}
+      />
+
+      <Selector
+        titulo="Reservas de alimento"
+        valor={reservas}
+        opciones={NIVELES}
+        onCambiar={setReservas}
+      />
+
+      <Selector
+        titulo="Nivel de miel observado"
+        valor={nivelMiel}
+        opciones={NIVELES_MIEL}
+        onCambiar={setNivelMiel}
+      />
+
+      <Text style={styles.tituloSeccion}>
+        Alimentación
       </Text>
 
       <Text style={styles.label}>
-        Marcos totales *
+        Alimentación suministrada
       </Text>
 
       <TextInput
         style={styles.input}
-        keyboardType="number-pad"
-        value={marcos}
-        onChangeText={setMarcos}
-        placeholder="Ejemplo: 10"
-        placeholderTextColor="#A69B85"
+        value={alimentacion}
+        onChangeText={v =>
+          setAlimentacion(
+            limpiarObservacion(v, 500)
+          )
+        }
+        maxLength={500}
+        placeholder="Descripción de alimentación"
       />
 
-      <Text style={styles.label}>
-        Marcos con cría *
+      <Text style={styles.tituloSeccion}>
+        Evaluación sanitaria
       </Text>
 
-      <TextInput
-        style={styles.input}
-        keyboardType="number-pad"
-        value={cria}
-        onChangeText={setCria}
-        placeholder="Ejemplo: 5"
-        placeholderTextColor="#A69B85"
+      <Selector
+        titulo="¿Hay signos de enfermedad?"
+        valor={signos ? 'SI' : 'NO'}
+        opciones={SI_NO}
+        onCambiar={v => {
+          const existe = v === 'SI';
+          setSignos(existe);
+
+          if (!existe) {
+            setEnfermedad('');
+            setTiras('0');
+          }
+        }}
       />
 
-      <Text style={styles.label}>
-        Marcos con miel *
-      </Text>
-
-      <TextInput
-        style={styles.input}
-        keyboardType="number-pad"
-        value={miel}
-        onChangeText={setMiel}
-        placeholder="Ejemplo: 3"
-        placeholderTextColor="#A69B85"
-      />
-
-      {/* ESTADO DE LA REINA */}
-      <Text style={styles.section}>
-        Estado de la reina
-      </Text>
-
-      {(
-        [
-          'Vista',
-          'No vista',
-          'Sin evaluar',
-        ] as EstadoReina[]
-      ).map((opcion) => (
-
-        <Pressable
-          key={opcion}
-          style={[
-            styles.option,
-            reina === opcion && styles.selected,
-          ]}
-          onPress={() => setReina(opcion)}
-        >
-          <Text style={styles.optionText}>
-            {reina === opcion ? '●' : '○'} {opcion}
+      {signos && (
+        <>
+          <Text style={styles.label}>
+            Signos observados *
           </Text>
-        </Pressable>
 
-      ))}
+          <TextInput
+            style={[styles.input, styles.area]}
+            multiline
+            textAlignVertical="top"
+            value={enfermedad}
+            onChangeText={v =>
+              setEnfermedad(
+                limpiarObservacion(v, 500)
+              )
+            }
+            maxLength={500}
+            placeholder="Describe lo observado"
+          />
 
-      {/* OBSERVACIONES */}
-      <Text style={styles.section}>
+          <Selector
+            titulo="Tiras aplicadas"
+            valor={tiras}
+            opciones={TIRAS}
+            onCambiar={setTiras}
+          />
+        </>
+      )}
+
+      <Text style={styles.tituloSeccion}>
+        Registro marco por marco
+      </Text>
+
+      <Text style={styles.ayuda}>
+        Debes registrar las diez posiciones de cada
+        caja utilizada. Selecciona Sin marco cuando
+        una posición esté vacía. Los totales se
+        calcularán automáticamente.
+      </Text>
+
+      <RegistroCaja
+        titulo="Cámara de cría"
+        marcos={camara}
+        destinos={destinos}
+        cargandoDestinos={cargandoDestinos}
+        onCambiar={(numero, cambios) =>
+          cambiarMarco(
+            'CAMARA_CRIA',
+            numero,
+            cambios
+          )
+        }
+      />
+
+      <Selector
+        titulo="¿La colmena tiene alza?"
+        valor={tieneAlza ? 'SI' : 'NO'}
+        opciones={SI_NO}
+        onCambiar={v => {
+          const tiene = v === 'SI';
+          setTieneAlza(tiene);
+
+          if (!tiene) {
+            setAlza(crearCaja());
+          }
+        }}
+      />
+
+      {tieneAlza && (
+        <RegistroCaja
+          titulo="Alza"
+          marcos={alza}
+          destinos={destinos}
+          cargandoDestinos={cargandoDestinos}
+          onCambiar={(numero, cambios) =>
+            cambiarMarco('ALZA', numero, cambios)
+          }
+        />
+      )}
+
+      <View style={styles.tarjeta}>
+        <Text style={styles.tituloSeccion}>
+          Resumen automático
+        </Text>
+
+        <Text style={styles.detalle}>
+          Marcos presentes: {resumen.total}
+        </Text>
+
+        <Text style={styles.detalle}>
+          Marcos con cría: {resumen.cria}
+        </Text>
+
+        <Text style={styles.detalle}>
+          Marcos con miel: {resumen.miel}
+        </Text>
+
+        <Text style={styles.detalle}>
+          Transferencias preparadas: {
+            resumen.transferencias
+          }
+        </Text>
+
+        <Text style={styles.detalle}>
+          Posiciones sin registrar: {
+            resumen.sinRegistrar
+          }
+        </Text>
+
+        {resumen.sinRegistrar > 0 && (
+          <Text style={styles.error}>
+            Completa las posiciones pendientes antes
+            de guardar.
+          </Text>
+        )}
+      </View>
+
+      <Text style={styles.tituloSeccion}>
         Observaciones
       </Text>
 
       <TextInput
-        style={[
-          styles.input,
-          styles.textarea,
-        ]}
+        style={[styles.input, styles.area]}
         multiline
-        value={observaciones}
-        onChangeText={setObservaciones}
-        placeholder="Escribe tus observaciones..."
-        placeholderTextColor="#A69B85"
         textAlignVertical="top"
+        value={observaciones}
+        onChangeText={v =>
+          setObservaciones(
+            limpiarObservacion(v, 1000)
+          )
+        }
+        maxLength={1000}
+        placeholder="Observaciones de la inspección"
       />
 
-      {/* AVISO DE GUARDADO LOCAL */}
-      <View style={styles.infoCard}>
-
-        <Text style={styles.infoTitle}>
-          Guardado sin conexión
+      <View style={styles.aviso}>
+        <Text style={styles.avisoTexto}>
+          Guardado offline: todos los detalles y marcos
+          se almacenan juntos en SQLite. Las transferencias
+          no modifican el inventario oficial hasta
+          su futura validación por FastAPI.
         </Text>
-
-        <Text style={styles.infoText}>
-          La inspección se guardará en este dispositivo.
-          Quedará pendiente de sincronización con FastAPI
-          hasta que implementemos la conexión automática.
-        </Text>
-
       </View>
 
-      {/* BOTÓN GUARDAR */}
       <Pressable
         style={[
-          styles.button,
-          guardando && styles.buttonDisabled,
+          styles.botonPrincipal,
+          guardando && styles.deshabilitado,
         ]}
-        onPress={guardarFormulario}
         disabled={guardando}
+        onPress={() => void guardar()}
       >
-        <Text style={styles.buttonText}>
+        <Text style={styles.textoPrincipal}>
           {guardando
             ? 'Guardando...'
             : 'Guardar inspección'}
         </Text>
       </Pressable>
 
-      {/* BOTÓN VOLVER */}
       <Pressable
-        style={styles.secondaryButton}
-        onPress={onVolver}
+        style={styles.botonSecundario}
         disabled={guardando}
+        onPress={onVolver}
       >
-        <Text style={styles.secondaryText}>
+        <Text style={styles.textoSecundario}>
           Volver a la colmena
         </Text>
       </Pressable>
-
-      <Text style={styles.footer}>
-        Colmenares Tres Pinos · Aplicación móvil
-      </Text>
-
     </ScrollView>
   );
 }
 
-// ESTILOS
 const styles = StyleSheet.create({
-
-  container: {
+  pantalla: {
     flex: 1,
     backgroundColor: '#FFF9EC',
   },
-
-  content: {
-    paddingHorizontal: 24,
+  contenido: {
+    padding: 20,
     paddingTop: 60,
-    paddingBottom: 50,
+    paddingBottom: 55,
   },
-
-  icon: {
-    fontSize: 55,
+  icono: {
+    fontSize: 48,
     textAlign: 'center',
-    marginBottom: 12,
   },
-
-  title: {
+  titulo: {
     fontSize: 27,
-    fontWeight: 'bold',
+    fontWeight: '800',
     color: '#3D321B',
-    textAlign: 'center',
-  },
-
-  subtitle: {
-    fontSize: 15,
-    color: '#766B52',
     textAlign: 'center',
     marginTop: 8,
+  },
+  subtitulo: {
+    color: '#766B52',
+    textAlign: 'center',
+    marginTop: 6,
     marginBottom: 22,
   },
-
-  card: {
-    backgroundColor: '#FFFFFF',
-    padding: 20,
-    borderRadius: 16,
-    marginBottom: 20,
-    alignItems: 'center',
-  },
-
-  cardLabel: {
-    fontSize: 15,
-    color: '#766B52',
-  },
-
-  codigo: {
+  tituloSeccion: {
     fontSize: 20,
-    fontWeight: 'bold',
+    fontWeight: '800',
     color: '#3D321B',
-    marginTop: 10,
-    textAlign: 'center',
+    marginTop: 22,
+    marginBottom: 12,
   },
-
-  testLabel: {
-    fontSize: 13,
-    color: '#956513',
-    marginTop: 10,
-  },
-
-  section: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#3D321B',
-    marginTop: 20,
-    marginBottom: 15,
-  },
-
   label: {
+    fontWeight: '700',
     fontSize: 15,
-    fontWeight: '500',
     color: '#594D36',
-    marginBottom: 8,
+    marginBottom: 10,
   },
-
+  grupo: {
+    marginBottom: 20,
+  },
+  fila: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  opcion: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#DDCEAE',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 7,
+  },
+  opcionActiva: {
+    backgroundColor: '#FFF0CC',
+    borderColor: '#D99A24',
+  },
+  opcionTexto: {
+    color: '#594D36',
+    fontWeight: '700',
+    fontSize: 13,
+  },
+  tarjeta: {
+    backgroundColor: '#FFFFFF',
+    padding: 18,
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: '#E5DAC5',
+    marginVertical: 12,
+  },
+  codigo: {
+    fontSize: 21,
+    fontWeight: '800',
+    color: '#3D321B',
+  },
+  marco: {
+    borderTopWidth: 1,
+    borderTopColor: '#EAE3D6',
+    paddingVertical: 16,
+  },
+  marcoTitulo: {
+    color: '#3D321B',
+    fontSize: 16,
+    fontWeight: '800',
+    marginBottom: 12,
+  },
+  ayuda: {
+    fontSize: 13,
+    lineHeight: 20,
+    color: '#766B52',
+    marginBottom: 12,
+  },
   input: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#DDCEAE',
     borderRadius: 12,
     padding: 15,
-    fontSize: 16,
+    fontSize: 15,
     color: '#3D321B',
-    marginBottom: 18,
+    marginBottom: 15,
   },
-
-  textarea: {
-    minHeight: 120,
+  area: {
+    minHeight: 115,
   },
-
-  option: {
-    backgroundColor: '#FFFFFF',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 10,
+  detalle: {
+    color: '#594D36',
+    fontSize: 14,
+    marginVertical: 5,
+  },
+  botonBorde: {
     borderWidth: 1,
-    borderColor: '#DDCEAE',
-  },
-
-  selected: {
     borderColor: '#D99A24',
-    backgroundColor: '#FFF0CC',
+    borderRadius: 10,
+    padding: 14,
+    marginTop: 12,
+    alignItems: 'center',
   },
-
-  optionText: {
-    fontSize: 16,
-    color: '#3D321B',
+  textoBorde: {
+    color: '#775315',
+    fontWeight: '700',
   },
-
-  infoCard: {
-    backgroundColor: '#FFF0CC',
-    padding: 18,
-    borderRadius: 12,
+  destino: {
+    padding: 13,
+    backgroundColor: '#FFF9EC',
+    marginTop: 12,
+    borderRadius: 10,
+  },
+  error: {
+    color: '#B45309',
+    fontSize: 13,
+    lineHeight: 20,
     marginTop: 10,
   },
-
-  infoTitle: {
-    fontSize: 15,
-    fontWeight: 'bold',
-    color: '#775315',
-    marginBottom: 7,
-  },
-
-  infoText: {
-    fontSize: 13,
-    color: '#766B52',
-    lineHeight: 20,
-  },
-
-  button: {
-    backgroundColor: '#D99A24',
-    padding: 18,
+  aviso: {
+    backgroundColor: '#FFF0CC',
+    padding: 16,
     borderRadius: 12,
+    marginTop: 18,
+  },
+  avisoTexto: {
+    color: '#775315',
+    lineHeight: 20,
+    fontSize: 13,
+  },
+  botonPrincipal: {
+    backgroundColor: '#D99A24',
+    borderRadius: 12,
+    padding: 18,
     alignItems: 'center',
     marginTop: 25,
   },
-
-  buttonDisabled: {
-    opacity: 0.6,
-  },
-
-  buttonText: {
+  textoPrincipal: {
     color: '#FFFFFF',
-    fontSize: 17,
-    fontWeight: 'bold',
+    fontWeight: '800',
+    fontSize: 16,
   },
-
-  secondaryButton: {
+  botonSecundario: {
     backgroundColor: '#FFFFFF',
-    padding: 18,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginTop: 14,
     borderWidth: 1,
     borderColor: '#D99A24',
+    borderRadius: 12,
+    padding: 18,
+    marginTop: 12,
+    alignItems: 'center',
   },
-
-  secondaryText: {
+  textoSecundario: {
     color: '#775315',
+    fontWeight: '700',
     fontSize: 16,
-    fontWeight: '600',
   },
-
-  footer: {
-    textAlign: 'center',
-    color: '#938972',
-    fontSize: 12,
-    marginTop: 28,
+  deshabilitado: {
+    opacity: 0.5,
   },
-
 });
