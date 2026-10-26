@@ -133,6 +133,42 @@ class InventoryTests(unittest.TestCase):
         self.assertEqual(self.codes('/colmenas/?orden=codigo&offset=1&limit=2'),['A3','B1'])
         self.assertEqual(self.call('GET','/colmenas/?orden=fecha')[0],422)
 
+    def test_admin_associates_qr_and_old_code_stops_resolving(self):
+        hive=self.hives[0];anterior=str(hive.codigo_qr);nuevo=str(uuid4())
+        status,body=self.call('PUT',f'/colmenas/{hive.id}/qr',{'codigo_qr':nuevo})
+        self.assertEqual((status,body['codigo_qr']),(200,nuevo))
+        self.assertEqual(self.call('GET',f'/colmenas/qr/{nuevo}')[1]['codigo'],'A1')
+        self.assertEqual(self.call('GET',f'/colmenas/qr/{anterior}')[0],404)
+        self.audit.assert_called_once()
+
+    def test_null_generates_a_new_qr(self):
+        hive=self.hives[0];anterior=str(hive.codigo_qr)
+        status,body=self.call('PUT',f'/colmenas/{hive.id}/qr',{'codigo_qr':None})
+        self.assertEqual(status,200)
+        self.assertNotEqual(body['codigo_qr'],anterior)
+
+    def test_duplicate_qr_rejected_even_from_deleted_hive(self):
+        for other in [self.hives[1],self.hives[4]]:
+            with self.subTest(codigo=other.codigo):
+                status,_=self.call('PUT',f'/colmenas/{self.hives[0].id}/qr',{'codigo_qr':str(other.codigo_qr)})
+                self.assertEqual(status,409)
+        self.audit.assert_not_called()
+
+    def test_same_qr_is_a_no_op(self):
+        hive=self.hives[0]
+        self.assertEqual(self.call('PUT',f'/colmenas/{hive.id}/qr',{'codigo_qr':str(hive.codigo_qr)})[0],200)
+        self.audit.assert_not_called()
+
+    def test_qr_association_errors(self):
+        hive=self.hives[0]
+        self.assertEqual(self.call('PUT','/colmenas/999999/qr',{'codigo_qr':str(uuid4())})[0],404)
+        self.assertEqual(self.call('PUT',f'/colmenas/{self.hives[4].id}/qr',{'codigo_qr':str(uuid4())})[0],404)
+        self.assertEqual(self.call('PUT',f'/colmenas/{hive.id}/qr',{'codigo_qr':'no-es-uuid'})[0],422)
+        self.assertEqual(self.call('PUT',f'/colmenas/{hive.id}/qr',{})[0],422)
+        self.assertEqual(self.call('PUT',f'/colmenas/{hive.id}/qr',{'codigo_qr':None,'codigo':'X'})[0],422)
+        self.set_role('APICULTOR')
+        self.assertEqual(self.call('PUT',f'/colmenas/{hive.id}/qr',{'codigo_qr':None})[0],403)
+
     def test_unknown_apiary_has_empty_list(self):
         self.assertEqual(self.codes('/colmenas/?apiario_id=999999999'),[])
 

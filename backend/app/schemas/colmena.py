@@ -140,3 +140,21 @@ class ColmenaSinRevisionResponse(ColmenaResponse):
     ultima_inspeccion: datetime | None = None
 
     dias_sin_revision: int | None = None
+
+
+# ==========================================================
+# ASOCIAR CODIGO QR (S2-T04)
+# ==========================================================
+#
+# codigo_qr = UUID -> asociar una etiqueta ya impresa.
+# codigo_qr = null -> generar un codigo nuevo (etiqueta
+#                     perdida o danada).
+# ==========================================================
+
+class ColmenaQrUpdate(BaseModel):
+
+    codigo_qr: UUID | None
+
+    model_config = ConfigDict(
+        extra="forbid"
+    )

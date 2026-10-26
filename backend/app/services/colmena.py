@@ -129,6 +129,39 @@ def listar_colmenas_sin_revision(
 
 
 # ==========================================================
+# ASOCIAR CODIGO QR
+# ==========================================================
+#
+# El indice unico de codigo_qr incluye colmenas dadas de
+# baja: un codigo nunca se reutiliza para otra colmena.
+# ==========================================================
+
+def obtener_colmena_con_qr(
+    db: Session,
+    codigo_qr: UUID
+) -> Colmena | None:
+
+    return db.scalar(
+        select(Colmena).where(Colmena.codigo_qr == codigo_qr)
+    )
+
+
+def asignar_codigo_qr(
+    db: Session,
+    colmena: Colmena,
+    codigo_qr: UUID
+) -> Colmena:
+
+    colmena.codigo_qr = codigo_qr
+    colmena.fecha_actualizacion = datetime.now(timezone.utc)
+
+    db.commit()
+    db.refresh(colmena)
+
+    return colmena
+
+
+# ==========================================================
 # OBTENER COLMENA POR ID
 # ==========================================================
 

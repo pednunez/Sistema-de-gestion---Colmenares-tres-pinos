@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from io import BytesIO
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import qrcode
 
@@ -18,6 +18,7 @@ from app.models.usuario import Usuario
 from app.schemas.colmena import (
     ColmenaCreate,
     ColmenaUpdate,
+    ColmenaQrUpdate,
     ColmenaResponse,
     ColmenaSinRevisionResponse,
     EstadoColmena
@@ -177,6 +178,87 @@ def consultar_colmena_por_qr(
         )
 
     return colmena
+
+
+# ==========================================================
+# ASOCIAR CÓDIGO QR A UNA COLMENA (S2-T04)
+# ==========================================================
+#
+# Solo ADMIN. El código es opaco (UUID): no contiene datos
+# de la colmena ni de personas. Un código ya asociado a otra
+# colmena, aunque esté dada de baja, se rechaza con 409.
+# ==========================================================
+
+@router.put(
+    "/{colmena_id}/qr",
+    response_model=ColmenaResponse
+)
+def asociar_qr_colmena(
+    colmena_id: int,
+    datos: ColmenaQrUpdate,
+    db: Session = Depends(get_db),
+    usuario: Usuario = Depends(requerir_admin)
+):
+
+    colmena = colmena_service.obtener_colmena(
+        db,
+        colmena_id
+    )
+
+    if colmena is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Colmena no encontrada"
+        )
+
+    nuevo_codigo = datos.codigo_qr or uuid4()
+
+    if nuevo_codigo == colmena.codigo_qr:
+        return colmena
+
+    existente = colmena_service.obtener_colmena_con_qr(
+        db,
+        nuevo_codigo
+    )
+
+    if existente is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="El código QR ya está asociado a otra colmena"
+        )
+
+    datos_anteriores = colmena_a_dict(colmena)
+
+    try:
+        colmena_actualizada = colmena_service.asignar_codigo_qr(
+            db,
+            colmena,
+            nuevo_codigo
+        )
+    except IntegrityError as error:
+        db.rollback()
+        if getattr(error.orig, "sqlstate", None) != "23505":
+            raise
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="El código QR ya está asociado a otra colmena"
+        ) from error
+
+    auditoria_service.registrar_auditoria(
+        db,
+        AuditoriaCreate(
+            usuario_id=usuario.id,
+            entidad="COLMENA",
+            entidad_id=colmena_actualizada.id,
+            accion="MODIFICAR",
+            datos_anteriores=datos_anteriores,
+            datos_nuevos=colmena_a_dict(
+                colmena_actualizada
+            )
+        )
+    )
+
+    return colmena_actualizada
 
 
 # ==========================================================
