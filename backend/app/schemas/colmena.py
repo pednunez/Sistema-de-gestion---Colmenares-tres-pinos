@@ -129,3 +129,14 @@ class ColmenaResponse(ColmenaBase):
     model_config = ConfigDict(
         from_attributes=True
     )
+
+# ==========================================================
+# COLMENA SIN REVISION EN EL PERIODO (RF-45)
+# ==========================================================
+
+class ColmenaSinRevisionResponse(ColmenaResponse):
+
+    # null si la colmena nunca fue inspeccionada.
+    ultima_inspeccion: datetime | None = None
+
+    dias_sin_revision: int | None = None

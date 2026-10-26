@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from sqlalchemy import func, select
@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.models.apiario import Apiario
 from app.models.colmena import Colmena
+from app.models.inspeccion import Inspeccion
 from app.schemas.colmena import ColmenaCreate, ColmenaUpdate
 
 
@@ -71,6 +72,60 @@ def listar_colmenas(
         consulta = consulta.limit(limit)
 
     return db.scalars(consulta).all(), total
+
+
+# ==========================================================
+# COLMENAS SIN REVISION EN EL PERIODO (RF-45)
+# ==========================================================
+#
+# Colmenas operativas (no INACTIVA ni BAJA) cuya ultima
+# inspeccion activa es anterior al periodo, o que nunca
+# fueron inspeccionadas. Primero las nunca revisadas y
+# luego de la mas antigua a la mas reciente.
+# ==========================================================
+
+ESTADOS_NO_OPERATIVOS = ("INACTIVA", "BAJA")
+
+
+def listar_colmenas_sin_revision(
+    db: Session,
+    dias: int,
+    apiario_id: int | None = None,
+    ahora: datetime | None = None
+) -> list[tuple[Colmena, datetime | None]]:
+
+    ahora = ahora or datetime.now(timezone.utc)
+    limite = ahora - timedelta(days=dias)
+
+    ultimas = (
+        select(
+            Inspeccion.colmena_id,
+            func.max(Inspeccion.fecha_inspeccion).label("ultima")
+        )
+        .where(Inspeccion.activo == True)
+        .group_by(Inspeccion.colmena_id)
+        .subquery()
+    )
+
+    consulta = (
+        select(Colmena, ultimas.c.ultima)
+        .outerjoin(ultimas, ultimas.c.colmena_id == Colmena.id)
+        .where(
+            Colmena.activo == True,
+            Colmena.estado.not_in(ESTADOS_NO_OPERATIVOS),
+            (ultimas.c.ultima.is_(None)) | (ultimas.c.ultima < limite)
+        )
+        .order_by(
+            ultimas.c.ultima.is_not(None),
+            ultimas.c.ultima,
+            Colmena.id
+        )
+    )
+
+    if apiario_id is not None:
+        consulta = consulta.where(Colmena.apiario_id == apiario_id)
+
+    return [(fila[0], fila[1]) for fila in db.execute(consulta).all()]
 
 
 # ==========================================================

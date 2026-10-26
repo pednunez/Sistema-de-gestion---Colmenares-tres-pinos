@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from io import BytesIO
 from uuid import UUID
 
@@ -18,6 +19,7 @@ from app.schemas.colmena import (
     ColmenaCreate,
     ColmenaUpdate,
     ColmenaResponse,
+    ColmenaSinRevisionResponse,
     EstadoColmena
 )
 
@@ -96,6 +98,58 @@ def listar_colmenas(
     response.headers[TOTAL_HEADER] = str(total)
 
     return colmenas
+
+
+# ==========================================================
+# COLMENAS SIN REVISIÓN EN EL PERIODO (RF-45)
+# ==========================================================
+#
+# dias: largo del periodo. Por defecto 30, igual que el
+# aviso "sin inspección" del frontend.
+# ==========================================================
+
+@router.get(
+    "/sin-revision",
+    response_model=list[ColmenaSinRevisionResponse]
+)
+def listar_colmenas_sin_revision(
+    db: Session = Depends(get_db),
+    dias: int = Query(default=30, ge=1, le=365),
+    apiario_id: int | None = Query(default=None, gt=0)
+):
+    ahora = datetime.now(timezone.utc)
+
+    filas = colmena_service.listar_colmenas_sin_revision(
+        db,
+        dias=dias,
+        apiario_id=apiario_id,
+        ahora=ahora
+    )
+
+    respuesta = []
+
+    for colmena, ultima in filas:
+
+        dias_sin_revision = None
+
+        if ultima is not None:
+            # SQLite de pruebas devuelve fechas sin zona horaria.
+            if ultima.tzinfo is None:
+                ultima = ultima.replace(tzinfo=timezone.utc)
+            dias_sin_revision = (ahora - ultima).days
+
+        respuesta.append(
+            ColmenaSinRevisionResponse.model_validate(
+                colmena
+            ).model_copy(
+                update={
+                    "ultima_inspeccion": ultima,
+                    "dias_sin_revision": dias_sin_revision,
+                }
+            )
+        )
+
+    return respuesta
 
 
 # ==========================================================
