@@ -81,3 +81,13 @@ from app.models.inventario_incidencia import InventarioIncidencia
 # ==========================================================
 
 from app.models.stock_minimo import StockMinimo
+
+
+# ==========================================================
+# GRUPOS O FILAS DE COLMENAS (PB-06)
+# ==========================================================
+#
+# Grupos por apiario e historial de asignaciones.
+# ==========================================================
+
+from app.models.grupo import GrupoColmena, GrupoColmenaAsignacion

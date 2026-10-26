@@ -72,14 +72,14 @@ class AccessControlTests(unittest.TestCase):
         self.connection.start()
         self.addCleanup(self.connection.stop)
         prefixes = ('/apiarios', '/colmenas', '/inspecciones', '/tratamientos',
-                    '/transferencias', '/historial')
+                    '/transferencias', '/historial', '/grupos')
         self.paths = []
         for path, methods in app.openapi()['paths'].items():
             if path.startswith(prefixes) and 'get' in methods:
                 import re
                 path = path.replace('{codigo_qr}', '00000000-0000-0000-0000-000000000001')
                 self.paths.append(re.sub(r'\{[^}]+\}', '1', path))
-        self.assertEqual(len(self.paths), 14)
+        self.assertEqual(len(self.paths), 17)
 
     def token(self, expired=False):
         return jwt.encode({'sub': '1', 'rol': 'ADMIN', 'ver': 0,
