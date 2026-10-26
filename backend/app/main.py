@@ -6,7 +6,14 @@ from app.core.dependencies import (
     obtener_usuario_actual,
     requerir_admin,
 )
+from app.core.registro import (
+    HEADER as CORRELATION_HEADER,
+    CorrelationIdMiddleware,
+    configurar_logging,
+)
 from app.database import probar_conexion, settings
+
+configurar_logging()
 
 # ==========================================================
 # ROUTERS EXISTENTES
@@ -60,7 +67,19 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=[CORRELATION_HEADER],
 )
+
+
+# ==========================================================
+# CORRELATION ID Y LOG JSON POR PETICION (RNF-57)
+# ==========================================================
+#
+# Se agrega despues de CORS para quedar por fuera: tambien
+# registra y responde el ID en las peticiones OPTIONS.
+# ==========================================================
+
+app.add_middleware(CorrelationIdMiddleware)
 
 
 # ==========================================================
@@ -117,11 +136,9 @@ app.include_router(inventario_router)
 #
 # Contrato esperado por el frontend de Pedro:
 #
-# GET /stock/
-#
-# Proximamente:
-# POST /stock/movimientos/
-# GET /stock/movimientos/
+# GET   /stock/
+# POST  /stock/movimientos/
+# GET   /stock/movimientos/
 # PATCH /stock/{material}
 #
 # La autenticacion se encuentra definida
