@@ -5,7 +5,6 @@ import { AreaTexto, Entrada, Segmentado } from "../ui/Campo";
 import SelectorApiarioColmena from "../colmenas/SelectorApiarioColmena";
 import RegistroMarcos from "./RegistroMarcos";
 import TratamientosEnCurso from "./TratamientosEnCurso";
-import { useAuth } from "../../hooks/useAuth";
 import { useFormulario } from "../../hooks/useFormulario";
 import { useDatos } from "../../hooks/useDatos";
 import { ESTADO_GENERAL, ESTADO_GENERAL_ANTERIOR, NIVEL, NIVEL_MIEL, opciones, texto } from "../../utils/etiquetas";
@@ -63,7 +62,6 @@ export default function FormularioInspeccion({ inspeccion, colmenaInicial, onGua
   const esEdicion = Boolean(inspeccion?.id);
   const idFormulario = useId();
   const { datos, indices, codigoColmena } = useDatos();
-  const { usuario, esAdmin } = useAuth();
   const refFormulario = useRef(null);
   const colmenaPrevia = indices.colmenas.get(Number(inspeccion?.colmena_id ?? colmenaInicial));
 
@@ -95,8 +93,9 @@ export default function FormularioInspeccion({ inspeccion, colmenaInicial, onGua
     () => datos.tratamientos.filter((t) => String(t.colmena_id) === String(valores.colmena_id) && t.estado === "EN_CURSO"),
     [datos.tratamientos, valores.colmena_id]
   );
-  // El backend solo deja modificar un tratamiento a quien lo registró o a un administrador.
-  const puedeFinalizar = (t) => esAdmin || t.usuario_id === usuario?.id;
+  // Los apicultores rotan entre apiarios: quien inspecciona puede finalizar el
+  // tratamiento aunque lo haya registrado otra persona (decisión del Product Owner, 26-10).
+  const puedeFinalizar = () => true;
 
   const cambiarApiario = (id) => {
     cambiar("apiario_id", id);

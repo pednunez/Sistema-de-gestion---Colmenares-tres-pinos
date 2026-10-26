@@ -116,10 +116,14 @@ it("si no se puede finalizar el tratamiento, la inspección queda guardada y se 
   screen.getByText(/Finalizar el tratamiento Varroa\. No tienes permisos/);
 });
 
-it("el apicultor no puede finalizar un tratamiento que registró otra persona", async () => {
-  const { d } = await abrir(APICULTOR);
+it("el apicultor que inspecciona puede finalizar un tratamiento que registró otra persona", async () => {
+  const { d, llamadas } = await abrir(APICULTOR);
   elegir(d, /^Apiario/, "1");
   elegir(d, /^Colmena/, "1");
-  expect(within(d).getByRole("checkbox", { name: /Finalizar Varroa/ }).disabled).toBe(true);
-  within(d).getByText("Solo quien lo registró o un administrador puede finalizarlo.");
+  const casilla = within(d).getByRole("checkbox", { name: /Finalizar Varroa/ });
+  expect(casilla.disabled).toBe(false);
+  fireEvent.click(casilla);
+  fireEvent.click(within(d).getByRole("radio", { name: "Completa" }));
+  enviar(d);
+  await waitFor(() => expect(llamadas.find((l) => l.metodo === "PATCH")?.ruta).toBe("/tratamientos/5"));
 });

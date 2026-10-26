@@ -1,6 +1,6 @@
 # Pendientes del backend para el frontend de escritorio
 
-Actualizado el 26-10-2026: nuevo estado de la colmena en la inspección (sección 6).
+Actualizado el 26-10-2026: estado de la colmena (sección 6) y finalizar tratamientos desde la inspección (sección 7).
 
 ## 1. Detalle por marco en la inspección (bloquea el guardado)
 
@@ -157,3 +157,17 @@ El cliente cambió la escala de `estado_general` (H005-E4). El frontend ya ofrec
 - Hoy `EstadoGeneral` en `schemas/inspeccion.py` solo acepta `BUENO`, `REGULAR` y `CRITICO`, así que `POST` y `PATCH /inspecciones/` responden **422** con los valores nuevos. Falta agregarlos al `Literal` y, si existe, a la restricción de la columna en la base.
 - **Inspecciones antiguas:** el frontend sigue mostrando `BUENO`, `REGULAR` y `CRITICO` como "escala anterior", y al editar una obliga a elegir el estado nuevo. Conviene que el backend siga aceptándolos en lectura. Si se decide migrarlos, acordar antes la equivalencia con el cliente.
 - **Alertas en el frontend:** `REQUIERE_REVISION` es prioridad alta y `DEBIL` es "revisar".
+
+## 7. Finalizar tratamientos desde la inspección
+
+Al registrar o editar una inspección, el frontend lista los tratamientos `EN_CURSO` de la colmena. Los que el apicultor marca se finalizan después de guardar la inspección con:
+
+```
+PATCH /tratamientos/{id}
+{ "estado": "FINALIZADO", "fecha_fin": "AAAA-MM-DD" }
+```
+
+- **Regla definida por el Product Owner (26-10):** los apicultores rotan entre apiarios, así que **cualquier APICULTOR o ADMIN que inspecciona la colmena puede finalizar su tratamiento**, aunque lo haya registrado otra persona.
+- Hoy `verificar_autor_o_admin` responde **403** si el apicultor no es el autor. Falta permitir este caso (por ejemplo, que un APICULTOR pueda pasar un tratamiento `EN_CURSO` a `FINALIZADO` con `fecha_fin`, dejando el resto de la edición solo para el autor o un ADMIN). Registrar en auditoría quién lo finalizó.
+- Mientras tanto, si el backend lo rechaza, la inspección queda guardada y el frontend avisa que falta finalizar el tratamiento.
+- Opcional: guardar la inspección en la que se finalizó, para mostrarlo en el detalle.
