@@ -15,7 +15,7 @@ import { useDatos } from "../hooks/useDatos";
 import { useNavegacion } from "../hooks/useNavegacion";
 import { usePaginaColmenas } from "../hooks/usePaginaColmenas";
 import { colmenasService } from "../services/colmenasService";
-import { ESTADO_COLMENA, ESTADO_GENERAL, opciones } from "../utils/etiquetas";
+import { ESTADO_COLMENA, ESTADO_GENERAL_TODOS, opciones } from "../utils/etiquetas";
 import { formatearFecha } from "../utils/formato";
 import { calcularAlertas, ultimaInspeccionPorColmena } from "../utils/alertas";
 
@@ -198,7 +198,7 @@ export default function ColmenasPage() {
                     <td className="p-4">
                       {ultima ? (
                         <span className="flex items-center gap-2">
-                          <InsigniaDe mapa={ESTADO_GENERAL} valor={ultima.estado_general} />
+                          <InsigniaDe mapa={ESTADO_GENERAL_TODOS} valor={ultima.estado_general} />
                           <span className="text-slate-500">{formatearFecha(ultima.fecha_inspeccion)}</span>
                         </span>
                       ) : (

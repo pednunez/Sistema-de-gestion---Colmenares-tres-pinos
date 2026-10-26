@@ -7,7 +7,7 @@ import SelectorColmena from "../colmenas/SelectorColmena";
 import RegistroMarcos from "./RegistroMarcos";
 import { useFormulario } from "../../hooks/useFormulario";
 import { useDatos } from "../../hooks/useDatos";
-import { ESTADO_GENERAL, NIVEL, NIVEL_MIEL, opciones } from "../../utils/etiquetas";
+import { ESTADO_GENERAL, ESTADO_GENERAL_ANTERIOR, NIVEL, NIVEL_MIEL, opciones, texto } from "../../utils/etiquetas";
 import { textoONulo } from "../../utils/validacion";
 import {
   crearCaja,
@@ -54,7 +54,8 @@ export default function FormularioInspeccion({ inspeccion, colmenaInicial, onGua
 
   const formulario = useFormulario({
     colmena_id: String(inspeccion?.colmena_id ?? colmenaInicial ?? ""),
-    estado_general: inspeccion?.estado_general ?? null,
+    // Una inspección con la escala anterior obliga a elegir el estado nuevo al editarla.
+    estado_general: inspeccion?.estado_general in ESTADO_GENERAL ? inspeccion.estado_general : null,
     reina_observada: inspeccion?.reina_observada ?? null,
     presencia_cria: inspeccion?.presencia_cria ?? null,
     nivel_poblacion: inspeccion?.nivel_poblacion ?? null,
@@ -74,7 +75,7 @@ export default function FormularioInspeccion({ inspeccion, colmenaInicial, onGua
 
   const validar = (v) => ({
     colmena_id: !v.colmena_id && "Selecciona la colmena inspeccionada.",
-    estado_general: !v.estado_general && "Indica el estado general de la colmena.",
+    estado_general: !v.estado_general && "Indica el estado de la colmena.",
     enfermedad_observada:
       v.signos_enfermedad && !v.enfermedad_observada.trim() && "Describe brevemente lo que observaste.",
     alimentacion_suministrada:
@@ -150,14 +151,21 @@ export default function FormularioInspeccion({ inspeccion, colmenaInicial, onGua
           />
         )}
 
-        <Segmentado
-          etiqueta="Estado general"
-          requerido
-          opciones={opciones(ESTADO_GENERAL)}
-          valor={valores.estado_general}
-          onCambiar={(valor) => cambiar("estado_general", valor)}
-          error={errores.estado_general}
-        />
+        <div className="grid gap-1.5">
+          <Segmentado
+            etiqueta="Estado de la colmena"
+            requerido
+            opciones={opciones(ESTADO_GENERAL)}
+            valor={valores.estado_general}
+            onCambiar={(valor) => cambiar("estado_general", valor)}
+            error={errores.estado_general}
+          />
+          {inspeccion?.estado_general in ESTADO_GENERAL_ANTERIOR && (
+            <p className="text-sm text-slate-500">
+              Esta inspección tenía el estado «{texto(ESTADO_GENERAL_ANTERIOR, inspeccion.estado_general)}». Elige el estado actual.
+            </p>
+          )}
+        </div>
 
         <div className="grid gap-5 sm:grid-cols-2">
           <Segmentado

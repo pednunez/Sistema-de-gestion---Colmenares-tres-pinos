@@ -30,8 +30,10 @@ export function calcularAlertas(colmenas, inspecciones) {
     const motivos = [];
     let prioridad = null;
 
-    if (ultima?.estado_general === "CRITICO") {
-      motivos.push("Última inspección en estado crítico");
+    if (ultima?.estado_general === "REQUIERE_REVISION" || ultima?.estado_general === "CRITICO") {
+      motivos.push(
+        ultima.estado_general === "CRITICO" ? "Última inspección en estado crítico" : "Última inspección: requiere revisión"
+      );
       prioridad = "alta";
     }
     if (ultima?.signos_enfermedad) {
@@ -42,8 +44,8 @@ export function calcularAlertas(colmenas, inspecciones) {
       );
       prioridad = "alta";
     }
-    if (ultima?.estado_general === "REGULAR") {
-      motivos.push("Última inspección en estado regular");
+    if (ultima?.estado_general === "DEBIL" || ultima?.estado_general === "REGULAR") {
+      motivos.push(ultima.estado_general === "REGULAR" ? "Última inspección en estado regular" : "Última inspección: colmena débil");
       prioridad ??= "media";
     }
     if (colmena.estado === "EN_OBSERVACION") {

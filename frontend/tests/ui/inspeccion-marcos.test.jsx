@@ -37,7 +37,7 @@ async function abrirFormulario() {
   fireEvent.click(await screen.findByRole("button", { name: "Registrar inspección" }));
   const d = screen.getByRole("dialog");
   fireEvent.change(within(d).getByLabelText(/^Colmena/), { target: { value: "1" } });
-  fireEvent.click(within(d).getByRole("radio", { name: "Bueno" }));
+  fireEvent.click(within(d).getByRole("radio", { name: "Completa" }));
   return d;
 }
 const elegir = (d, etiqueta, valor) => fireEvent.change(within(d).getByLabelText(etiqueta), { target: { value: valor } });
@@ -73,7 +73,7 @@ it("registra 10 marcos, alza y transferencias, y las guarda después de la inspe
   const posts = llamadas.filter((l) => l.metodo === "POST");
   expect(posts.map((l) => l.ruta)).toEqual(["/inspecciones/", "/transferencias-marcos/", "/transferencias-marcos/"]);
   const insp = posts[0].cuerpo;
-  expect(insp).toMatchObject({ colmena_id: 1, usuario_id: 7, estado_general: "BUENO", cantidad_marcos: 19, tiene_alza: true });
+  expect(insp).toMatchObject({ colmena_id: 1, usuario_id: 7, estado_general: "COMPLETA", cantidad_marcos: 19, tiene_alza: true });
   expect(insp.marcos).toHaveLength(20);
   expect(insp.marcos[0]).toEqual({ ubicacion: "CAMARA_CRIA", numero: 1, contenido: "SOLO_CRIA", transferido_a_colmena_id: 2 });
   expect(insp.marcos[1]).toEqual({ ubicacion: "CAMARA_CRIA", numero: 2, contenido: "SIN_MARCO", transferido_a_colmena_id: null });

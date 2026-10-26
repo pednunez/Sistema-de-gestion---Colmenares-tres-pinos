@@ -6,14 +6,20 @@ import { Cargando } from "../components/ui/Estados";
 import { Panel, TarjetaIndicador } from "../components/ui/Estructura";
 import AvisoStockBajo from "../components/stock/AvisoStockBajo";
 import { useDatos } from "../hooks/useDatos";
+import { ESTADO_GENERAL } from "../utils/etiquetas";
 import { useInventario } from "../hooks/useInventario";
 import { useNavegacion } from "../hooks/useNavegacion";
 import { calcularAlertas, colmenaOperativa, ultimaInspeccionPorColmena, DIAS_SIN_INSPECCION } from "../utils/alertas";
 
+// Estado según la última inspección (PB-08). Las inspecciones con la escala
+// anterior (Bueno, Regular, Crítico) se agrupan aparte.
 const DISTRIBUCION = [
-  { clave: "BUENO", texto: "Bueno", barra: "bg-emerald-500" },
-  { clave: "REGULAR", texto: "Regular", barra: "bg-amber-400" },
-  { clave: "CRITICO", texto: "Crítico", barra: "bg-red-500" },
+  { clave: "COMPLETA", texto: "Completa", barra: "bg-emerald-500" },
+  { clave: "EN_DESARROLLO", texto: "En desarrollo", barra: "bg-sky-500" },
+  { clave: "DONANTE", texto: "Donante", barra: "bg-teal-500" },
+  { clave: "DEBIL", texto: "Débil", barra: "bg-amber-400" },
+  { clave: "REQUIERE_REVISION", texto: "Requiere revisión", barra: "bg-red-500" },
+  { clave: "ANTERIOR", texto: "Escala anterior", barra: "bg-slate-400", soloSiHay: true },
   { clave: "SIN", texto: "Sin inspección", barra: "bg-slate-300" },
 ];
 
@@ -28,10 +34,12 @@ export default function DashboardPage() {
     const alertas = calcularAlertas(datos.colmenas, datos.inspecciones);
     const ultimas = ultimaInspeccionPorColmena(datos.inspecciones);
 
-    const conteo = { BUENO: 0, REGULAR: 0, CRITICO: 0, SIN: 0 };
+    const conteo = Object.fromEntries(DISTRIBUCION.map((fila) => [fila.clave, 0]));
     for (const colmena of operativas) {
       const estado = ultimas.get(colmena.id)?.estado_general;
-      conteo[estado in conteo ? estado : "SIN"] += 1;
+      if (!estado) conteo.SIN += 1;
+      else if (estado in ESTADO_GENERAL) conteo[estado] += 1;
+      else conteo.ANTERIOR += 1;
     }
 
     const porApiario = datos.apiarios.map((apiario) => ({
@@ -123,7 +131,7 @@ export default function DashboardPage() {
 
         <Panel titulo="Estado según última inspección" descripcion={`${total} colmenas en operación`}>
           <div className="grid gap-5 p-5">
-            {DISTRIBUCION.map((fila) => {
+            {DISTRIBUCION.filter((fila) => !fila.soloSiHay || resumen.conteo[fila.clave] > 0).map((fila) => {
               const cantidad = resumen.conteo[fila.clave];
               const porcentaje = total ? Math.round((cantidad * 100) / total) : 0;
               return (

@@ -14,7 +14,7 @@ import { useDatos } from "../hooks/useDatos";
 import { useNavegacion } from "../hooks/useNavegacion";
 import { inspeccionesService } from "../services/inspeccionesService";
 import { transferenciasService } from "../services/transferenciasService";
-import { ESTADO_GENERAL, NIVEL, NIVEL_MIEL, opciones, siNo, texto } from "../utils/etiquetas";
+import { ESTADO_GENERAL_TODOS, NIVEL, NIVEL_MIEL, opciones, siNo, texto } from "../utils/etiquetas";
 import { formatearFechaHora } from "../utils/formato";
 
 const POR_PAGINA = 30;
@@ -142,7 +142,7 @@ export default function InspeccionesPage() {
           value={filtroEstado}
           onChange={(e) => setFiltroEstado(e.target.value)}
           placeholder="Todos los estados"
-          opciones={opciones(ESTADO_GENERAL)}
+          opciones={opciones(ESTADO_GENERAL_TODOS)}
         />
       </BarraFiltros>
 
@@ -169,7 +169,7 @@ export default function InspeccionesPage() {
                       {inspeccion.cantidad_marcos != null && ` · ${inspeccion.cantidad_marcos} marcos`}
                     </p>
                   </div>
-                  <InsigniaDe mapa={ESTADO_GENERAL} valor={inspeccion.estado_general} porDefecto="Sin estado" />
+                  <InsigniaDe mapa={ESTADO_GENERAL_TODOS} valor={inspeccion.estado_general} porDefecto="Sin estado" />
                 </div>
 
                 <dl className="mt-4 grid grid-cols-2 gap-4 text-sm sm:grid-cols-3">

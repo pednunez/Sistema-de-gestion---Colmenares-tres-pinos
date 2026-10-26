@@ -1,6 +1,6 @@
 # Pendientes del backend para el frontend de escritorio
 
-Actualizado el 21-10-2026: estados del módulo Stock acordados con el cliente (sección 5).
+Actualizado el 26-10-2026: nuevo estado de la colmena en la inspección (sección 6).
 
 ## 1. Detalle por marco en la inspección (bloquea el guardado)
 
@@ -141,3 +141,19 @@ Parámetros opcionales: `material`, `tipo`, `desde`, `hasta`, `offset` y `limit`
 ### PATCH /stock/{material} (solo ADMIN)
 
 `{ "minimo": 5 }`: entero ≥ 0, o `null` para quitarlo. El frontend avisa cuando `disponible` < `minimo`.
+
+## 6. Estado de la colmena en la inspección (PB-08, bloquea el guardado)
+
+El cliente cambió la escala de `estado_general` (H005-E4). El frontend ya ofrece solo los valores nuevos:
+
+| Valor | En pantalla |
+|---|---|
+| `COMPLETA` | Completa |
+| `EN_DESARROLLO` | En desarrollo |
+| `DONANTE` | Donante |
+| `DEBIL` | Débil |
+| `REQUIERE_REVISION` | Requiere revisión |
+
+- Hoy `EstadoGeneral` en `schemas/inspeccion.py` solo acepta `BUENO`, `REGULAR` y `CRITICO`, así que `POST` y `PATCH /inspecciones/` responden **422** con los valores nuevos. Falta agregarlos al `Literal` y, si existe, a la restricción de la columna en la base.
+- **Inspecciones antiguas:** el frontend sigue mostrando `BUENO`, `REGULAR` y `CRITICO` como "escala anterior", y al editar una obliga a elegir el estado nuevo. Conviene que el backend siga aceptándolos en lectura. Si se decide migrarlos, acordar antes la equivalencia con el cliente.
+- **Alertas en el frontend:** `REQUIERE_REVISION` es prioridad alta y `DEBIL` es "revisar".

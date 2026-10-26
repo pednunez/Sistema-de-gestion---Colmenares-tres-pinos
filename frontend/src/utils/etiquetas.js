@@ -17,11 +17,24 @@ export const ESTADO_COLMENA = {
   BAJA: { texto: "Dada de baja", tono: "gris" },
 };
 
+// Estado de la colmena en la inspección (PB-08, H005-E4).
 export const ESTADO_GENERAL = {
-  BUENO: { texto: "Bueno", tono: "verde" },
-  REGULAR: { texto: "Regular", tono: "ambar" },
-  CRITICO: { texto: "Crítico", tono: "rojo" },
+  COMPLETA: { texto: "Completa", tono: "verde" },
+  EN_DESARROLLO: { texto: "En desarrollo", tono: "azul" },
+  DONANTE: { texto: "Donante", tono: "verde" },
+  DEBIL: { texto: "Débil", tono: "ambar" },
+  REQUIERE_REVISION: { texto: "Requiere revisión", tono: "rojo" },
 };
+
+// Escala anterior. Ya no se ofrece, pero las inspecciones antiguas la conservan.
+export const ESTADO_GENERAL_ANTERIOR = {
+  BUENO: { texto: "Bueno (escala anterior)", tono: "gris" },
+  REGULAR: { texto: "Regular (escala anterior)", tono: "gris" },
+  CRITICO: { texto: "Crítico (escala anterior)", tono: "gris" },
+};
+
+// Para mostrar cualquier inspección, nueva o antigua.
+export const ESTADO_GENERAL_TODOS = { ...ESTADO_GENERAL, ...ESTADO_GENERAL_ANTERIOR };
 
 export const NIVEL = {
   BAJO: { texto: "Bajo", tono: "gris" },
