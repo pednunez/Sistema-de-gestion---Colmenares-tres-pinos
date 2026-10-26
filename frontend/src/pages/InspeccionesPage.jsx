@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Archive, ClipboardCheck, Pencil, Plus } from "lucide-react";
+import { Archive, ClipboardCheck, Eye, Pencil, Plus } from "lucide-react";
 import Boton from "../components/ui/Boton";
 import Confirmar from "../components/ui/Confirmar";
 import Insignia, { InsigniaDe } from "../components/ui/Insignia";
@@ -8,6 +8,7 @@ import Alerta from "../components/ui/Alerta";
 import { Cargando, EstadoVacio } from "../components/ui/Estados";
 import { BarraFiltros, Buscador, Dato, EncabezadoModulo } from "../components/ui/Estructura";
 import FormularioInspeccion from "../components/inspecciones/FormularioInspeccion";
+import DetalleInspeccion from "../components/inspecciones/DetalleInspeccion";
 import { useAuth } from "../hooks/useAuth";
 import { useAvisos } from "../hooks/useAvisos";
 import { useDatos } from "../hooks/useDatos";
@@ -31,6 +32,7 @@ export default function InspeccionesPage() {
   const [visibles, setVisibles] = useState(POR_PAGINA);
   const [formulario, setFormulario] = useState(parametros.nuevaPara ? { colmenaInicial: parametros.nuevaPara } : null);
   const [aDarDeBaja, setADarDeBaja] = useState(null);
+  const [detalle, setDetalle] = useState(null);
   const [transferenciasFallidas, setTransferenciasFallidas] = useState(null);
 
   const filtradas = useMemo(() => {
@@ -161,7 +163,13 @@ export default function InspeccionesPage() {
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <p className="text-lg font-semibold">
-                      {codigoColmena(inspeccion.colmena_id)}
+                      <button
+                        type="button"
+                        onClick={() => setDetalle(inspeccion)}
+                        className="underline-offset-2 hover:underline"
+                      >
+                        {codigoColmena(inspeccion.colmena_id)}
+                      </button>
                       {colmena && <span className="ml-2 text-sm font-normal text-slate-500">{nombreApiario(colmena.apiario_id)}</span>}
                     </p>
                     <p className="text-sm text-slate-500">
@@ -201,16 +209,27 @@ export default function InspeccionesPage() {
                 )}
                 {inspeccion.observaciones && <p className="mt-3 text-sm text-slate-600">{inspeccion.observaciones}</p>}
 
-                {puedeGestionar(inspeccion) && (
-                  <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-3">
-                    <Boton variante="fantasma" tamano="sm" icono={Pencil} onClick={() => setFormulario({ inspeccion })}>
-                      Editar
-                    </Boton>
-                    <Boton variante="fantasma" tamano="sm" icono={Archive} onClick={() => setADarDeBaja(inspeccion)}>
-                      Anular
-                    </Boton>
-                  </div>
-                )}
+                <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-3">
+                  <Boton
+                    variante="fantasma"
+                    tamano="sm"
+                    icono={Eye}
+                    aria-label={`Ver detalle de la inspección de ${codigoColmena(inspeccion.colmena_id)}`}
+                    onClick={() => setDetalle(inspeccion)}
+                  >
+                    Ver detalle
+                  </Boton>
+                  {puedeGestionar(inspeccion) && (
+                    <>
+                      <Boton variante="fantasma" tamano="sm" icono={Pencil} onClick={() => setFormulario({ inspeccion })}>
+                        Editar
+                      </Boton>
+                      <Boton variante="fantasma" tamano="sm" icono={Archive} onClick={() => setADarDeBaja(inspeccion)}>
+                        Anular
+                      </Boton>
+                    </>
+                  )}
+                </div>
               </article>
             );
           })}
@@ -221,6 +240,18 @@ export default function InspeccionesPage() {
             </Boton>
           )}
         </div>
+      )}
+
+      {detalle && (
+        <DetalleInspeccion
+          inspeccion={detalle}
+          puedeEditar={puedeGestionar(detalle)}
+          onEditar={() => {
+            setFormulario({ inspeccion: detalle });
+            setDetalle(null);
+          }}
+          onCerrar={() => setDetalle(null)}
+        />
       )}
 
       {formulario && (
