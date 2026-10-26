@@ -29,7 +29,7 @@ from pydantic import (
 # Se conservan los seis materiales originales
 # y se incorporan cinco nuevos.
 #
-# Total: 11 identificadores.
+# Total: 12 identificadores.
 #
 # Deben coincidir con las restricciones de PostgreSQL.
 # ==========================================================
@@ -40,6 +40,7 @@ MaterialInventario = Literal[
     "CAJON",
     "TAPA",
     "TECHO_LATA",
+    "TECHO",
     "TECHO_AMERICANO",
     "MARCO_VACIO",
     "MARCO_CERA_ESTIRADA",

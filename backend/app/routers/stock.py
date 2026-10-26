@@ -30,6 +30,7 @@ from app.core.dependencies import (
 
 from app.database import get_db
 
+from app.models.inventario_movimiento import InventarioMovimiento
 from app.models.inventario_stock import InventarioStock
 from app.models.stock_minimo import StockMinimo
 from app.models.usuario import Usuario
@@ -82,15 +83,7 @@ router = APIRouter(
 # MATERIALES DEL FRONTEND DE PEDRO
 # ==========================================================
 
-MATERIALES_STOCK = (
-    "ALZA",
-    "MARCO_VACIO",
-    "MARCO_CERA_ESTIRADA",
-    "MARCO_CERA_UNTADA",
-    "TECHO_AMERICANO",
-    "ENTRETAPA",
-    "PISO",
-)
+MATERIALES_STOCK = stock_movimientos_service.MATERIALES_STOCK
 
 
 # ==========================================================
@@ -102,10 +95,11 @@ ESTADOS_DISPONIBLES = (
     "REPARADO",
 )
 
+# ROTO se informa como danado: en pantalla hay un solo
+# concepto de material danado.
 ESTADOS_DANADOS = (
     "DANADO",
     "ROTO",
-    "EN_REPARACION",
 )
 
 
@@ -120,6 +114,11 @@ class StockFilaResponse(BaseModel):
     disponible: int = Field(ge=0)
 
     danado: int = Field(ge=0)
+
+    en_reparacion: int = Field(ge=0)
+
+    # Total acumulado de unidades descartadas.
+    merma: int = Field(ge=0)
 
     minimo: int | None = Field(
         default=None,
@@ -169,8 +168,8 @@ class StockMinimoResponse(BaseModel):
 # 1. GET /stock/
 # ==========================================================
 #
-# Consulta las existencias disponibles y danadas
-# de los siete materiales de BODEGA.
+# Consulta disponible, danado, en reparacion y merma
+# de los materiales de BODEGA.
 #
 # Tambien consulta los minimos configurados.
 #
@@ -187,7 +186,7 @@ def consultar_stock(
 ):
 
     # ======================================================
-    # INICIALIZAR LOS SIETE MATERIALES
+    # INICIALIZAR TODOS LOS MATERIALES
     # ======================================================
 
     resumen = {
@@ -195,6 +194,8 @@ def consultar_stock(
             "material": material,
             "disponible": 0,
             "danado": 0,
+            "en_reparacion": 0,
+            "merma": 0,
             "minimo": None,
             "actualizado_en": None,
         }
@@ -250,6 +251,10 @@ def consultar_stock(
 
             item["danado"] += cantidad
 
+        elif fila.estado == "EN_REPARACION":
+
+            item["en_reparacion"] += cantidad
+
         # ==================================================
         # FECHA DE ACTUALIZACION DEL INVENTARIO
         # ==================================================
@@ -266,6 +271,36 @@ def consultar_stock(
             item["actualizado_en"] = (
                 fila.actualizado_en
             )
+
+    # ======================================================
+    # MERMA ACUMULADA
+    # ======================================================
+    #
+    # Suma de las bajas registradas desde la bodega.
+    # ======================================================
+
+    consulta_merma = (
+        select(
+            InventarioMovimiento.material,
+            func.sum(
+                InventarioMovimiento.cantidad
+            ).label("cantidad"),
+        )
+        .where(
+            InventarioMovimiento.tipo_movimiento == "BAJA",
+            InventarioMovimiento.origen_ubicacion == "BODEGA",
+            InventarioMovimiento.material.in_(
+                MATERIALES_STOCK
+            ),
+        )
+        .group_by(
+            InventarioMovimiento.material,
+        )
+    )
+
+    for fila in db.execute(consulta_merma).all():
+
+        resumen[fila.material]["merma"] = int(fila.cantidad)
 
     # ======================================================
     # CONSULTAR MINIMOS DE POSTGRESQL
@@ -322,11 +357,8 @@ def consultar_stock(
 #
 # Registra movimientos de stock.
 #
-# Actualmente implementado:
-#
-# INGRESO.
-#
-# Los demas tipos se implementaran posteriormente.
+# Tipos: INGRESO, ENVIO, DANO, ENVIO_REPARACION,
+# REPARACION y DESCARTE.
 #
 # Solo ADMIN puede registrar movimientos.
 #

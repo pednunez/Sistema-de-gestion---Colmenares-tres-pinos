@@ -90,6 +90,7 @@ class InventarioMovimiento(Base):
             "'CAJON', "
             "'TAPA', "
             "'TECHO_LATA', "
+            "'TECHO', "
             "'TECHO_AMERICANO', "
             "'MARCO_VACIO', "
             "'MARCO_CERA_ESTIRADA', "
@@ -333,6 +334,26 @@ class InventarioMovimiento(Base):
     # ======================================================
 
     colmena_destino_id: Mapped[int | None] = mapped_column(
+        BigInteger,
+        ForeignKey("colmenas.id"),
+        nullable=True,
+    )
+
+    # ======================================================
+    # DESTINO INFORMADO EN UNA SALIDA (ENVIO)
+    # ======================================================
+    #
+    # Solo referencia: la salida no suma stock en el
+    # apiario ni en la colmena.
+    # ======================================================
+
+    salida_apiario_id: Mapped[int | None] = mapped_column(
+        BigInteger,
+        ForeignKey("apiarios.id"),
+        nullable=True,
+    )
+
+    salida_colmena_id: Mapped[int | None] = mapped_column(
         BigInteger,
         ForeignKey("colmenas.id"),
         nullable=True,

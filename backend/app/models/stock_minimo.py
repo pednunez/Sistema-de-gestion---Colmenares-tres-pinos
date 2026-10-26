@@ -79,10 +79,12 @@ class StockMinimo(Base):
 
         CheckConstraint(
             "material IN ("
+            "'CAJON', "
             "'ALZA', "
             "'MARCO_VACIO', "
             "'MARCO_CERA_ESTIRADA', "
             "'MARCO_CERA_UNTADA', "
+            "'TECHO', "
             "'TECHO_AMERICANO', "
             "'ENTRETAPA', "
             "'PISO'"

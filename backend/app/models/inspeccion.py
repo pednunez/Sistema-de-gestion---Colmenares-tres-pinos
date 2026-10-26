@@ -110,7 +110,7 @@ class Inspeccion(Base):
 
     # ======================================================
     # ESTADO GENERAL
-    # BUENO / REGULAR / CRITICO
+    # Valores permitidos: EstadoGeneral en schemas/inspeccion.py
     # ======================================================
 
     estado_general: Mapped[str | None] = mapped_column(

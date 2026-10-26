@@ -15,9 +15,14 @@ from pydantic import (
 # ==========================================================
 
 EstadoGeneral = Literal[
+    "COMPLETA",
+    "EN_DESARROLLO",
+    "DONANTE",
+    "DEBIL",
+    "REQUIERE_REVISION",
     "BUENO",
     "REGULAR",
-    "CRITICO"
+    "CRITICO",
 ]
 
 Nivel = Literal[

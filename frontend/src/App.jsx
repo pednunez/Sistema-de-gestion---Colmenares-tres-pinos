@@ -18,6 +18,7 @@ import ColmenasPage from "./pages/ColmenasPage";
 import InspeccionesPage from "./pages/InspeccionesPage";
 import TratamientosPage from "./pages/TratamientosPage";
 import TransferenciasPage from "./pages/TransferenciasPage";
+import StockPage from "./pages/StockPage";
 import QrPage from "./pages/QrPage";
 import AuditoriaPage from "./pages/AuditoriaPage";
 import UsuariosPage from "./pages/UsuariosPage";
@@ -30,6 +31,7 @@ const PAGINAS = {
   inspecciones: InspeccionesPage,
   tratamientos: TratamientosPage,
   transferencias: TransferenciasPage,
+  stock: StockPage,
   qr: QrPage,
   auditoria: AuditoriaPage,
   usuarios: UsuariosPage,

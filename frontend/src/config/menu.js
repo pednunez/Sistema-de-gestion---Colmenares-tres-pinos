@@ -6,6 +6,7 @@ import {
   Pill,
   ArrowRightLeft,
   QrCode,
+  Warehouse,
   ShieldCheck,
   Users,
 } from "lucide-react";
@@ -21,6 +22,7 @@ export const MENU = [
   { id: "inspecciones", nombre: "Inspecciones", icono: ClipboardCheck, roles: TODOS },
   { id: "tratamientos", nombre: "Tratamientos", icono: Pill, roles: TODOS },
   { id: "transferencias", nombre: "Transferencias", icono: ArrowRightLeft, roles: TODOS },
+  { id: "stock", nombre: "Stock", icono: Warehouse, roles: TODOS },
   { id: "qr", nombre: "Códigos QR", icono: QrCode, roles: TODOS },
   { id: "auditoria", nombre: "Auditoría", icono: ShieldCheck, roles: SOLO_ADMIN },
   { id: "usuarios", nombre: "Usuarios", icono: Users, roles: SOLO_ADMIN },

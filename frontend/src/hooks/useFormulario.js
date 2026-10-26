@@ -27,6 +27,7 @@ export function useFormulario(valoresIniciales) {
       return true;
     } catch (err) {
       setErrorGeneral(err.message || "No se pudo guardar. Intenta nuevamente.");
+      if (err.campos && Object.keys(err.campos).length > 0) setErrores(err.campos);
       return false;
     } finally {
       setEnviando(false);

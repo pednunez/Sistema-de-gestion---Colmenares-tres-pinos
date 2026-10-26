@@ -12,7 +12,24 @@ export class ApiError extends Error {
     this.estado = estado;
     this.detalle = detalle;
     this.correlationId = correlationId;
+    // Errores de validación por campo ({ estado_general: "..." }), para marcarlos en el formulario.
+    this.campos = camposDeValidacion(detalle);
   }
+}
+
+// Pydantic indica en "loc" el campo rechazado, por ejemplo ["body", "estado_general"].
+function camposDeValidacion(detalle) {
+  if (!Array.isArray(detalle)) return {};
+  const campos = {};
+  for (const error of detalle) {
+    const campo = Array.isArray(error?.loc) ? error.loc.filter((parte) => typeof parte === "string" && parte !== "body").at(-1) : null;
+    if (!campo || campos[campo]) continue;
+    campos[campo] =
+      error.type === "value_error" && error.msg
+        ? error.msg.replace(/^Value error,\s*/i, "")
+        : "El servidor no acepta este valor.";
+  }
+  return campos;
 }
 
 // En fallas del servidor o de conexión se agrega un código corto para que el
@@ -46,6 +63,9 @@ const MENSAJES_POR_ESTADO = {
   409: "Ya existe un registro con esos datos.",
   422: "Hay datos inválidos en el formulario. Revísalos e intenta nuevamente.",
 };
+
+// 501: el backend tiene la ruta, pero esa opción aún no está implementada.
+const MENSAJE_NO_IMPLEMENTADO = "Esta opción todavía no está disponible en el servidor.";
 
 const MENSAJE_SERVIDOR = "El servidor tuvo un problema. Intenta nuevamente en unos minutos.";
 
@@ -168,11 +188,15 @@ async function solicitar(ruta, { metodo = "GET", cuerpo, tipoRespuesta = "json",
       }
 
       let mensaje;
-      if (respuesta.status >= 500) mensaje = conCodigo(MENSAJE_SERVIDOR, correlationId);
+      if (respuesta.status === 501) mensaje = MENSAJE_NO_IMPLEMENTADO;
+      else if (respuesta.status >= 500) mensaje = conCodigo(MENSAJE_SERVIDOR, correlationId);
       else if (typeof detalle === "string") mensaje = detalle;
       else
         mensaje =
           mensajeDeValidacion(detalle) ??
+          (Object.keys(camposDeValidacion(detalle)).length > 0
+            ? "El servidor rechazó algunos datos. Revisa los campos marcados en rojo."
+            : null) ??
           MENSAJES_POR_ESTADO[respuesta.status] ??
           "No se pudo completar la operación.";
 

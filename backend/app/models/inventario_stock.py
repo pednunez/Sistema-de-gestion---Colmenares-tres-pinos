@@ -60,6 +60,7 @@ class InventarioStock(Base):
             "'CAJON', "
             "'TAPA', "
             "'TECHO_LATA', "
+            "'TECHO', "
             "'TECHO_AMERICANO', "
             "'MARCO_VACIO', "
             "'MARCO_CERA_ESTIRADA', "

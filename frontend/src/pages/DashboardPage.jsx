@@ -1,39 +1,65 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { AlertTriangle, Boxes, CheckCircle2, MapPinned, Pill } from "lucide-react";
 import Boton from "../components/ui/Boton";
 import Insignia from "../components/ui/Insignia";
 import { Cargando } from "../components/ui/Estados";
 import { Panel, TarjetaIndicador } from "../components/ui/Estructura";
+import AvisoStockBajo from "../components/stock/AvisoStockBajo";
+import FiltroApiario from "../components/ui/FiltroApiario";
 import { useDatos } from "../hooks/useDatos";
+import { ESTADO_GENERAL } from "../utils/etiquetas";
+import { useInventario } from "../hooks/useInventario";
 import { useNavegacion } from "../hooks/useNavegacion";
 import { calcularAlertas, colmenaOperativa, ultimaInspeccionPorColmena, DIAS_SIN_INSPECCION } from "../utils/alertas";
 
+// Estado según la última inspección (PB-08). Las inspecciones con la escala
+// anterior (Bueno, Regular, Crítico) se agrupan aparte.
 const DISTRIBUCION = [
-  { clave: "BUENO", texto: "Bueno", barra: "bg-emerald-500" },
-  { clave: "REGULAR", texto: "Regular", barra: "bg-amber-400" },
-  { clave: "CRITICO", texto: "Crítico", barra: "bg-red-500" },
+  { clave: "COMPLETA", texto: "Completa", barra: "bg-emerald-500" },
+  { clave: "EN_DESARROLLO", texto: "En desarrollo", barra: "bg-sky-500" },
+  { clave: "DONANTE", texto: "Donante", barra: "bg-teal-500" },
+  { clave: "DEBIL", texto: "Débil", barra: "bg-amber-400" },
+  { clave: "REQUIERE_REVISION", texto: "Requiere revisión", barra: "bg-red-500" },
+  { clave: "ANTERIOR", texto: "Escala anterior", barra: "bg-slate-400", soloSiHay: true },
   { clave: "SIN", texto: "Sin inspección", barra: "bg-slate-300" },
 ];
 
 export default function DashboardPage() {
   const { datos, cargado, nombreApiario } = useDatos();
+  // "" = todos los apiarios; si no, el id del apiario elegido.
+  const [apiarioId, setApiarioId] = useState("");
   const { navegar } = useNavegacion();
+  // Si el backend aún no tiene stock, el inventario queda en null y no se muestra nada.
+  const { inventario } = useInventario();
+
+  const apiariosOrdenados = useMemo(
+    () => [...datos.apiarios].sort((a, b) => a.nombre.localeCompare(b.nombre, "es")),
+    [datos.apiarios]
+  );
+  const apiarioElegido = datos.apiarios.find((a) => String(a.id) === apiarioId) ?? null;
 
   const resumen = useMemo(() => {
-    const operativas = datos.colmenas.filter(colmenaOperativa);
-    const alertas = calcularAlertas(datos.colmenas, datos.inspecciones);
+    const todasOperativas = datos.colmenas.filter(colmenaOperativa);
+    const todasAlertas = calcularAlertas(datos.colmenas, datos.inspecciones);
+    const delApiario = (colmena) => !apiarioId || String(colmena.apiario_id) === apiarioId;
+    const operativas = todasOperativas.filter(delApiario);
+    const alertas = todasAlertas.filter((a) => delApiario(a.colmena));
+    const idsColmenas = new Set(datos.colmenas.filter(delApiario).map((c) => c.id));
     const ultimas = ultimaInspeccionPorColmena(datos.inspecciones);
 
-    const conteo = { BUENO: 0, REGULAR: 0, CRITICO: 0, SIN: 0 };
+    const conteo = Object.fromEntries(DISTRIBUCION.map((fila) => [fila.clave, 0]));
     for (const colmena of operativas) {
       const estado = ultimas.get(colmena.id)?.estado_general;
-      conteo[estado in conteo ? estado : "SIN"] += 1;
+      if (!estado) conteo.SIN += 1;
+      else if (estado in ESTADO_GENERAL) conteo[estado] += 1;
+      else conteo.ANTERIOR += 1;
     }
 
-    const porApiario = datos.apiarios.map((apiario) => ({
+    // La tabla por apiario siempre muestra todos, para comparar.
+    const porApiario = apiariosOrdenados.map((apiario) => ({
       apiario,
-      colmenas: operativas.filter((c) => c.apiario_id === apiario.id).length,
-      alertas: alertas.filter((a) => a.colmena.apiario_id === apiario.id).length,
+      colmenas: todasOperativas.filter((c) => c.apiario_id === apiario.id).length,
+      alertas: todasAlertas.filter((a) => a.colmena.apiario_id === apiario.id).length,
     }));
 
     return {
@@ -41,9 +67,9 @@ export default function DashboardPage() {
       alertas,
       conteo,
       porApiario,
-      tratamientosEnCurso: datos.tratamientos.filter((t) => t.estado === "EN_CURSO").length,
+      tratamientosEnCurso: datos.tratamientos.filter((t) => t.estado === "EN_CURSO" && idsColmenas.has(t.colmena_id)).length,
     };
-  }, [datos]);
+  }, [datos, apiarioId, apiariosOrdenados]);
 
   if (!cargado) return <Cargando texto="Cargando resumen..." />;
 
@@ -52,9 +78,32 @@ export default function DashboardPage() {
 
   return (
     <>
+      {inventario?.bajos.length > 0 && (
+        <div className="mb-6">
+          <AvisoStockBajo bajos={inventario.bajos} onVer={() => navegar("stock")} />
+        </div>
+      )}
+
+      <FiltroApiario apiarios={apiariosOrdenados} valor={apiarioId} onCambiar={setApiarioId} />
+
       <div className="mb-6 grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
-        <TarjetaIndicador titulo="Apiarios" valor={datos.apiarios.length} icono={MapPinned} onClick={() => navegar("apiarios")} />
-        <TarjetaIndicador titulo="Colmenas en operación" valor={total} icono={Boxes} onClick={() => navegar("colmenas")} />
+        {apiarioElegido ? (
+          <TarjetaIndicador
+            titulo="Apiario"
+            valor={apiarioElegido.nombre}
+            detalle={apiarioElegido.ubicacion || undefined}
+            icono={MapPinned}
+            onClick={() => navegar("apiarios")}
+          />
+        ) : (
+          <TarjetaIndicador titulo="Apiarios" valor={datos.apiarios.length} icono={MapPinned} onClick={() => navegar("apiarios")} />
+        )}
+        <TarjetaIndicador
+          titulo="Colmenas en operación"
+          valor={total}
+          icono={Boxes}
+          onClick={() => navegar("colmenas", apiarioElegido ? { apiario: apiarioElegido.id } : {})}
+        />
         <TarjetaIndicador
           titulo="Requieren atención"
           valor={resumen.alertas.length}
@@ -74,7 +123,7 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         <Panel
           titulo="Colmenas que requieren atención"
-          descripcion={`Según su última inspección, su estado o más de ${DIAS_SIN_INSPECCION} días sin revisar.`}
+          descripcion={`${apiarioElegido ? `${apiarioElegido.nombre}. ` : ""}Según su última inspección, su estado o más de ${DIAS_SIN_INSPECCION} días sin revisar.`}
           className="xl:col-span-2"
         >
           <div id="alertas" className="scroll-mt-24" />
@@ -111,9 +160,12 @@ export default function DashboardPage() {
           )}
         </Panel>
 
-        <Panel titulo="Estado según última inspección" descripcion={`${total} colmenas en operación`}>
+        <Panel
+          titulo="Estado según última inspección"
+          descripcion={`${apiarioElegido ? `${apiarioElegido.nombre} · ` : ""}${total} colmenas en operación`}
+        >
           <div className="grid gap-5 p-5">
-            {DISTRIBUCION.map((fila) => {
+            {DISTRIBUCION.filter((fila) => !fila.soloSiHay || resumen.conteo[fila.clave] > 0).map((fila) => {
               const cantidad = resumen.conteo[fila.clave];
               const porcentaje = total ? Math.round((cantidad * 100) / total) : 0;
               return (
@@ -147,7 +199,10 @@ export default function DashboardPage() {
               </thead>
               <tbody>
                 {resumen.porApiario.map(({ apiario, colmenas, alertas }) => (
-                  <tr key={apiario.id} className="border-t border-slate-100">
+                  <tr
+                    key={apiario.id}
+                    className={`border-t border-slate-100 ${String(apiario.id) === apiarioId ? "bg-amber-50" : ""}`}
+                  >
                     <td className="px-5 py-3 font-semibold">{apiario.nombre}</td>
                     <td className="px-5 py-3 text-slate-600">{apiario.ubicacion || "Sin registrar"}</td>
                     <td className="px-5 py-3">{colmenas}</td>
@@ -155,9 +210,21 @@ export default function DashboardPage() {
                       {alertas > 0 ? <Insignia tono="ambar">{alertas}</Insignia> : <span className="text-slate-400">0</span>}
                     </td>
                     <td className="px-5 py-3 text-right">
-                      <Boton variante="fantasma" tamano="sm" onClick={() => navegar("colmenas", { apiario: apiario.id })}>
-                        Ver colmenas
-                      </Boton>
+                      <div className="flex justify-end gap-1">
+                        <Boton
+                          variante="fantasma"
+                          tamano="sm"
+                          onClick={() => {
+                            setApiarioId(String(apiario.id));
+                            window.scrollTo?.({ top: 0, behavior: "smooth" });
+                          }}
+                        >
+                          Ver en el panel
+                        </Boton>
+                        <Boton variante="fantasma" tamano="sm" onClick={() => navegar("colmenas", { apiario: apiario.id })}>
+                          Ver colmenas
+                        </Boton>
+                      </div>
                     </td>
                   </tr>
                 ))}

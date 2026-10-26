@@ -9,7 +9,7 @@ import { useConsulta } from "../../hooks/useConsulta";
 import { useDatos } from "../../hooks/useDatos";
 import { useNavegacion } from "../../hooks/useNavegacion";
 import { historialService } from "../../services/historialService";
-import { ESTADO_COLMENA, ESTADO_GENERAL } from "../../utils/etiquetas";
+import { ESTADO_COLMENA, ESTADO_GENERAL_TODOS } from "../../utils/etiquetas";
 import { formatearFecha, formatearFechaHora, humanizar } from "../../utils/formato";
 import { ultimaInspeccionPorColmena } from "../../utils/alertas";
 
@@ -65,7 +65,7 @@ export default function DetalleColmena({ colmenaId, onCerrar }) {
             {ultima ? (
               <span className="flex flex-wrap items-center gap-2">
                 {formatearFecha(ultima.fecha_inspeccion)}
-                <InsigniaDe mapa={ESTADO_GENERAL} valor={ultima.estado_general} />
+                <InsigniaDe mapa={ESTADO_GENERAL_TODOS} valor={ultima.estado_general} />
               </span>
             ) : (
               "Sin inspecciones"

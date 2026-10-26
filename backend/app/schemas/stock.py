@@ -1,4 +1,3 @@
-
 from datetime import datetime
 from typing import Literal
 
@@ -15,28 +14,27 @@ from pydantic import (
 # COLMENARES TRES PINOS
 # ==========================================================
 #
-# Contrato de datos para el frontend de Pedro.
+# Contrato de datos para el frontend.
 #
 # POST /stock/movimientos/
-# GET /stock/movimientos/
+# GET  /stock/movimientos/
 #
-# Este archivo solamente valida datos.
-#
-# No modifica PostgreSQL.
-# No registra movimientos.
-# No altera el inventario general.
+# Este archivo solamente valida y estructura datos.
+# No modifica PostgreSQL ni registra movimientos.
 # ==========================================================
 
 
 # ==========================================================
-# SIETE MATERIALES PERMITIDOS
+# MATERIALES PERMITIDOS
 # ==========================================================
 
 MaterialStock = Literal[
+    "CAJON",
     "ALZA",
     "MARCO_VACIO",
     "MARCO_CERA_ESTIRADA",
     "MARCO_CERA_UNTADA",
+    "TECHO",
     "TECHO_AMERICANO",
     "ENTRETAPA",
     "PISO",
@@ -51,8 +49,19 @@ TipoMovimientoStock = Literal[
     "INGRESO",
     "ENVIO",
     "DANO",
+    "ENVIO_REPARACION",
     "REPARACION",
     "DESCARTE",
+]
+
+
+# ==========================================================
+# ORIGEN DE UNA MERMA (DESCARTE)
+# ==========================================================
+
+EstadoOrigenMerma = Literal[
+    "DANADO",
+    "EN_REPARACION",
 ]
 
 
@@ -61,54 +70,26 @@ TipoMovimientoStock = Literal[
 # ==========================================================
 
 class StockMovimientoCreate(BaseModel):
-
-    # ======================================================
-    # MATERIAL QUE SE VA A MODIFICAR
-    # ======================================================
+    """Datos necesarios para solicitar un movimiento de stock."""
 
     material: MaterialStock
-
-    # ======================================================
-    # OPERACION SOLICITADA
-    # ======================================================
-
     tipo: TipoMovimientoStock
 
-    # ======================================================
-    # CANTIDAD OBLIGATORIAMENTE POSITIVA
-    # ======================================================
-    #
-    # No se permiten negativos, decimales ni booleanos.
-    # ======================================================
-
+    # Cantidad entera, positiva. strict=True rechaza decimales
+    # y valores booleanos.
     cantidad: int = Field(
         gt=0,
         strict=True,
     )
 
-    # ======================================================
-    # APIARIO DE DESTINO
-    # ======================================================
-    #
-    # Obligatorio para ENVIO.
-    # No se requiere para otros movimientos.
-    # ======================================================
-
+    # Destino opcional para ENVIO.
+    # El servicio debe validar la colmena y resolver el apiario
+    # si se informa colmena_id.
     apiario_id: int | None = Field(
         default=None,
         gt=0,
         strict=True,
     )
-
-    # ======================================================
-    # COLMENA DE DESTINO
-    # ======================================================
-    #
-    # Opcional para ENVIO.
-    #
-    # El servicio posteriormente comprobara que
-    # la colmena pertenece al apiario indicado.
-    # ======================================================
 
     colmena_id: int | None = Field(
         default=None,
@@ -116,62 +97,49 @@ class StockMovimientoCreate(BaseModel):
         strict=True,
     )
 
-    # ======================================================
-    # INFORMACION ADICIONAL
-    # ======================================================
+    # Obligatorio solo para DESCARTE.
+    estado_origen: EstadoOrigenMerma | None = None
 
-    observaciones: str | None = None
+    observaciones: str | None = Field(
+        default=None,
+        max_length=500,
+    )
 
-    # ======================================================
-    # NO ACEPTAR CAMPOS DESCONOCIDOS
-    # ======================================================
-
+    # Rechaza campos que no forman parte de este contrato.
     model_config = ConfigDict(
         extra="forbid",
     )
 
-    # ======================================================
-    # VALIDACIONES SEGUN EL TIPO DE MOVIMIENTO
-    # ======================================================
-
     @model_validator(mode="after")
     def validar_datos_movimiento(self):
+        """Valida los campos que dependen del tipo solicitado."""
 
-        # ==================================================
-        # ENVIO
-        # ==================================================
-        #
-        # El envio siempre debe indicar un apiario.
-        # La colmena es opcional segun el frontend.
-        # ==================================================
+        if self.tipo == "DESCARTE":
+            if self.estado_origen is None:
+                raise ValueError(
+                    "La merma requiere indicar el estado de origen: "
+                    "DANADO o EN_REPARACION"
+                )
+        elif self.estado_origen is not None:
+            raise ValueError(
+                "Solo la merma requiere estado de origen"
+            )
 
         if self.tipo == "ENVIO":
+            # Un ENVIO puede ser una salida genérica de bodega.
+            # Si hay destino, el servicio validará su existencia
+            # y la relación entre apiario y colmena.
+            return self
 
-            if self.apiario_id is None:
-
-                raise ValueError(
-                    "El envio requiere indicar un apiario"
-                )
-
-        # ==================================================
-        # INGRESO, DANO, REPARACION Y DESCARTE
-        # ==================================================
-        #
-        # Estas operaciones afectan el stock de bodega.
-        # No requieren apiario ni colmena.
-        # ==================================================
-
-        else:
-
-            if (
-                self.apiario_id is not None
-                or self.colmena_id is not None
-            ):
-
-                raise ValueError(
-                    "Esta operacion no requiere "
-                    "apiario ni colmena"
-                )
+        # Los demás movimientos se registran
+        # sobre el stock de bodega, sin apiario ni colmena.
+        if (
+            self.apiario_id is not None
+            or self.colmena_id is not None
+        ):
+            raise ValueError(
+                "Esta operación no requiere apiario ni colmena"
+            )
 
         return self
 
@@ -179,29 +147,21 @@ class StockMovimientoCreate(BaseModel):
 # ==========================================================
 # RESPUESTA DEL MOVIMIENTO REGISTRADO
 # ==========================================================
-#
-# Este esquema representa los datos que recibira
-# el frontend despues de registrar un movimiento.
-# ==========================================================
 
 class StockMovimientoResponse(BaseModel):
+    """Datos que recibe el frontend después de consultar o registrar."""
 
     id: int
-
     material: MaterialStock
-
     tipo: TipoMovimientoStock
-
     cantidad: int = Field(gt=0)
 
     apiario_id: int | None = None
-
     colmena_id: int | None = None
-
+    estado_origen: EstadoOrigenMerma | None = None
     observaciones: str | None = None
 
     usuario_id: int
-
     fecha: datetime
 
     model_config = ConfigDict(

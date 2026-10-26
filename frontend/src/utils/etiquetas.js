@@ -17,11 +17,24 @@ export const ESTADO_COLMENA = {
   BAJA: { texto: "Dada de baja", tono: "gris" },
 };
 
+// Estado de la colmena en la inspección (PB-08, H005-E4).
 export const ESTADO_GENERAL = {
-  BUENO: { texto: "Bueno", tono: "verde" },
-  REGULAR: { texto: "Regular", tono: "ambar" },
-  CRITICO: { texto: "Crítico", tono: "rojo" },
+  COMPLETA: { texto: "Completa", tono: "verde" },
+  EN_DESARROLLO: { texto: "En desarrollo", tono: "azul" },
+  DONANTE: { texto: "Donante", tono: "verde" },
+  DEBIL: { texto: "Débil", tono: "ambar" },
+  REQUIERE_REVISION: { texto: "Requiere revisión", tono: "rojo" },
 };
+
+// Escala anterior. Ya no se ofrece, pero las inspecciones antiguas la conservan.
+export const ESTADO_GENERAL_ANTERIOR = {
+  BUENO: { texto: "Bueno (escala anterior)", tono: "gris" },
+  REGULAR: { texto: "Regular (escala anterior)", tono: "gris" },
+  CRITICO: { texto: "Crítico (escala anterior)", tono: "gris" },
+};
+
+// Para mostrar cualquier inspección, nueva o antigua.
+export const ESTADO_GENERAL_TODOS = { ...ESTADO_GENERAL, ...ESTADO_GENERAL_ANTERIOR };
 
 export const NIVEL = {
   BAJO: { texto: "Bajo", tono: "gris" },
@@ -88,6 +101,39 @@ export const ENTIDAD = {
   TRATAMIENTO: { texto: "Tratamiento" },
   TRANSFERENCIA_MARCO: { texto: "Transferencia de marcos" },
   USUARIO: { texto: "Usuario" },
+};
+
+// Materiales de la bodega central (módulo Stock). "puedeDanarse" indica si el
+// material pasa por dañado, reparación y merma. Un marco con cera que se rompe
+// se cuenta como marco roto (MARCO_VACIO dañado). El cajón lleva piso; el alza no.
+export const MATERIAL_STOCK = {
+  CAJON: { texto: "Cajones", unidad: "cajón", plural: "cajones", puedeDanarse: true },
+  ALZA: { texto: "Alzas", unidad: "alza", plural: "alzas", puedeDanarse: true },
+  PISO: { texto: "Pisos", unidad: "piso", plural: "pisos", puedeDanarse: true },
+  TECHO: { texto: "Techos", unidad: "techo", plural: "techos", puedeDanarse: true },
+  TECHO_AMERICANO: { texto: "Techos americanos", unidad: "techo americano", plural: "techos americanos", puedeDanarse: true },
+  ENTRETAPA: { texto: "Entretapas", unidad: "entretapa", plural: "entretapas", puedeDanarse: true },
+  MARCO_VACIO: { texto: "Marcos vacíos", textoDanado: "Marcos rotos", unidad: "marco", plural: "marcos", puedeDanarse: true },
+  MARCO_CERA_ESTIRADA: { texto: "Marcos con cera estirada", unidad: "marco", plural: "marcos", puedeDanarse: false },
+  MARCO_CERA_UNTADA: { texto: "Marcos con cera untada", unidad: "marco", plural: "marcos", puedeDanarse: false },
+};
+
+// Movimientos de stock. Cada unidad está en un solo estado:
+// disponible → dañado → en reparación → disponible, o a merma si no tiene arreglo.
+// "signo" es el efecto sobre lo usable (disponible).
+export const TIPO_MOVIMIENTO_STOCK = {
+  INGRESO: { texto: "Ingreso", tono: "verde", signo: "+", ayuda: "Compra o fabricación: suma al disponible." },
+  ENVIO: { texto: "Salida", tono: "azul", signo: "−", ayuda: "Material que sale de bodega hacia las colmenas: resta del disponible." },
+  DANO: { texto: "Daño", tono: "rojo", signo: "−", ayuda: "Material que se rompió: deja de estar disponible y pasa a dañado." },
+  ENVIO_REPARACION: { texto: "A reparación", tono: "ambar", signo: "", ayuda: "Material dañado que se lleva a reparar: pasa de dañado a en reparación." },
+  REPARACION: { texto: "Reparado", tono: "verde", signo: "+", ayuda: "Material que volvió reparado: pasa de en reparación a disponible." },
+  DESCARTE: { texto: "Merma", tono: "gris", signo: "", ayuda: "Material sin arreglo que se bota: sale de dañado o de en reparación." },
+};
+
+// Desde dónde sale la merma.
+export const ORIGEN_MERMA = {
+  DANADO: { texto: "Dañado" },
+  EN_REPARACION: { texto: "En reparación" },
 };
 
 export function texto(mapa, valor, porDefecto = "Sin registrar") {

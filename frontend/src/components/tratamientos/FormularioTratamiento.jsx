@@ -6,7 +6,7 @@ import { AreaTexto, Entrada, Seleccion } from "../ui/Campo";
 import SelectorColmena from "../colmenas/SelectorColmena";
 import { useFormulario } from "../../hooks/useFormulario";
 import { useDatos } from "../../hooks/useDatos";
-import { ESTADO_GENERAL, ESTADO_TRATAMIENTO, opciones, texto } from "../../utils/etiquetas";
+import { ESTADO_GENERAL_TODOS, ESTADO_TRATAMIENTO, opciones, texto } from "../../utils/etiquetas";
 import { formatearFecha, hoyISO, humanizar } from "../../utils/formato";
 import { textoONulo } from "../../utils/validacion";
 
@@ -117,7 +117,7 @@ export default function FormularioTratamiento({ tratamiento, colmenaInicial, onG
               ayuda="Opcional: la inspección que motivó el tratamiento."
               opciones={inspeccionesDeColmena.map((i) => ({
                 valor: String(i.id),
-                texto: `${formatearFecha(i.fecha_inspeccion)} · ${texto(ESTADO_GENERAL, i.estado_general, "Sin estado")}`,
+                texto: `${formatearFecha(i.fecha_inspeccion)} · ${texto(ESTADO_GENERAL_TODOS, i.estado_general, "Sin estado")}`,
               }))}
             />
           </div>

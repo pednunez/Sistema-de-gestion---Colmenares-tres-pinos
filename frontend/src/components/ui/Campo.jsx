@@ -3,7 +3,9 @@ import { useId } from "react";
 export const claseControl =
   "w-full min-h-11 rounded-xl border bg-white px-3 py-2 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-amber-400 focus:ring-2 focus:ring-amber-400/40 disabled:bg-slate-100 disabled:text-slate-500";
 
+// "error" puede ser un texto (se muestra bajo el campo) o true (solo marca el borde en rojo).
 function Envoltura({ id, etiqueta, error, ayuda, requerido, className = "", children }) {
+  const mensaje = typeof error === "string" ? error : null;
   return (
     <div className={`grid content-start gap-1.5 ${className}`}>
       {etiqueta && (
@@ -17,9 +19,9 @@ function Envoltura({ id, etiqueta, error, ayuda, requerido, className = "", chil
         </label>
       )}
       {children}
-      {(error || ayuda) && (
-        <p id={`${id}-ayuda`} className={`text-sm ${error ? "text-red-600" : "text-slate-500"}`}>
-          {error || ayuda}
+      {(mensaje || ayuda) && (
+        <p id={`${id}-ayuda`} className={`text-sm ${mensaje ? "text-red-600" : "text-slate-500"}`}>
+          {mensaje || ayuda}
         </p>
       )}
     </div>
@@ -30,7 +32,7 @@ function atributosControl(id, error, ayuda) {
   return {
     id,
     "aria-invalid": Boolean(error),
-    "aria-describedby": error || ayuda ? `${id}-ayuda` : undefined,
+    "aria-describedby": typeof error === "string" || ayuda ? `${id}-ayuda` : undefined,
     className: `${claseControl} ${error ? "border-red-400" : "border-slate-300"}`,
   };
 }
@@ -75,7 +77,10 @@ export function Seleccion({ etiqueta, error, ayuda, requerido, className, opcion
 export function Segmentado({ etiqueta, opciones, valor, onCambiar, error, requerido, className = "" }) {
   const id = useId();
   return (
-    <div className={`grid content-start gap-1.5 ${className}`}>
+    <div
+      data-invalido={error ? "true" : undefined}
+      className={`grid content-start gap-1.5 ${error ? "rounded-xl border border-red-400 bg-red-50/60 p-3" : ""} ${className}`}
+    >
       <span id={`${id}-etiqueta`} className="text-sm font-medium text-slate-800">
         {etiqueta}
         {requerido && (
@@ -105,7 +110,7 @@ export function Segmentado({ etiqueta, opciones, valor, onCambiar, error, requer
           );
         })}
       </div>
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {typeof error === "string" && <p className="text-sm text-red-600">{error}</p>}
     </div>
   );
 }
