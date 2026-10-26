@@ -33,7 +33,11 @@ export default function RegistroMarcos({ titulo, caja, onCambiar, colmenaId, err
   };
 
   return (
-    <section aria-labelledby={idTitulo} className="rounded-2xl border border-slate-200 p-4">
+    <section
+      aria-labelledby={idTitulo}
+      data-invalido={error ? "true" : undefined}
+      className={`rounded-2xl border p-4 ${error ? "border-red-400 bg-red-50/40" : "border-slate-200"}`}
+    >
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h3 id={idTitulo} className="font-semibold text-slate-900">
@@ -69,6 +73,7 @@ export default function RegistroMarcos({ titulo, caja, onCambiar, colmenaId, err
                 onChange={(evento) => cambiarMarco(marco.numero, { contenido: evento.target.value })}
                 placeholder="Sin registrar"
                 opciones={OPCIONES_CONTENIDO}
+                error={Boolean(error) && marco.contenido === ""}
               />
               {marco.transferir ? (
                 <span className="w-[6.5rem]" />
@@ -95,6 +100,7 @@ export default function RegistroMarcos({ titulo, caja, onCambiar, colmenaId, err
                 </span>
                 <SelectorColmena
                   aria-label={`Colmena de destino del marco ${marco.numero} de ${titulo}`}
+                  error={Boolean(error) && !marco.destino}
                   valor={marco.destino}
                   excluir={colmenaId}
                   onCambiar={(valor) => cambiarMarco(marco.numero, { destino: valor })}

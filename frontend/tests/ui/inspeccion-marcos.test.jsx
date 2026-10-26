@@ -36,6 +36,7 @@ async function abrirFormulario() {
   fireEvent.click(within(nav).getByText("Inspecciones"));
   fireEvent.click(await screen.findByRole("button", { name: "Registrar inspección" }));
   const d = screen.getByRole("dialog");
+  fireEvent.change(within(d).getByLabelText(/^Apiario/), { target: { value: "1" } });
   fireEvent.change(within(d).getByLabelText(/^Colmena/), { target: { value: "1" } });
   fireEvent.click(within(d).getByRole("radio", { name: "Completa" }));
   return d;
@@ -97,8 +98,8 @@ it("si una transferencia falla, la inspección no se duplica y se informa cuál 
   fireEvent.click(within(d).getByRole("button", { name: "Transferir el marco 5 de Cámara de cría" }));
   elegir(d, "Colmena de destino del marco 5 de Cámara de cría", "2");
   enviar(d);
-  await screen.findByText(/quedó registrada, pero no se pudieron guardar/);
-  screen.getByText(/Marco 5 de cámara de cría: solo cría, hacia COL-002\. La colmena de destino no existe/);
+  await screen.findByText(/quedó guardada, pero no se pudo completar lo siguiente/);
+  screen.getByText(/Transferencia: Marco 5 de cámara de cría: solo cría, hacia COL-002\. La colmena de destino no existe/);
   expect(screen.queryByRole("dialog")).toBeNull();
   expect(llamadas.filter((l) => l.ruta === "/inspecciones/" && l.metodo === "POST")).toHaveLength(1);
 });

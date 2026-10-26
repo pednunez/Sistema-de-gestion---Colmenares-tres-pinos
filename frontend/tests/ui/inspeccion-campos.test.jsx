@@ -36,6 +36,7 @@ it("registra postura, miel y alimentación", async () => {
   await abrir();
   fireEvent.click(await screen.findByRole("button", { name: "Registrar inspección" }));
   const d = screen.getByRole("dialog");
+  fireEvent.change(within(d).getByLabelText(/^Apiario/), { target: { value: "1" } });
   fireEvent.change(within(d).getByLabelText(/^Colmena/), { target: { value: "1" } });
   fireEvent.click(within(d).getByRole("radio", { name: "Completa" }));
   const postura = within(d).getByRole("radiogroup", { name: "¿Hay postura?" });
@@ -53,6 +54,7 @@ it("sin completar los campos nuevos envía null", async () => {
   await abrir();
   fireEvent.click(await screen.findByRole("button", { name: "Registrar inspección" }));
   const d = screen.getByRole("dialog");
+  fireEvent.change(within(d).getByLabelText(/^Apiario/), { target: { value: "1" } });
   fireEvent.change(within(d).getByLabelText(/^Colmena/), { target: { value: "1" } });
   fireEvent.click(within(d).getByRole("radio", { name: "Débil" }));
   fireEvent.click(within(d).getAllByRole("button", { name: "Registrar inspección" }).at(-1));
@@ -88,6 +90,7 @@ it("pide las tiras de medicamento solo con signos de enfermedad", async () => {
   await abrir();
   fireEvent.click(await screen.findByRole("button", { name: "Registrar inspección" }));
   const d = screen.getByRole("dialog");
+  fireEvent.change(within(d).getByLabelText(/^Apiario/), { target: { value: "1" } });
   fireEvent.change(within(d).getByLabelText(/^Colmena/), { target: { value: "1" } });
   fireEvent.click(within(d).getByRole("radio", { name: "Requiere revisión" }));
   expect(within(d).queryByRole("radiogroup", { name: "Tiras de medicamento aplicadas" })).toBeNull();

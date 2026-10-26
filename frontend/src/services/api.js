@@ -12,7 +12,24 @@ export class ApiError extends Error {
     this.estado = estado;
     this.detalle = detalle;
     this.correlationId = correlationId;
+    // Errores de validación por campo ({ estado_general: "..." }), para marcarlos en el formulario.
+    this.campos = camposDeValidacion(detalle);
   }
+}
+
+// Pydantic indica en "loc" el campo rechazado, por ejemplo ["body", "estado_general"].
+function camposDeValidacion(detalle) {
+  if (!Array.isArray(detalle)) return {};
+  const campos = {};
+  for (const error of detalle) {
+    const campo = Array.isArray(error?.loc) ? error.loc.filter((parte) => typeof parte === "string" && parte !== "body").at(-1) : null;
+    if (!campo || campos[campo]) continue;
+    campos[campo] =
+      error.type === "value_error" && error.msg
+        ? error.msg.replace(/^Value error,\s*/i, "")
+        : "El servidor no acepta este valor.";
+  }
+  return campos;
 }
 
 // En fallas del servidor o de conexión se agrega un código corto para que el
@@ -177,6 +194,9 @@ async function solicitar(ruta, { metodo = "GET", cuerpo, tipoRespuesta = "json",
       else
         mensaje =
           mensajeDeValidacion(detalle) ??
+          (Object.keys(camposDeValidacion(detalle)).length > 0
+            ? "El servidor rechazó algunos datos. Revisa los campos marcados en rojo."
+            : null) ??
           MENSAJES_POR_ESTADO[respuesta.status] ??
           "No se pudo completar la operación.";
 

@@ -15,8 +15,9 @@ import { useDatos } from "../hooks/useDatos";
 import { useNavegacion } from "../hooks/useNavegacion";
 import { inspeccionesService } from "../services/inspeccionesService";
 import { transferenciasService } from "../services/transferenciasService";
+import { tratamientosService } from "../services/tratamientosService";
 import { ESTADO_GENERAL_TODOS, NIVEL, NIVEL_MIEL, opciones, siNo, texto } from "../utils/etiquetas";
-import { formatearFechaHora } from "../utils/formato";
+import { formatearFechaHora, hoyISO, humanizar } from "../utils/formato";
 
 const POR_PAGINA = 30;
 
@@ -33,7 +34,8 @@ export default function InspeccionesPage() {
   const [formulario, setFormulario] = useState(parametros.nuevaPara ? { colmenaInicial: parametros.nuevaPara } : null);
   const [aDarDeBaja, setADarDeBaja] = useState(null);
   const [detalle, setDetalle] = useState(null);
-  const [transferenciasFallidas, setTransferenciasFallidas] = useState(null);
+  // Lo que no se pudo guardar después de la inspección (transferencias o tratamientos).
+  const [pendientes, setPendientes] = useState(null);
 
   const filtradas = useMemo(() => {
     const termino = busqueda.trim().toLowerCase();
@@ -50,15 +52,35 @@ export default function InspeccionesPage() {
 
   // Las transferencias marcadas en la revisión de marcos se guardan después de la
   // inspección, que es la que deja en la colmena la cantidad de marcos de la que se descuentan.
-  const guardar = async (valores, transferencias = []) => {
+  // Finaliza con fecha de hoy los tratamientos marcados en la inspección.
+  const finalizarTratamientos = async (ids) => {
+    const fallidos = [];
+    for (const id of ids) {
+      try {
+        await tratamientosService.actualizar(id, { estado: "FINALIZADO", fecha_fin: hoyISO() });
+      } catch (error) {
+        const tratamiento = datos.tratamientos.find((t) => t.id === id);
+        fallidos.push({ id, nombre: tratamiento ? humanizar(tratamiento.tipo_tratamiento) : `Tratamiento #${id}`, mensaje: error.message });
+      }
+    }
+    return fallidos;
+  };
+
+  const textoFinalizados = (cantidad) =>
+    cantidad > 0 ? ` ${cantidad === 1 ? "Se finalizó 1 tratamiento" : `Se finalizaron ${cantidad} tratamientos`}.` : "";
+
+  const guardar = async (valores, transferencias = [], finalizar = []) => {
     if (formulario?.inspeccion) {
       // Al editar, el backend no permite cambiar la colmena.
       const cambios = { ...valores };
       delete cambios.colmena_id;
       await inspeccionesService.actualizar(formulario.inspeccion.id, cambios);
-      avisos.exito("Inspección actualizada.");
-      await recargar();
+      const tratamientosFallidos = await finalizarTratamientos(finalizar);
+      avisos.exito(`Inspección actualizada.${textoFinalizados(finalizar.length - tratamientosFallidos.length)}`);
+      await recargar().catch(() => {});
       setFormulario(null);
+      const codigo = codigoColmena(formulario.inspeccion.colmena_id);
+      setPendientes(tratamientosFallidos.length > 0 ? { codigo, transferencias: [], tratamientos: tratamientosFallidos } : null);
       return;
     }
 
@@ -75,6 +97,7 @@ export default function InspeccionesPage() {
         fallidas.push({ ...transferencia, mensaje: error.message });
       }
     }
+    const tratamientosFallidos = await finalizarTratamientos(finalizar);
 
     await recargar().catch(() => {});
     setFormulario(null);
@@ -82,11 +105,15 @@ export default function InspeccionesPage() {
     const guardadas = transferencias.length - fallidas.length;
     const codigo = codigoColmena(valores.colmena_id);
     avisos.exito(
-      guardadas > 0
+      (guardadas > 0
         ? `Inspección de ${codigo} registrada con ${guardadas} ${guardadas === 1 ? "transferencia" : "transferencias"}.`
-        : `Inspección de ${codigo} registrada.`
+        : `Inspección de ${codigo} registrada.`) + textoFinalizados(finalizar.length - tratamientosFallidos.length)
     );
-    setTransferenciasFallidas(fallidas.length > 0 ? { codigo, fallidas } : null);
+    setPendientes(
+      fallidas.length > 0 || tratamientosFallidos.length > 0
+        ? { codigo, transferencias: fallidas, tratamientos: tratamientosFallidos }
+        : null
+    );
   };
 
   const darDeBaja = async () => {
@@ -105,24 +132,28 @@ export default function InspeccionesPage() {
         </Boton>
       </EncabezadoModulo>
 
-      {transferenciasFallidas && (
+      {pendientes && (
         <div className="mb-5">
           <Alerta
             accion={
-              <Boton variante="secundario" tamano="sm" onClick={() => setTransferenciasFallidas(null)}>
+              <Boton variante="secundario" tamano="sm" onClick={() => setPendientes(null)}>
                 Entendido
               </Boton>
             }
           >
             <p className="font-semibold">
-              La inspección de {transferenciasFallidas.codigo} quedó registrada, pero no se pudieron guardar estas
-              transferencias:
+              La inspección de {pendientes.codigo} quedó guardada, pero no se pudo completar lo siguiente:
             </p>
             <ul className="mt-2 list-disc pl-5">
-              {transferenciasFallidas.fallidas.map((fallida) => (
+              {pendientes.transferencias.map((fallida) => (
                 <li key={`${fallida.ubicacion}-${fallida.numero_marco}`}>
-                  {fallida.observaciones.replace(/\.$/, "")}, hacia {codigoColmena(fallida.colmena_destino_id)}.{" "}
+                  Transferencia: {fallida.observaciones.replace(/\.$/, "")}, hacia {codigoColmena(fallida.colmena_destino_id)}.{" "}
                   {fallida.mensaje}
+                </li>
+              ))}
+              {pendientes.tratamientos.map((fallido) => (
+                <li key={fallido.id}>
+                  Finalizar el tratamiento {fallido.nombre}. {fallido.mensaje} Puedes finalizarlo desde Tratamientos.
                 </li>
               ))}
             </ul>
@@ -155,11 +186,12 @@ export default function InspeccionesPage() {
           texto={datos.inspecciones.length === 0 ? "Registra la primera inspección desde aquí o escaneando el QR de una colmena." : "Ajusta o limpia los filtros."}
         />
       ) : (
-        <div className="grid gap-4">
+        // Tarjetas compactas en cuadrícula, igual que en Tratamientos.
+        <div className="grid grid-cols-1 gap-5 md:grid-cols-2 2xl:grid-cols-3">
           {filtradas.slice(0, visibles).map((inspeccion) => {
             const colmena = indices.colmenas.get(inspeccion.colmena_id);
             return (
-              <article key={inspeccion.id} className="rounded-2xl border border-slate-200 bg-white p-5">
+              <article key={inspeccion.id} className="flex flex-col rounded-2xl border border-slate-200 bg-white p-5">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <p className="text-lg font-semibold">
@@ -180,7 +212,7 @@ export default function InspeccionesPage() {
                   <InsigniaDe mapa={ESTADO_GENERAL_TODOS} valor={inspeccion.estado_general} porDefecto="Sin estado" />
                 </div>
 
-                <dl className="mt-4 grid grid-cols-2 gap-4 text-sm sm:grid-cols-3">
+                <dl className="mb-4 mt-4 grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
                   <Dato nombre="Reina observada">{siNo(inspeccion.reina_observada)}</Dato>
                   <Dato nombre="Presencia de cría">{siNo(inspeccion.presencia_cria)}</Dato>
                   <Dato nombre="Postura">{siNo(inspeccion.postura)}</Dato>
@@ -190,7 +222,7 @@ export default function InspeccionesPage() {
                 </dl>
 
                 {inspeccion.signos_enfermedad && (
-                  <div className="mt-4">
+                  <div className="mb-3">
                     <Insignia tono="rojo">Signos de enfermedad</Insignia>
                     {inspeccion.enfermedad_observada && (
                       <span className="ml-2 text-sm text-slate-700">{inspeccion.enfermedad_observada}</span>
@@ -203,13 +235,13 @@ export default function InspeccionesPage() {
                   </div>
                 )}
                 {inspeccion.alimentacion_suministrada && (
-                  <p className="mt-3 text-sm text-slate-600">
+                  <p className="mb-3 text-sm text-slate-600">
                     <span className="font-medium text-slate-800">Alimentación:</span> {inspeccion.alimentacion_suministrada}
                   </p>
                 )}
-                {inspeccion.observaciones && <p className="mt-3 text-sm text-slate-600">{inspeccion.observaciones}</p>}
+                {inspeccion.observaciones && <p className="mb-3 line-clamp-2 text-sm text-slate-600">{inspeccion.observaciones}</p>}
 
-                <div className="mt-4 flex flex-wrap gap-2 border-t border-slate-100 pt-3">
+                <div className="mt-auto flex flex-wrap gap-2 border-t border-slate-100 pt-3">
                   <Boton
                     variante="fantasma"
                     tamano="sm"
@@ -235,7 +267,7 @@ export default function InspeccionesPage() {
           })}
 
           {filtradas.length > visibles && (
-            <Boton variante="secundario" className="justify-self-center" onClick={() => setVisibles((v) => v + POR_PAGINA)}>
+            <Boton variante="secundario" className="col-span-full justify-self-center" onClick={() => setVisibles((v) => v + POR_PAGINA)}>
               Mostrar más ({filtradas.length - visibles} restantes)
             </Boton>
           )}
