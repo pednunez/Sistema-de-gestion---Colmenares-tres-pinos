@@ -67,8 +67,9 @@ it("registra una salida de bodega sin destino", async () => {
   await waitFor(() => expect(llamadas.some((l) => l.metodo === "POST")).toBe(true));
   expect(llamadas.find((l) => l.metodo === "POST")).toMatchObject({
     ruta: "/stock/movimientos/",
-    cuerpo: { material: "ALZA", tipo: "ENVIO", cantidad: 2, apiario_id: null, colmena_id: null, estado_origen: null },
   });
+  // Sin destino, la salida no envía apiario_id ni colmena_id.
+  expect(llamadas.find((l) => l.metodo === "POST").cuerpo).toEqual({ material: "ALZA", tipo: "ENVIO", cantidad: 2 });
   await waitFor(() => expect(screen.queryByRole("dialog")).toBeNull());
   await waitFor(() => expect(llamadas.filter((l) => l.ruta === "/stock/").length).toBeGreaterThan(1));
 });
@@ -112,6 +113,21 @@ it("las acciones del panel abren el formulario listo: a reparación, reparado y 
   fireEvent.click(within(dialogo).getByRole("button", { name: "Registrar movimiento" }));
   await waitFor(() =>
     expect(llamadas.find((l) => l.metodo === "POST")?.cuerpo).toMatchObject({ tipo: "DESCARTE", material: "ALZA", estado_origen: "EN_REPARACION", cantidad: 1 })
+  );
+});
+
+it("un ingreso solo envía los campos que aplican", async () => {
+  const llamadas = simularBackend({ usuario: ADMIN, datos });
+  await montarApp();
+  await irA("Stock");
+  fireEvent.click(await screen.findByRole("button", { name: "Registrar movimiento" }));
+  const dialogo = await screen.findByRole("dialog");
+  fireEvent.change(within(dialogo).getByLabelText(/Material/), { target: { value: "ALZA" } });
+  fireEvent.change(within(dialogo).getByLabelText(/Cantidad/), { target: { value: "2" } });
+  fireEvent.change(within(dialogo).getByLabelText(/Observaciones/), { target: { value: "QA-PEDRO" } });
+  fireEvent.click(within(dialogo).getByRole("button", { name: "Registrar movimiento" }));
+  await waitFor(() =>
+    expect(llamadas.find((l) => l.metodo === "POST")?.cuerpo).toEqual({ material: "ALZA", tipo: "INGRESO", cantidad: 2, observaciones: "QA-PEDRO" })
   );
 });
 

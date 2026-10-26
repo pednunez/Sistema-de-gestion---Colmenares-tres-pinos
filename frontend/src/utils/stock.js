@@ -148,19 +148,19 @@ export function validarMovimiento(v, inventario) {
   };
 }
 
+// Solo se envían los campos que aplican a cada tipo: el backend rechaza
+// apiario_id o colmena_id en movimientos que no son salidas.
 export function movimientoParaEnviar(v) {
-  const esSalida = v.tipo === "ENVIO";
-  const observaciones = v.observaciones.trim();
-  return {
-    material: v.material,
-    tipo: v.tipo,
-    cantidad: Number(v.cantidad),
+  const movimiento = { material: v.material, tipo: v.tipo, cantidad: Number(v.cantidad) };
+  if (v.tipo === "ENVIO") {
     // El destino de una salida es opcional: el stock es de la bodega central.
-    apiario_id: esSalida && v.apiario_id ? Number(v.apiario_id) : null,
-    colmena_id: esSalida && v.colmena_id ? Number(v.colmena_id) : null,
-    estado_origen: v.tipo === "DESCARTE" ? v.estado_origen : null,
-    observaciones: observaciones || null,
-  };
+    if (v.apiario_id) movimiento.apiario_id = Number(v.apiario_id);
+    if (v.apiario_id && v.colmena_id) movimiento.colmena_id = Number(v.colmena_id);
+  }
+  if (v.tipo === "DESCARTE") movimiento.estado_origen = v.estado_origen;
+  const observaciones = v.observaciones.trim();
+  if (observaciones) movimiento.observaciones = observaciones;
+  return movimiento;
 }
 
 // ---------------------------------------------------------------------------
