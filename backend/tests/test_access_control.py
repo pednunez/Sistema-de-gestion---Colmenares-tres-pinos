@@ -38,6 +38,10 @@ class FakeSession:
         self.queries += 1
         return SimpleNamespace(all=lambda: [])
 
+    def execute(self, query):
+        self.queries += 1
+        return SimpleNamespace(all=lambda: [])
+
 
 async def request(path, token=None, method='GET', body=b''):
     messages = []
@@ -75,7 +79,7 @@ class AccessControlTests(unittest.TestCase):
                 import re
                 path = path.replace('{codigo_qr}', '00000000-0000-0000-0000-000000000001')
                 self.paths.append(re.sub(r'\{[^}]+\}', '1', path))
-        self.assertEqual(len(self.paths), 13)
+        self.assertEqual(len(self.paths), 14)
 
     def token(self, expired=False):
         return jwt.encode({'sub': '1', 'rol': 'ADMIN', 'ver': 0,
@@ -109,7 +113,9 @@ class AccessControlTests(unittest.TestCase):
             self.db.user.rol = role
             for path in self.paths:
                 with self.subTest(role=role, path=path):
-                    expected = 200 if path.endswith('/') else 404
+                    # Los listados responden 200 con lista vacía; los detalles, 404.
+                    listado = path.endswith('/') or path == '/colmenas/sin-revision'
+                    expected = 200 if listado else 404
                     self.assertEqual(self.status(path, self.token()), expected)
 
     def test_database_is_admin_only_using_current_db_role(self):
