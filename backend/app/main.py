@@ -20,7 +20,10 @@ configurar_logging()
 # ==========================================================
 
 from app.routers.apiarios import router as apiarios_router
-from app.routers.colmenas import router as colmenas_router
+from app.routers.colmenas import (
+    TOTAL_HEADER as COLMENAS_TOTAL_HEADER,
+    router as colmenas_router,
+)
 from app.routers.usuarios import router as usuarios_router
 from app.routers.inspecciones import router as inspecciones_router
 from app.routers.tratamientos import router as tratamientos_router
@@ -67,7 +70,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=[CORRELATION_HEADER],
+    expose_headers=[CORRELATION_HEADER, COLMENAS_TOTAL_HEADER],
 )
 
 

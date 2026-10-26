@@ -3,7 +3,9 @@ from uuid import UUID
 
 import qrcode
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from typing import Literal
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
@@ -15,13 +17,17 @@ from app.models.usuario import Usuario
 from app.schemas.colmena import (
     ColmenaCreate,
     ColmenaUpdate,
-    ColmenaResponse
+    ColmenaResponse,
+    EstadoColmena
 )
 
 from app.schemas.auditoria import AuditoriaCreate
 
 from app.services import colmena as colmena_service
 from app.services import auditoria as auditoria_service
+
+
+TOTAL_HEADER = "X-Total-Count"
 
 
 router = APIRouter(
@@ -65,15 +71,31 @@ def colmena_a_dict(colmena):
     response_model=list[ColmenaResponse]
 )
 def listar_colmenas(
+    response: Response,
     db: Session = Depends(get_db),
     apiario_id: int | None = Query(default=None, gt=0),
     offset: int = Query(default=0, ge=0),
-    limit: int | None = Query(default=None, ge=1, le=500)
+    limit: int | None = Query(default=None, ge=1, le=500),
+    estado: EstadoColmena | None = Query(default=None),
+    codigo: str | None = Query(default=None, min_length=1, max_length=50),
+    orden: Literal["id", "codigo"] = Query(default="id")
 ):
     # Sin parametros conserva la lista completa que consume el frontend actual.
-    return colmena_service.listar_colmenas(
-        db, apiario_id=apiario_id, offset=offset, limit=limit
+    # El total filtrado va en X-Total-Count para no cambiar la forma de la
+    # respuesta (sigue siendo una lista).
+    colmenas, total = colmena_service.listar_colmenas(
+        db,
+        apiario_id=apiario_id,
+        offset=offset,
+        limit=limit,
+        estado=estado,
+        codigo=codigo,
+        orden=orden
     )
+
+    response.headers[TOTAL_HEADER] = str(total)
+
+    return colmenas
 
 
 # ==========================================================

@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.apiario import Apiario
@@ -13,24 +13,64 @@ from app.schemas.colmena import ColmenaCreate, ColmenaUpdate
 # LISTAR COLMENAS ACTIVAS
 # ==========================================================
 
+def escapar_like(texto: str) -> str:
+    """Busca el texto literal: % y _ no actuan como comodines."""
+    return (
+        texto.replace("\\", "\\\\")
+        .replace("%", "\\%")
+        .replace("_", "\\_")
+    )
+
+
 def listar_colmenas(
     db: Session,
     apiario_id: int | None = None,
     offset: int = 0,
-    limit: int | None = None
-):
-    consulta = (
-        select(Colmena)
-        .where(Colmena.activo == True)
-        .order_by(Colmena.id)
-    )
+    limit: int | None = None,
+    estado: str | None = None,
+    codigo: str | None = None,
+    orden: str = "id"
+) -> tuple[list[Colmena], int]:
+    """Devuelve la pagina pedida y el total de colmenas que cumplen el filtro."""
+
+    condiciones = [Colmena.activo == True]
 
     if apiario_id is not None:
-        consulta = consulta.where(Colmena.apiario_id == apiario_id)
-    consulta = consulta.offset(offset)
+        condiciones.append(Colmena.apiario_id == apiario_id)
+
+    if estado is not None:
+        condiciones.append(Colmena.estado == estado)
+
+    if codigo:
+        condiciones.append(
+            Colmena.codigo.ilike(
+                f"%{escapar_like(codigo)}%",
+                escape="\\"
+            )
+        )
+
+    total = db.scalar(
+        select(func.count()).select_from(Colmena).where(*condiciones)
+    )
+
+    # El id desempata para que la paginacion sea estable.
+    orden_sql = (
+        (Colmena.codigo, Colmena.id)
+        if orden == "codigo"
+        else (Colmena.id,)
+    )
+
+    consulta = (
+        select(Colmena)
+        .where(*condiciones)
+        .order_by(*orden_sql)
+        .offset(offset)
+    )
+
     if limit is not None:
         consulta = consulta.limit(limit)
-    return db.scalars(consulta).all()
+
+    return db.scalars(consulta).all(), total
 
 
 # ==========================================================

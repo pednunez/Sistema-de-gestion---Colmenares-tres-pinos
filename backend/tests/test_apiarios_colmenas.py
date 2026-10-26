@@ -37,9 +37,10 @@ async def request(method, url, data=None):
     async def send(message):
         messages.append(message)
     await app(scope,receive,send)
-    status=next(m['status'] for m in messages if m['type']=='http.response.start')
+    start=next(m for m in messages if m['type']=='http.response.start')
     payload=b''.join(m.get('body',b'') for m in messages if m['type']=='http.response.body')
-    return status,json.loads(payload)
+    request.headers={k.decode().lower():v.decode() for k,v in start['headers']}
+    return start['status'],json.loads(payload)
 
 
 class InventoryTests(unittest.TestCase):
@@ -110,6 +111,27 @@ class InventoryTests(unittest.TestCase):
         self.assertEqual(self.codes(url+'&offset=1&limit=1'),['A2'])
         self.assertEqual(self.codes(url+'&offset=2&limit=2'),['A3'])
         self.assertEqual(self.codes(url+'&offset=9&limit=2'),[])
+
+    def test_total_count_header_reports_filtered_total(self):
+        url=f'/colmenas/?apiario_id={self.a.id}&offset=0&limit=1'
+        self.assertEqual(self.codes(url),['A1'])
+        self.assertEqual(request.headers['x-total-count'],'3')
+        self.assertEqual(self.codes('/colmenas/?offset=9&limit=5'),[])
+        self.assertEqual(request.headers['x-total-count'],'4')
+
+    def test_filter_by_state_and_code(self):
+        self.hives[1].estado='EN_OBSERVACION';self.db.commit()
+        self.assertEqual(self.codes('/colmenas/?estado=EN_OBSERVACION'),['B1'])
+        self.assertEqual(request.headers['x-total-count'],'1')
+        self.assertEqual(self.codes('/colmenas/?codigo=a'),['A1','A2','A3'])
+        self.assertEqual(self.codes('/colmenas/?codigo=%25'),[])
+        self.assertEqual(self.call('GET','/colmenas/?estado=OTRO')[0],422)
+
+    def test_order_by_code(self):
+        self.hives[0].codigo='Z9';self.db.commit()
+        self.assertEqual(self.codes('/colmenas/?orden=codigo'),['A2','A3','B1','Z9'])
+        self.assertEqual(self.codes('/colmenas/?orden=codigo&offset=1&limit=2'),['A3','B1'])
+        self.assertEqual(self.call('GET','/colmenas/?orden=fecha')[0],422)
 
     def test_unknown_apiary_has_empty_list(self):
         self.assertEqual(self.codes('/colmenas/?apiario_id=999999999'),[])
