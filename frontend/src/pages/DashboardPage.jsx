@@ -5,6 +5,7 @@ import Insignia from "../components/ui/Insignia";
 import { Cargando } from "../components/ui/Estados";
 import { Panel, TarjetaIndicador } from "../components/ui/Estructura";
 import AvisoStockBajo from "../components/stock/AvisoStockBajo";
+import FiltroApiario from "../components/ui/FiltroApiario";
 import { useDatos } from "../hooks/useDatos";
 import { ESTADO_GENERAL } from "../utils/etiquetas";
 import { useInventario } from "../hooks/useInventario";
@@ -22,33 +23,6 @@ const DISTRIBUCION = [
   { clave: "ANTERIOR", texto: "Escala anterior", barra: "bg-slate-400", soloSiHay: true },
   { clave: "SIN", texto: "Sin inspección", barra: "bg-slate-300" },
 ];
-
-// Botones para ver todo junto o un apiario a la vez.
-function FiltroApiario({ apiarios, valor, onCambiar }) {
-  const opcionesFiltro = [{ id: "", nombre: "Todos los apiarios" }, ...apiarios];
-  return (
-    <div className="mb-6 flex items-center gap-3 overflow-x-auto pb-1" role="radiogroup" aria-label="Ver apiario">
-      <span className="shrink-0 text-sm font-medium text-slate-600">Ver:</span>
-      {opcionesFiltro.map((apiario) => {
-        const activo = String(valor) === String(apiario.id);
-        return (
-          <button
-            key={apiario.id || "todos"}
-            type="button"
-            role="radio"
-            aria-checked={activo}
-            onClick={() => onCambiar(String(apiario.id))}
-            className={`min-h-10 shrink-0 rounded-full border px-4 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${
-              activo ? "border-amber-400 bg-amber-400 text-slate-950" : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
-            }`}
-          >
-            {apiario.nombre}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
 
 export default function DashboardPage() {
   const { datos, cargado, nombreApiario } = useDatos();
