@@ -24,6 +24,7 @@ from app.schemas.inspeccion import (
 from app.schemas.auditoria import AuditoriaCreate
 
 from app.services import inspeccion as inspeccion_service
+from app.services import revision as revision_service
 from app.services import auditoria as auditoria_service
 
 
@@ -204,6 +205,44 @@ def crear_inspeccion(
         )
 
     # ------------------------------------------------------
+    # REVISIÓN POR GRUPO ("GUARDAR Y SIGUIENTE")
+    # ------------------------------------------------------
+
+    fila_sesion = None
+
+    if datos.sesion_revision_id is not None:
+
+        sesion = revision_service.obtener_sesion(db, datos.sesion_revision_id)
+
+        if sesion is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Sesión de revisión no encontrada",
+            )
+
+        verificar_autor_o_admin(usuario_actual, sesion.usuario_id)
+
+        if sesion.estado != "EN_CURSO":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="La sesión de revisión ya fue finalizada",
+            )
+
+        fila_sesion = revision_service.fila_de_colmena(db, sesion.id, datos.colmena_id)
+
+        if fila_sesion is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="La colmena no forma parte de esta sesión de revisión",
+            )
+
+        if fila_sesion.estado == "REVISADA":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="La colmena ya fue revisada en esta sesión",
+            )
+
+    # ------------------------------------------------------
     # UTILIZAR EL USUARIO DEL JWT
     # ------------------------------------------------------
 
@@ -224,6 +263,9 @@ def crear_inspeccion(
             datos_seguros,
             commit=False,
         )
+
+        if fila_sesion is not None:
+            revision_service.marcar_revisada(db, fila_sesion, inspeccion.id)
 
         # Crear la auditoría sin hacer commit.
         auditoria_service.registrar_auditoria(

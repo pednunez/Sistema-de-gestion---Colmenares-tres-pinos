@@ -35,6 +35,7 @@ from app.routers.transferencias_marcos import (
 from app.routers.historial import router as historial_router
 from app.routers.grupos import router as grupos_router
 from app.routers.movil import router as movil_router
+from app.routers.revisiones import router as revisiones_router
 from app.routers.auditoria import router as auditoria_router
 from app.routers.auth import router as auth_router
 
@@ -131,6 +132,11 @@ app.include_router(
 )
 
 app.include_router(movil_router)
+
+app.include_router(
+    revisiones_router,
+    dependencies=[Depends(obtener_usuario_actual)],
+)
 
 app.include_router(auditoria_router)
 

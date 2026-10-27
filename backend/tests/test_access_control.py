@@ -42,6 +42,10 @@ class FakeSession:
         self.queries += 1
         return SimpleNamespace(all=lambda: [])
 
+    def get(self, model, ident):
+        self.queries += 1
+        return None
+
 
 async def request(path, token=None, method='GET', body=b''):
     messages = []
@@ -72,14 +76,14 @@ class AccessControlTests(unittest.TestCase):
         self.connection.start()
         self.addCleanup(self.connection.stop)
         prefixes = ('/apiarios', '/colmenas', '/inspecciones', '/tratamientos',
-                    '/transferencias', '/historial', '/grupos', '/movil')
+                    '/transferencias', '/historial', '/grupos', '/movil', '/revisiones')
         self.paths = []
         for path, methods in app.openapi()['paths'].items():
             if path.startswith(prefixes) and 'get' in methods:
                 import re
                 path = path.replace('{codigo_qr}', '00000000-0000-0000-0000-000000000001')
                 self.paths.append(re.sub(r'\{[^}]+\}', '1', path))
-        self.assertEqual(len(self.paths), 18)
+        self.assertEqual(len(self.paths), 20)
 
     def token(self, expired=False):
         return jwt.encode({'sub': '1', 'rol': 'ADMIN', 'ver': 0,

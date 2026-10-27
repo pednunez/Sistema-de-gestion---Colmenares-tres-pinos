@@ -91,3 +91,10 @@ from app.models.stock_minimo import StockMinimo
 # ==========================================================
 
 from app.models.grupo import GrupoColmena, GrupoColmenaAsignacion
+
+
+# ==========================================================
+# SESIONES DE REVISION POR GRUPO (D-07 / S2-T16)
+# ==========================================================
+
+from app.models.revision import SesionRevision, SesionRevisionColmena
