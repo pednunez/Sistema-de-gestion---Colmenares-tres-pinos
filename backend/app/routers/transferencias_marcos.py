@@ -4,7 +4,7 @@ from decimal import Decimal
 from enum import Enum
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.orm import Session
 
@@ -130,6 +130,7 @@ def obtener_transferencia(
 )
 def crear_transferencia(
     datos: TransferenciaMarcoCreate,
+    response: Response,
     db: Session = Depends(get_db),
     usuario_actual: Usuario = Depends(
         obtener_usuario_actual
@@ -140,20 +141,40 @@ def crear_transferencia(
     # 1. PROTEGER TRANSFERENCIAS DE INSPECCIONES
     # ======================================================
     #
-    # El frontend no debe crear por separado transferencias
-    # que ya serán procesadas al guardar una inspección.
+    # Las transferencias de una inspección ya se registran
+    # al guardarla (marcos[].transferido_a_colmena_id).
     #
-    # Evitamos que el cliente envíe inspeccion_id a este
-    # endpoint y registre movimientos duplicados.
+    # Si el cliente vuelve a enviar una de ellas, se responde
+    # 200 con la transferencia existente: no se duplica el
+    # movimiento ni se descuentan otra vez los marcos.
+    # Cualquier otra transferencia con inspeccion_id se
+    # rechaza para no crear movimientos fuera de la inspección.
     # ======================================================
 
     if datos.inspeccion_id is not None:
+
+        existente = transferencia_service.obtener_transferencia_de_inspeccion(
+            db,
+            datos.inspeccion_id,
+            datos.ubicacion,
+            datos.numero_marco,
+        )
+
+        if (
+            existente is not None
+            and existente.colmena_origen_id == datos.colmena_origen_id
+            and existente.colmena_destino_id == datos.colmena_destino_id
+        ):
+            response.status_code = status.HTTP_200_OK
+            return existente
+
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
                 "Las transferencias asociadas a inspecciones "
                 "se registran automáticamente al guardar "
-                "la inspección."
+                "la inspección, indicando el destino en "
+                "marcos[].transferido_a_colmena_id."
             ),
         )
 

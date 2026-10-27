@@ -47,6 +47,26 @@ def obtener_transferencia(
 # OBTENER COLMENA ACTIVA
 # ==========================================================
 
+def obtener_transferencia_de_inspeccion(
+    db: Session,
+    inspeccion_id: int,
+    ubicacion: str | None,
+    numero_marco: int | None,
+) -> TransferenciaMarco | None:
+    """Transferencia que la inspeccion ya registro para ese marco."""
+
+    if ubicacion is None or numero_marco is None:
+        return None
+
+    return db.scalar(
+        select(TransferenciaMarco).where(
+            TransferenciaMarco.inspeccion_id == inspeccion_id,
+            TransferenciaMarco.ubicacion == ubicacion,
+            TransferenciaMarco.numero_marco == numero_marco,
+        )
+    )
+
+
 def obtener_colmena_activa(
     db: Session,
     colmena_id: int,

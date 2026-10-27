@@ -143,6 +143,23 @@ class ErroresApiTests(unittest.TestCase):
             status, respuesta = self.call('POST', '/transferencias-marcos/', {**TRANSFERENCIA, 'cantidad_marcos': 5})
         self.assertEqual(status, 400, respuesta)
 
+    def test_resending_an_inspection_transfer_returns_the_existing_one(self):
+        existente = SimpleNamespace(id=7, colmena_origen_id=1, colmena_destino_id=2, usuario_id=1,
+                                    cantidad_marcos=1, tipo_marco='CRIA', inspeccion_id=5,
+                                    ubicacion='CAMARA_CRIA', numero_marco=3, contenido='SOLO_CRIA',
+                                    motivo=None, observaciones=None,
+                                    fecha_transferencia=AHORA, fecha_creacion=AHORA)
+        reenvio = {**TRANSFERENCIA, 'inspeccion_id': 5, 'ubicacion': 'CAMARA_CRIA',
+                   'numero_marco': 3, 'contenido': 'SOLO_CRIA'}
+        with patch(f'{TRANSFERENCIAS}.obtener_transferencia_de_inspeccion', return_value=existente),              patch(f'{TRANSFERENCIAS}.crear_transferencia') as crear:
+            status, respuesta = self.call('POST', '/transferencias-marcos/', reenvio)
+            self.assertEqual((status, respuesta['id']), (200, 7))
+            otro_destino = self.call('POST', '/transferencias-marcos/', {**reenvio, 'colmena_destino_id': 9})
+            self.assertEqual(otro_destino[0], 400)
+            crear.assert_not_called()
+        with patch(f'{TRANSFERENCIAS}.obtener_transferencia_de_inspeccion', return_value=None):
+            self.assertEqual(self.call('POST', '/transferencias-marcos/', reenvio)[0], 400)
+
     def test_audit_is_admin_only(self):
         self.rol('APICULTOR')
         self.assertEqual(self.call('GET', '/auditoria/')[0], 403)
