@@ -5,9 +5,10 @@ from sqlalchemy import (
     Integer,
     Boolean,
     DateTime,
+    Identity,
     String,
     Text,
-    text
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -18,11 +19,12 @@ class Usuario(Base):
     __tablename__ = "usuarios"
 
     # ======================================================
-    # IDENTIFICADOR
+    # IDENTIFICADOR AUTOMATICO
     # ======================================================
 
     id: Mapped[int] = mapped_column(
         BigInteger,
+        Identity(always=True),
         primary_key=True
     )
 
@@ -66,7 +68,12 @@ class Usuario(Base):
         nullable=False
     )
 
-    version_sesion: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default=text("0"))
+    version_sesion: Mapped[int] = mapped_column(
+        Integer,
+        nullable=False,
+        default=0,
+        server_default=text("0")
+    )
 
     # ======================================================
     # RF-03 - TOKEN DE RECUPERACIÓN

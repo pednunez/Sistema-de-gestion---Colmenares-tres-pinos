@@ -3,35 +3,83 @@ from datetime import datetime
 from sqlalchemy import (
     BigInteger,
     Boolean,
+    CheckConstraint,
     DateTime,
     ForeignKey,
+    Identity,
+    Index,
     Integer,
     String,
     Text,
-    text
+    text,
 )
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import (
+    Mapped,
+    mapped_column,
+    relationship,
+)
 
 from app.database import Base
 
 
+# ==========================================================
+# MODELO: INSPECCIÓN DE COLMENAS
+# ==========================================================
+#
+# Almacena la información general de cada inspección.
+#
+# Incluye:
+# - Colmena inspeccionada.
+# - Usuario responsable.
+# - Estado general.
+# - Condiciones de la reina y cría.
+# - Alimentación y miel.
+# - Cantidad de marcos.
+# - Presencia de alza.
+# - Enfermedades y medicamentos.
+# - Observaciones.
+# - Historial y baja lógica.
+#
+# RELACIÓN:
+# Una inspección puede tener múltiples marcos.
+# ==========================================================
+
 class Inspeccion(Base):
+
     __tablename__ = "inspecciones"
 
     # ======================================================
-    # IDENTIFICADOR DE LA INSPECCIÓN
+    # RESTRICCIONES DE INTEGRIDAD E ÍNDICES
+    # ======================================================
+
+    __table_args__ = (
+        CheckConstraint(
+            "tiras_medicamento IS NULL OR "
+            "tiras_medicamento BETWEEN 1 AND 3",
+            name="ck_inspecciones_tiras_medicamento"
+        ),
+        Index(
+            "idx_inspecciones_colmena",
+            "colmena_id",
+        ),
+        Index(
+            "idx_inspecciones_fecha",
+            "fecha_inspeccion",
+        ),
+    )
+
+    # ======================================================
+    # IDENTIFICADOR AUTOMÁTICO
     # ======================================================
 
     id: Mapped[int] = mapped_column(
         BigInteger,
+        Identity(always=True),
         primary_key=True
     )
 
     # ======================================================
     # COLMENA INSPECCIONADA
-    # ======================================================
-    #
-    # Relaciona la inspección con una colmena existente.
     # ======================================================
 
     colmena_id: Mapped[int] = mapped_column(
@@ -41,11 +89,7 @@ class Inspeccion(Base):
     )
 
     # ======================================================
-    # USUARIO QUE REALIZÓ LA INSPECCIÓN
-    # ======================================================
-    #
-    # Permite saber qué apicultor o administrador realizó
-    # el registro.
+    # USUARIO RESPONSABLE
     # ======================================================
 
     usuario_id: Mapped[int] = mapped_column(
@@ -55,7 +99,7 @@ class Inspeccion(Base):
     )
 
     # ======================================================
-    # FECHA DE LA INSPECCIÓN
+    # FECHA DE INSPECCIÓN
     # ======================================================
 
     fecha_inspeccion: Mapped[datetime] = mapped_column(
@@ -66,6 +110,7 @@ class Inspeccion(Base):
 
     # ======================================================
     # ESTADO GENERAL
+    # Valores permitidos: EstadoGeneral en schemas/inspeccion.py
     # ======================================================
 
     estado_general: Mapped[str | None] = mapped_column(
@@ -93,6 +138,7 @@ class Inspeccion(Base):
 
     # ======================================================
     # NIVEL DE POBLACIÓN
+    # BAJO / MEDIO / ALTO
     # ======================================================
 
     nivel_poblacion: Mapped[str | None] = mapped_column(
@@ -102,6 +148,7 @@ class Inspeccion(Base):
 
     # ======================================================
     # RESERVAS DE ALIMENTO
+    # BAJO / MEDIO / ALTO
     # ======================================================
 
     reservas_alimento: Mapped[str | None] = mapped_column(
@@ -113,11 +160,13 @@ class Inspeccion(Base):
     # CANTIDAD DE MARCOS OBSERVADOS
     # ======================================================
     #
-    # Guarda cuántos marcos tenía la colmena al momento
-    # exacto de realizar esta inspección.
+    # Cantidad real de marcos presentes durante
+    # esta inspección.
     #
-    # nullable=True porque existen inspecciones antiguas
-    # donde todavía no se registraba este dato.
+    # No incluye posiciones con SIN_MARCO.
+    #
+    # Se conserva como nullable para permitir
+    # inspecciones históricas sin este dato.
     # ======================================================
 
     cantidad_marcos: Mapped[int | None] = mapped_column(
@@ -126,14 +175,27 @@ class Inspeccion(Base):
     )
 
     # ======================================================
+    # PRESENCIA DE ALZA
+    # ======================================================
+    #
+    # True: la colmena tenía alza.
+    # False: la colmena no tenía alza.
+    # None: no se registró información.
+    # ======================================================
+
+    tiene_alza: Mapped[bool | None] = mapped_column(
+        Boolean,
+        nullable=True
+    )
+
+    # ======================================================
     # RF-27 - MIEL
     # ======================================================
     #
-    # Permite registrar información relacionada con la
-    # presencia o nivel de miel observado en la inspección.
-    #
-    # Se deja como texto para permitir definir posteriormente
-    # la escala exacta sin modificar nuevamente la estructura.
+    # SIN_MIEL
+    # POCA
+    # MEDIA
+    # ABUNDANTE
     # ======================================================
 
     miel: Mapped[str | None] = mapped_column(
@@ -144,32 +206,16 @@ class Inspeccion(Base):
     # ======================================================
     # RF-28 - ALIMENTACIÓN SUMINISTRADA
     # ======================================================
-    #
-    # Registra si durante la inspección se suministró
-    # alimentación y permite indicar el tipo o detalle.
-    #
-    # Ejemplos:
-    # - Jarabe
-    # - Pasta proteica
-    # - Alimento suplementario
-    # - No suministrada
-    # ======================================================
 
-    alimentacion_suministrada: Mapped[str | None] = mapped_column(
-        Text,
-        nullable=True
+    alimentacion_suministrada: Mapped[str | None] = (
+        mapped_column(
+            Text,
+            nullable=True
+        )
     )
 
     # ======================================================
     # RF-31 - POSTURA
-    # ======================================================
-    #
-    # True  -> se observó postura
-    # False -> no se observó postura
-    # None  -> no fue registrada
-    #
-    # Se mantiene nullable=True para compatibilidad con
-    # inspecciones históricas.
     # ======================================================
 
     postura: Mapped[bool | None] = mapped_column(
@@ -198,6 +244,25 @@ class Inspeccion(Base):
     )
 
     # ======================================================
+    # TIRAS DE MEDICAMENTO
+    # ======================================================
+    #
+    # 1: una tira.
+    # 2: dos tiras.
+    # 3: tres tiras.
+    #
+    # None: no se aplicaron o no se registraron.
+    #
+    # La restricción de la tabla limita los valores
+    # permitidos.
+    # ======================================================
+
+    tiras_medicamento: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True
+    )
+
+    # ======================================================
     # OBSERVACIONES GENERALES
     # ======================================================
 
@@ -208,12 +273,6 @@ class Inspeccion(Base):
 
     # ======================================================
     # ESTADO ACTIVO / BAJA LÓGICA
-    # ======================================================
-    #
-    # No eliminamos físicamente las inspecciones.
-    #
-    # activo = True  -> registro vigente
-    # activo = False -> inspección anulada
     # ======================================================
 
     activo: Mapped[bool] = mapped_column(
@@ -244,10 +303,36 @@ class Inspeccion(Base):
     )
 
     # ======================================================
-    # FECHA DE ELIMINACIÓN / ANULACIÓN
+    # FECHA DE ELIMINACIÓN
     # ======================================================
 
-    fecha_eliminacion: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True),
-        nullable=True
+    fecha_eliminacion: Mapped[datetime | None] = (
+        mapped_column(
+            DateTime(timezone=True),
+            nullable=True
+        )
+    )
+
+    # ======================================================
+    # RELACIÓN CON LOS MARCOS
+    # ======================================================
+    #
+    # Relación uno a muchos (1:N).
+    #
+    # Una inspección puede contener:
+    # - 10 posiciones de cámara de cría.
+    # - 10 posiciones adicionales de alza.
+    #
+    # lazy="selectin":
+    # Carga los marcos relacionados eficientemente.
+    #
+    # back_populates="inspeccion":
+    # Relación inversa del modelo InspeccionMarco.
+    # ======================================================
+
+    marcos: Mapped[list["InspeccionMarco"]] = relationship(
+        "InspeccionMarco",
+        back_populates="inspeccion",
+        lazy="selectin",
+        order_by="(InspeccionMarco.ubicacion, InspeccionMarco.numero)"
     )

@@ -1,9 +1,12 @@
+from datetime import datetime, timezone
 from io import BytesIO
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import qrcode
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from typing import Literal
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
@@ -15,13 +18,19 @@ from app.models.usuario import Usuario
 from app.schemas.colmena import (
     ColmenaCreate,
     ColmenaUpdate,
-    ColmenaResponse
+    ColmenaQrUpdate,
+    ColmenaResponse,
+    ColmenaSinRevisionResponse,
+    EstadoColmena
 )
 
 from app.schemas.auditoria import AuditoriaCreate
 
 from app.services import colmena as colmena_service
 from app.services import auditoria as auditoria_service
+
+
+TOTAL_HEADER = "X-Total-Count"
 
 
 router = APIRouter(
@@ -65,15 +74,83 @@ def colmena_a_dict(colmena):
     response_model=list[ColmenaResponse]
 )
 def listar_colmenas(
+    response: Response,
     db: Session = Depends(get_db),
     apiario_id: int | None = Query(default=None, gt=0),
     offset: int = Query(default=0, ge=0),
-    limit: int | None = Query(default=None, ge=1, le=500)
+    limit: int | None = Query(default=None, ge=1, le=500),
+    estado: EstadoColmena | None = Query(default=None),
+    codigo: str | None = Query(default=None, min_length=1, max_length=50),
+    orden: Literal["id", "codigo"] = Query(default="id")
 ):
     # Sin parametros conserva la lista completa que consume el frontend actual.
-    return colmena_service.listar_colmenas(
-        db, apiario_id=apiario_id, offset=offset, limit=limit
+    # El total filtrado va en X-Total-Count para no cambiar la forma de la
+    # respuesta (sigue siendo una lista).
+    colmenas, total = colmena_service.listar_colmenas(
+        db,
+        apiario_id=apiario_id,
+        offset=offset,
+        limit=limit,
+        estado=estado,
+        codigo=codigo,
+        orden=orden
     )
+
+    response.headers[TOTAL_HEADER] = str(total)
+
+    return colmenas
+
+
+# ==========================================================
+# COLMENAS SIN REVISIÓN EN EL PERIODO (RF-45)
+# ==========================================================
+#
+# dias: largo del periodo. Por defecto 30, igual que el
+# aviso "sin inspección" del frontend.
+# ==========================================================
+
+@router.get(
+    "/sin-revision",
+    response_model=list[ColmenaSinRevisionResponse]
+)
+def listar_colmenas_sin_revision(
+    db: Session = Depends(get_db),
+    dias: int = Query(default=30, ge=1, le=365),
+    apiario_id: int | None = Query(default=None, gt=0)
+):
+    ahora = datetime.now(timezone.utc)
+
+    filas = colmena_service.listar_colmenas_sin_revision(
+        db,
+        dias=dias,
+        apiario_id=apiario_id,
+        ahora=ahora
+    )
+
+    respuesta = []
+
+    for colmena, ultima in filas:
+
+        dias_sin_revision = None
+
+        if ultima is not None:
+            # SQLite de pruebas devuelve fechas sin zona horaria.
+            if ultima.tzinfo is None:
+                ultima = ultima.replace(tzinfo=timezone.utc)
+            dias_sin_revision = (ahora - ultima).days
+
+        respuesta.append(
+            ColmenaSinRevisionResponse.model_validate(
+                colmena
+            ).model_copy(
+                update={
+                    "ultima_inspeccion": ultima,
+                    "dias_sin_revision": dias_sin_revision,
+                }
+            )
+        )
+
+    return respuesta
 
 
 # ==========================================================
@@ -101,6 +178,87 @@ def consultar_colmena_por_qr(
         )
 
     return colmena
+
+
+# ==========================================================
+# ASOCIAR CÓDIGO QR A UNA COLMENA (S2-T04)
+# ==========================================================
+#
+# Solo ADMIN. El código es opaco (UUID): no contiene datos
+# de la colmena ni de personas. Un código ya asociado a otra
+# colmena, aunque esté dada de baja, se rechaza con 409.
+# ==========================================================
+
+@router.put(
+    "/{colmena_id}/qr",
+    response_model=ColmenaResponse
+)
+def asociar_qr_colmena(
+    colmena_id: int,
+    datos: ColmenaQrUpdate,
+    db: Session = Depends(get_db),
+    usuario: Usuario = Depends(requerir_admin)
+):
+
+    colmena = colmena_service.obtener_colmena(
+        db,
+        colmena_id
+    )
+
+    if colmena is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Colmena no encontrada"
+        )
+
+    nuevo_codigo = datos.codigo_qr or uuid4()
+
+    if nuevo_codigo == colmena.codigo_qr:
+        return colmena
+
+    existente = colmena_service.obtener_colmena_con_qr(
+        db,
+        nuevo_codigo
+    )
+
+    if existente is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="El código QR ya está asociado a otra colmena"
+        )
+
+    datos_anteriores = colmena_a_dict(colmena)
+
+    try:
+        colmena_actualizada = colmena_service.asignar_codigo_qr(
+            db,
+            colmena,
+            nuevo_codigo
+        )
+    except IntegrityError as error:
+        db.rollback()
+        if getattr(error.orig, "sqlstate", None) != "23505":
+            raise
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="El código QR ya está asociado a otra colmena"
+        ) from error
+
+    auditoria_service.registrar_auditoria(
+        db,
+        AuditoriaCreate(
+            usuario_id=usuario.id,
+            entidad="COLMENA",
+            entidad_id=colmena_actualizada.id,
+            accion="MODIFICAR",
+            datos_anteriores=datos_anteriores,
+            datos_nuevos=colmena_a_dict(
+                colmena_actualizada
+            )
+        )
+    )
+
+    return colmena_actualizada
 
 
 # ==========================================================

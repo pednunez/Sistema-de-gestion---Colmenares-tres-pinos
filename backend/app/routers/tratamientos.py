@@ -221,15 +221,44 @@ def actualizar_tratamiento(
             detail="Tratamiento no encontrado"
         )
 
-    # Estado antes del cambio
-    verificar_autor_o_admin(usuario_actual, tratamiento.usuario_id)
-
-    datos_anteriores = tratamiento_a_dict(
-        tratamiento
-    )
-
     cambios = datos.model_dump(
         exclude_unset=True
+    )
+
+    # ------------------------------------------------------
+    # FINALIZAR DESDE LA INSPECCIÓN
+    # ------------------------------------------------------
+    # Los apicultores rotan entre apiarios: cualquiera que
+    # inspecciona la colmena puede finalizar un tratamiento
+    # EN_CURSO, aunque lo haya registrado otra persona.
+    # El resto de la edición queda para el autor o un ADMIN.
+    # La auditoría registra quién lo finalizó.
+
+    es_finalizacion = (
+        set(cambios) == {"estado", "fecha_fin"}
+        and cambios["estado"] == "FINALIZADO"
+        and cambios["fecha_fin"] is not None
+        and tratamiento.estado == "EN_CURSO"
+    )
+
+    if not (
+        es_finalizacion
+        and usuario_actual.rol == "APICULTOR"
+    ):
+        verificar_autor_o_admin(usuario_actual, tratamiento.usuario_id)
+
+    if (
+        cambios.get("fecha_fin") is not None
+        and cambios["fecha_fin"] < tratamiento.fecha_inicio
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La fecha_fin no puede ser anterior a fecha_inicio"
+        )
+
+    # Estado antes del cambio
+    datos_anteriores = tratamiento_a_dict(
+        tratamiento
     )
 
     # No permitimos cambiar quién creó el tratamiento

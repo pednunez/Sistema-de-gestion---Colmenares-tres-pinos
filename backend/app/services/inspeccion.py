@@ -1,266 +1,375 @@
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import select, inspect as sa_inspect
 from sqlalchemy.orm import Session
 
 from app.models.colmena import Colmena
 from app.models.inspeccion import Inspeccion
+from app.models.inspeccion_marco import InspeccionMarco
 from app.models.usuario import Usuario
 
 from app.schemas.inspeccion import (
     InspeccionCreate,
-    InspeccionUpdate
+    InspeccionUpdate,
+    validar_posiciones_marcos,
 )
+from app.schemas.transferencia_marco import TransferenciaMarcoCreate
+from app.schemas.auditoria import AuditoriaCreate
+
+from app.services import transferencia_marco as transferencia_service
+from app.services import auditoria as auditoria_service
+
+
+TIPO_POR_CONTENIDO = {
+    "MIEL_Y_CRIA": "CRIA",
+    "SOLO_CRIA": "CRIA",
+    "SOLO_MIEL": "MIEL",
+    "CERA_ESTIRADA": "VACIO",
+    "CERA_ESTAMPADA": "VACIO",
+    "CERA_UNTADA": "VACIO",
+}
 
 
 # ==========================================================
-# LISTAR INSPECCIONES ACTIVAS
+# CONSULTAS
 # ==========================================================
 
-def listar_inspecciones(
-    db: Session
-):
-    consulta = (
-        select(Inspeccion)
-        .where(
-            Inspeccion.activo == True
-        )
-        .order_by(
-            Inspeccion.fecha_inspeccion.desc()
-        )
-    )
-
+def listar_inspecciones(db: Session):
     return db.scalars(
-        consulta
+        select(Inspeccion)
+        .where(Inspeccion.activo.is_(True))
+        .order_by(
+            Inspeccion.fecha_inspeccion.desc(),
+            Inspeccion.id.desc(),
+        )
     ).all()
 
 
-# ==========================================================
-# OBTENER INSPECCIÓN POR ID
-# ==========================================================
-
-def obtener_inspeccion(
-    db: Session,
-    inspeccion_id: int
-):
-    consulta = select(
-        Inspeccion
-    ).where(
-        Inspeccion.id == inspeccion_id,
-        Inspeccion.activo == True
-    )
-
+def obtener_inspeccion(db: Session, inspeccion_id: int):
     return db.scalar(
-        consulta
+        select(Inspeccion).where(
+            Inspeccion.id == inspeccion_id,
+            Inspeccion.activo.is_(True),
+        )
     )
 
 
-# ==========================================================
-# OBTENER / VALIDAR COLMENA ACTIVA
-# ==========================================================
-
-def obtener_colmena_activa(
-    db: Session,
-    colmena_id: int
-):
-    consulta = select(
-        Colmena
-    ).where(
-        Colmena.id == colmena_id,
-        Colmena.activo == True
-    )
-
+def obtener_colmena_activa(db: Session, colmena_id: int):
     return db.scalar(
-        consulta
+        select(Colmena).where(
+            Colmena.id == colmena_id,
+            Colmena.activo.is_(True),
+        )
     )
 
 
-# ==========================================================
-# OBTENER / VALIDAR USUARIO ACTIVO
-# ==========================================================
-
-def obtener_usuario_activo(
-    db: Session,
-    usuario_id: int
-):
-    consulta = select(
-        Usuario
-    ).where(
-        Usuario.id == usuario_id,
-        Usuario.activo == True
-    )
-
+def obtener_usuario_activo(db: Session, usuario_id: int):
     return db.scalar(
-        consulta
+        select(Usuario).where(
+            Usuario.id == usuario_id,
+            Usuario.activo.is_(True),
+        )
     )
 
 
 # ==========================================================
-# CREAR INSPECCIÓN
+# UTILIDADES
+# ==========================================================
+
+def ahora_utc():
+    return datetime.now(timezone.utc)
+
+
+def guardar_cambios(db: Session, *, commit: bool):
+    if not commit:
+        db.flush()
+        return
+
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+
+
+def comprobar_transferencias_pendientes(marcos):
+    """
+    Se conserva esta protección para PATCH.
+    No permitimos crear nuevos movimientos mediante
+    la edición de inspecciones históricas.
+    """
+    if any(
+        marco.transferido_a_colmena_id is not None
+        for marco in marcos
+    ):
+        raise ValueError(
+            "No se pueden agregar transferencias "
+            "editando una inspección histórica."
+        )
+
+
+def crear_objetos_marcos(marcos):
+    return [
+        InspeccionMarco(
+            ubicacion=marco.ubicacion,
+            numero=marco.numero,
+            contenido=marco.contenido,
+            transferido_a_colmena_id=(
+                marco.transferido_a_colmena_id
+            ),
+        )
+        for marco in marcos
+    ]
+
+
+def validar_detalle_marcos(
+    marcos,
+    tiene_alza,
+    cantidad_marcos,
+):
+    if not marcos:
+        return
+
+    if tiene_alza is None:
+        raise ValueError(
+            "Debes indicar si la colmena tiene alza."
+        )
+
+    validar_posiciones_marcos(
+        marcos,
+        tiene_alza,
+        cantidad_marcos,
+    )
+
+
+def transferencia_a_dict(transferencia):
+    """
+    Prepara los campos de una transferencia
+    para guardar una fotografía en auditoría.
+    """
+    resultado = {}
+
+    for columna in sa_inspect(
+        transferencia
+    ).mapper.column_attrs:
+        valor = getattr(transferencia, columna.key)
+
+        if isinstance(valor, datetime):
+            valor = valor.isoformat()
+
+        resultado[columna.key] = valor
+
+    return resultado
+
+
+# ==========================================================
+# CREAR INSPECCIÓN Y TRANSFERENCIAS
 # ==========================================================
 
 def crear_inspeccion(
     db: Session,
-    datos: InspeccionCreate
+    datos: InspeccionCreate,
+    *,
+    commit: bool = True,
 ):
-
-    # ------------------------------------------------------
-    # VALIDAR QUE LA COLMENA EXISTA Y ESTÉ ACTIVA
-    # ------------------------------------------------------
-
-    colmena = obtener_colmena_activa(
-        db,
-        datos.colmena_id
+    # 1. Validar detalle.
+    validar_detalle_marcos(
+        datos.marcos,
+        datos.tiene_alza,
+        datos.cantidad_marcos,
     )
 
-    if colmena is None:
-        raise ValueError(
-            "La colmena indicada no existe o está inactiva"
+    transferibles = [
+        marco
+        for marco in datos.marcos
+        if marco.transferido_a_colmena_id is not None
+    ]
+
+    # 2. Para transferir necesitamos una cantidad
+    #    observada y consistente con el detalle.
+    if transferibles:
+        if datos.cantidad_marcos is None:
+            raise ValueError(
+                "Debes registrar cantidad_marcos "
+                "para transferir marcos."
+            )
+
+        cantidad_real = sum(
+            marco.contenido != "SIN_MARCO"
+            for marco in datos.marcos
         )
 
-    # ------------------------------------------------------
-    # CREAR INSPECCIÓN
-    # ------------------------------------------------------
+        if cantidad_real != datos.cantidad_marcos:
+            raise ValueError(
+                "La cantidad de marcos no coincide "
+                "con el detalle registrado."
+            )
 
+        if len(transferibles) > cantidad_real:
+            raise ValueError(
+                "No hay suficientes marcos para transferir."
+            )
+
+    # 3. Validar que origen y destino sean diferentes.
+    destinos = {
+        marco.transferido_a_colmena_id
+        for marco in transferibles
+    }
+
+    if datos.colmena_id in destinos:
+        raise ValueError(
+            "No se puede transferir a la misma colmena."
+        )
+
+    # 4. Bloquear todas las colmenas involucradas
+    #    en orden estable para reducir interbloqueos.
+    ids_colmenas = sorted({
+        datos.colmena_id,
+        *destinos,
+    })
+
+    colmenas = db.scalars(
+        select(Colmena)
+        .where(
+            Colmena.id.in_(ids_colmenas),
+            Colmena.activo.is_(True),
+        )
+        .order_by(Colmena.id.asc())
+        .with_for_update()
+    ).all()
+
+    mapa = {
+        colmena.id: colmena
+        for colmena in colmenas
+    }
+
+    origen = mapa.get(datos.colmena_id)
+
+    if origen is None:
+        raise ValueError(
+            "La colmena inspeccionada no existe "
+            "o está inactiva."
+        )
+
+    for destino_id in destinos:
+        if destino_id not in mapa:
+            raise ValueError(
+                f"La colmena destino {destino_id} "
+                "no existe o está inactiva."
+            )
+
+    # 5. Construir la inspección.
     inspeccion = Inspeccion(
-
-        # --------------------------------------------------
-        # RELACIONES
-        # --------------------------------------------------
-
         colmena_id=datos.colmena_id,
-
         usuario_id=datos.usuario_id,
-
-        # --------------------------------------------------
-        # INFORMACIÓN GENERAL
-        # --------------------------------------------------
-
         estado_general=datos.estado_general,
-
         reina_observada=datos.reina_observada,
-
         presencia_cria=datos.presencia_cria,
-
         nivel_poblacion=datos.nivel_poblacion,
-
         reservas_alimento=datos.reservas_alimento,
-
-        # --------------------------------------------------
-        # CANTIDAD DE MARCOS
-        # --------------------------------------------------
-        #
-        # Guarda la cantidad observada durante esta
-        # inspección para mantener trazabilidad histórica.
-        # --------------------------------------------------
-
         cantidad_marcos=datos.cantidad_marcos,
-
-        # --------------------------------------------------
-        # RF-27 - MIEL
-        # --------------------------------------------------
-
+        tiene_alza=datos.tiene_alza,
         miel=datos.miel,
-
-        # --------------------------------------------------
-        # RF-28 - ALIMENTACIÓN SUMINISTRADA
-        # --------------------------------------------------
-
         alimentacion_suministrada=(
             datos.alimentacion_suministrada
         ),
-
-        # --------------------------------------------------
-        # RF-31 - POSTURA
-        # --------------------------------------------------
-
         postura=datos.postura,
-
-        # --------------------------------------------------
-        # ESTADO SANITARIO
-        # --------------------------------------------------
-
         signos_enfermedad=datos.signos_enfermedad,
-
-        enfermedad_observada=(
-            datos.enfermedad_observada
-        ),
-
-        # --------------------------------------------------
-        # OBSERVACIONES
-        # --------------------------------------------------
-
-        observaciones=datos.observaciones
+        enfermedad_observada=datos.enfermedad_observada,
+        tiras_medicamento=datos.tiras_medicamento,
+        observaciones=datos.observaciones,
     )
 
-    # ------------------------------------------------------
-    # ACTUALIZAR CANTIDAD ACTUAL DE MARCOS DE LA COLMENA
-    # ------------------------------------------------------
+    # ======================================================
+    # FECHA DE INSPECCIÓN
+    # ======================================================
     #
-    # Si el apicultor registró la cantidad de marcos durante
-    # una NUEVA inspección, ese número representa el estado
-    # actual observado de la colmena.
+    # Si el usuario indica una fecha válida,
+    # se utiliza esa fecha.
     #
-    # Ejemplo:
+    # Si no indica ninguna fecha, PostgreSQL
+    # asignará automáticamente la fecha actual.
     #
-    # Antes:
-    # Colmena C-001 -> 10 marcos
-    #
-    # Nueva inspección:
-    # cantidad_marcos = 8
-    #
-    # Después:
-    # Colmena C-001 -> 8 marcos actuales
-    #
-    # La inspección conserva igualmente el valor 8 como
-    # registro histórico.
-    # ------------------------------------------------------
+    # La validación para rechazar fechas futuras
+    # se encuentra en InspeccionCreate.
+    # ======================================================
 
+    if datos.fecha_inspeccion is not None:
+        inspeccion.fecha_inspeccion = datos.fecha_inspeccion
+
+    # 6. Registrar todas las posiciones observadas.
+    inspeccion.marcos = crear_objetos_marcos(
+        datos.marcos
+    )
+
+    db.add(inspeccion)
+
+    # Obtener el ID de inspección sin hacer COMMIT.
+    db.flush()
+
+    # 7. Actualizar inventario observado.
+    #    La inspección conserva la cantidad histórica;
+    #    el origen será descontado posteriormente.
     if datos.cantidad_marcos is not None:
+        origen.cantidad_marcos = datos.cantidad_marcos
+        origen.fecha_actualizacion = ahora_utc()
 
-        colmena.cantidad_marcos = (
-            datos.cantidad_marcos
+    # 8. Registrar cada transferencia.
+    for marco in transferibles:
+        transferencia_datos = TransferenciaMarcoCreate(
+            colmena_origen_id=datos.colmena_id,
+            colmena_destino_id=(
+                marco.transferido_a_colmena_id
+            ),
+            usuario_id=datos.usuario_id,
+            inspeccion_id=inspeccion.id,
+            cantidad_marcos=1,
+            tipo_marco=TIPO_POR_CONTENIDO[
+                marco.contenido
+            ],
+            ubicacion=marco.ubicacion,
+            numero_marco=marco.numero,
+            contenido=marco.contenido,
+            motivo=(
+                "Transferencia registrada "
+                "durante la inspección"
+            ),
+            observaciones=(
+                f"Marco {marco.numero} "
+                f"en {marco.ubicacion}"
+            ),
         )
 
-        colmena.fecha_actualizacion = (
-            datetime.now(
-                timezone.utc
+        transferencia = (
+            transferencia_service.crear_transferencia(
+                db,
+                transferencia_datos,
+                commit=False,
             )
         )
 
-    # ------------------------------------------------------
-    # AGREGAR INSPECCIÓN
-    # ------------------------------------------------------
+        # 9. Registrar auditoría sin COMMIT.
+        auditoria_service.registrar_auditoria(
+            db,
+            AuditoriaCreate(
+                usuario_id=datos.usuario_id,
+                entidad="TRANSFERENCIA_MARCO",
+                entidad_id=transferencia.id,
+                accion="CREAR",
+                datos_anteriores=None,
+                datos_nuevos=transferencia_a_dict(
+                    transferencia
+                ),
+            ),
+            commit=False,
+        )
 
-    db.add(
-        inspeccion
-    )
+    # 10. El router hará el COMMIT definitivo
+    #     cuando utilice commit=False.
+    guardar_cambios(db, commit=commit)
 
-    # ------------------------------------------------------
-    # GUARDAR TODO EN LA MISMA TRANSACCIÓN
-    # ------------------------------------------------------
-    #
-    # Se guarda:
-    #
-    # 1. La nueva inspección.
-    # 2. La cantidad actual de marcos de la colmena.
-    #
-    # Si ocurre un error, rollback revierte ambos cambios.
-    # ------------------------------------------------------
-
-    try:
-
-        db.commit()
-
-    except Exception:
-
-        db.rollback()
-
-        raise
-
-    db.refresh(
-        inspeccion
-    )
+    if commit:
+        db.refresh(inspeccion)
 
     return inspeccion
 
@@ -272,137 +381,119 @@ def crear_inspeccion(
 def actualizar_inspeccion(
     db: Session,
     inspeccion: Inspeccion,
-    datos: InspeccionUpdate
+    datos: InspeccionUpdate,
+    *,
+    commit: bool = True,
 ):
+    cambios = datos.model_dump(exclude_unset=True)
 
-    # ------------------------------------------------------
-    # SOLO TOMAR LOS CAMPOS ENVIADOS
-    # ------------------------------------------------------
+    # No permitir cambiar relaciones históricas.
+    cambios.pop("colmena_id", None)
+    cambios.pop("usuario_id", None)
 
-    datos_actualizados = datos.model_dump(
-        exclude_unset=True
-    )
+    marcos_enviados = "marcos" in cambios
+    cambios.pop("marcos", None)
 
-    # ------------------------------------------------------
-    # ACTUALIZAR CAMPOS DINÁMICAMENTE
-    # ------------------------------------------------------
-    #
-    # Como los campos:
-    #
-    # cantidad_marcos
-    # miel
-    # alimentacion_suministrada
-    # postura
-    #
-    # ya existen en InspeccionUpdate, también serán
-    # actualizados automáticamente cuando sean enviados.
-    # ------------------------------------------------------
+    nuevos_marcos = None
 
-    for campo, valor in datos_actualizados.items():
+    if marcos_enviados:
+        if datos.marcos is None:
+            raise ValueError(
+                "Para modificar marcos envía una lista. "
+                "Utiliza [] para eliminar el detalle."
+            )
 
-        setattr(
-            inspeccion,
-            campo,
-            valor
+        nuevos_marcos = datos.marcos
+
+        # Prohibir nuevos movimientos desde PATCH.
+        comprobar_transferencias_pendientes(
+            nuevos_marcos
         )
 
-    # ------------------------------------------------------
-    # IMPORTANTE:
-    #
-    # NO actualizamos aquí colmena.cantidad_marcos.
-    #
-    # Una inspección que se modifica puede ser una
-    # inspección histórica y no necesariamente representa
-    # el estado actual de la colmena.
-    # ------------------------------------------------------
+        # Proteger movimientos históricos existentes.
+        if any(
+            marco.transferido_a_colmena_id is not None
+            for marco in inspeccion.marcos
+        ):
+            raise ValueError(
+                "No puedes reemplazar marcos de una "
+                "inspección que tiene transferencias."
+            )
 
-    # ------------------------------------------------------
-    # ACTUALIZAR FECHA DE MODIFICACIÓN
-    # ------------------------------------------------------
-
-    inspeccion.fecha_actualizacion = (
-        datetime.now(
-            timezone.utc
+        tiene_alza_final = cambios.get(
+            "tiene_alza",
+            inspeccion.tiene_alza,
         )
-    )
 
-    # ------------------------------------------------------
-    # GUARDAR CAMBIOS
-    # ------------------------------------------------------
+        if nuevos_marcos:
+            cantidad_calculada = sum(
+                marco.contenido != "SIN_MARCO"
+                for marco in nuevos_marcos
+            )
 
-    try:
+            cantidad_final = cambios.get(
+                "cantidad_marcos",
+                cantidad_calculada,
+            )
 
-        db.commit()
+            validar_detalle_marcos(
+                nuevos_marcos,
+                tiene_alza_final,
+                cantidad_final,
+            )
 
-    except Exception:
+            cambios["cantidad_marcos"] = cantidad_final
 
-        db.rollback()
+    # Actualizar únicamente los campos enviados.
+    for campo, valor in cambios.items():
+        setattr(inspeccion, campo, valor)
 
-        raise
+    # Sustituir detalle cuando se haya solicitado.
+    if nuevos_marcos is not None:
+        anteriores = list(inspeccion.marcos)
 
-    db.refresh(
-        inspeccion
-    )
+        for marco in anteriores:
+            db.delete(marco)
+
+        db.flush()
+
+        inspeccion.marcos = crear_objetos_marcos(
+            nuevos_marcos
+        )
+
+    inspeccion.fecha_actualizacion = ahora_utc()
+
+    # No cambiar la cantidad actual de la colmena
+    # al editar una inspección histórica.
+    guardar_cambios(db, commit=commit)
+
+    if commit:
+        db.refresh(inspeccion)
 
     return inspeccion
 
 
 # ==========================================================
-# ELIMINAR / ANULAR INSPECCIÓN
-# ==========================================================
-#
-# Se utiliza baja lógica.
-#
-# El registro NO se elimina físicamente de PostgreSQL.
+# ANULAR INSPECCIÓN
 # ==========================================================
 
 def eliminar_inspeccion(
     db: Session,
-    inspeccion: Inspeccion
+    inspeccion: Inspeccion,
+    *,
+    commit: bool = True,
 ):
-
-    # ------------------------------------------------------
-    # FECHA ACTUAL
-    # ------------------------------------------------------
-
-    ahora = datetime.now(
-        timezone.utc
-    )
-
-    # ------------------------------------------------------
-    # BAJA LÓGICA
-    # ------------------------------------------------------
+    ahora = ahora_utc()
 
     inspeccion.activo = False
-
-    # ------------------------------------------------------
-    # FECHA DE ELIMINACIÓN
-    # ------------------------------------------------------
-
     inspeccion.fecha_eliminacion = ahora
-
-    # ------------------------------------------------------
-    # FECHA DE ÚLTIMA ACTUALIZACIÓN
-    # ------------------------------------------------------
-
     inspeccion.fecha_actualizacion = ahora
 
-    # ------------------------------------------------------
-    # GUARDAR CAMBIOS
-    # ------------------------------------------------------
+    # La baja lógica conserva marcos y transferencias.
+    # No revierte automáticamente inventarios antiguos.
+    guardar_cambios(db, commit=commit)
 
-    try:
-
-        db.commit()
-
-    except Exception:
-
-        db.rollback()
-
-        raise
-
-    db.refresh(
-        inspeccion
-    )
+    if commit:
+        db.refresh(inspeccion)
 
     return inspeccion

@@ -129,3 +129,32 @@ class ColmenaResponse(ColmenaBase):
     model_config = ConfigDict(
         from_attributes=True
     )
+
+# ==========================================================
+# COLMENA SIN REVISION EN EL PERIODO (RF-45)
+# ==========================================================
+
+class ColmenaSinRevisionResponse(ColmenaResponse):
+
+    # null si la colmena nunca fue inspeccionada.
+    ultima_inspeccion: datetime | None = None
+
+    dias_sin_revision: int | None = None
+
+
+# ==========================================================
+# ASOCIAR CODIGO QR (S2-T04)
+# ==========================================================
+#
+# codigo_qr = UUID -> asociar una etiqueta ya impresa.
+# codigo_qr = null -> generar un codigo nuevo (etiqueta
+#                     perdida o danada).
+# ==========================================================
+
+class ColmenaQrUpdate(BaseModel):
+
+    codigo_qr: UUID | None
+
+    model_config = ConfigDict(
+        extra="forbid"
+    )

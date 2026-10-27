@@ -1,9 +1,11 @@
+
 from datetime import datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.colmena import Colmena
+from app.models.inspeccion import Inspeccion
 from app.models.transferencia_marco import TransferenciaMarco
 from app.models.usuario import Usuario
 from app.schemas.transferencia_marco import TransferenciaMarcoCreate
@@ -13,13 +15,12 @@ from app.schemas.transferencia_marco import TransferenciaMarcoCreate
 # LISTAR TRANSFERENCIAS
 # ==========================================================
 
-def listar_transferencias(
-    db: Session
-):
+def listar_transferencias(db: Session):
     consulta = (
         select(TransferenciaMarco)
         .order_by(
-            TransferenciaMarco.fecha_transferencia.desc()
+            TransferenciaMarco.fecha_transferencia.desc(),
+            TransferenciaMarco.id.desc(),
         )
     )
 
@@ -32,133 +33,190 @@ def listar_transferencias(
 
 def obtener_transferencia(
     db: Session,
-    transferencia_id: int
+    transferencia_id: int,
 ):
-    consulta = select(
-        TransferenciaMarco
-    ).where(
-        TransferenciaMarco.id == transferencia_id
+    consulta = (
+        select(TransferenciaMarco)
+        .where(TransferenciaMarco.id == transferencia_id)
     )
 
     return db.scalar(consulta)
 
 
 # ==========================================================
-# OBTENER / VALIDAR COLMENA ACTIVA
+# OBTENER COLMENA ACTIVA
 # ==========================================================
+
+def obtener_transferencia_de_inspeccion(
+    db: Session,
+    inspeccion_id: int,
+    ubicacion: str | None,
+    numero_marco: int | None,
+) -> TransferenciaMarco | None:
+    """Transferencia que la inspeccion ya registro para ese marco."""
+
+    if ubicacion is None or numero_marco is None:
+        return None
+
+    return db.scalar(
+        select(TransferenciaMarco).where(
+            TransferenciaMarco.inspeccion_id == inspeccion_id,
+            TransferenciaMarco.ubicacion == ubicacion,
+            TransferenciaMarco.numero_marco == numero_marco,
+        )
+    )
+
 
 def obtener_colmena_activa(
     db: Session,
-    colmena_id: int
+    colmena_id: int,
 ):
-    consulta = select(
-        Colmena
-    ).where(
-        Colmena.id == colmena_id,
-        Colmena.activo == True
+    consulta = (
+        select(Colmena)
+        .where(
+            Colmena.id == colmena_id,
+            Colmena.activo.is_(True),
+        )
     )
 
     return db.scalar(consulta)
 
 
 # ==========================================================
-# OBTENER / VALIDAR USUARIO ACTIVO
+# OBTENER USUARIO ACTIVO
 # ==========================================================
 
 def obtener_usuario_activo(
     db: Session,
-    usuario_id: int
+    usuario_id: int,
 ):
-    consulta = select(
-        Usuario
-    ).where(
-        Usuario.id == usuario_id,
-        Usuario.activo == True
+    consulta = (
+        select(Usuario)
+        .where(
+            Usuario.id == usuario_id,
+            Usuario.activo.is_(True),
+        )
     )
 
     return db.scalar(consulta)
 
 
 # ==========================================================
-# OBTENER COLMENAS PARA TRANSFERENCIA
+# OBTENER Y BLOQUEAR COLMENAS
 # ==========================================================
 #
-# Se bloquean temporalmente las filas mientras se realiza
-# la transferencia.
+# Bloquear en orden de ID disminuye el riesgo de
+# interbloqueos entre transferencias simultáneas.
 #
-# Esto ayuda a evitar que dos transferencias simultáneas
-# utilicen la misma cantidad de marcos disponibles.
+# El bloqueo permanece hasta COMMIT o ROLLBACK.
 # ==========================================================
 
 def obtener_colmenas_para_transferencia(
     db: Session,
     colmena_origen_id: int,
-    colmena_destino_id: int
+    colmena_destino_id: int,
 ):
     consulta = (
         select(Colmena)
         .where(
-            Colmena.id.in_([
-                colmena_origen_id,
-                colmena_destino_id
-            ]),
-            Colmena.activo == True
+            Colmena.id.in_(
+                [colmena_origen_id, colmena_destino_id]
+            ),
+            Colmena.activo.is_(True),
         )
+        .order_by(Colmena.id.asc())
         .with_for_update()
     )
 
-    colmenas = db.scalars(
-        consulta
-    ).all()
+    colmenas = db.scalars(consulta).all()
 
     mapa_colmenas = {
         colmena.id: colmena
         for colmena in colmenas
     }
 
-    colmena_origen = mapa_colmenas.get(
-        colmena_origen_id
+    return (
+        mapa_colmenas.get(colmena_origen_id),
+        mapa_colmenas.get(colmena_destino_id),
     )
-
-    colmena_destino = mapa_colmenas.get(
-        colmena_destino_id
-    )
-
-    return colmena_origen, colmena_destino
 
 
 # ==========================================================
-# CREAR TRANSFERENCIA DE MARCOS
+# VALIDAR VÍNCULO CON INSPECCIÓN
+# ==========================================================
+
+def validar_inspeccion_transferencia(
+    db: Session,
+    datos: TransferenciaMarcoCreate,
+):
+    if datos.inspeccion_id is None:
+        return
+
+    inspeccion = db.scalar(
+        select(Inspeccion).where(
+            Inspeccion.id == datos.inspeccion_id,
+            Inspeccion.activo.is_(True),
+        )
+    )
+
+    if inspeccion is None:
+        raise ValueError(
+            "La inspección indicada no existe o está inactiva"
+        )
+
+    if inspeccion.colmena_id != datos.colmena_origen_id:
+        raise ValueError(
+            "La colmena de origen no coincide con "
+            "la colmena inspeccionada"
+        )
+
+    if inspeccion.usuario_id != datos.usuario_id:
+        raise ValueError(
+            "El usuario responsable no coincide con "
+            "el autor de la inspección"
+        )
+
+    # El vínculo detallado exige los datos del marco.
+    if (
+        datos.ubicacion is None
+        or datos.numero_marco is None
+        or datos.contenido is None
+    ):
+        raise ValueError(
+            "Una transferencia asociada a una inspección "
+            "debe identificar la ubicación, número y "
+            "contenido del marco"
+        )
+
+
+# ==========================================================
+# CREAR TRANSFERENCIA
 # ==========================================================
 #
-# RF-40:
-# Registrar transferencia de marcos.
+# commit=True:
+#   Mantiene el comportamiento del router actual.
 #
-# RF-41:
-# Validar disponibilidad y actualizar las cantidades de
-# marcos de las colmenas involucradas.
+# commit=False:
+#   Agrega la transferencia a la transacción actual,
+#   pero NO realiza commit. El llamador debe hacerlo.
+#
+# En ambos casos se utiliza flush() para obtener el ID.
 # ==========================================================
 
 def crear_transferencia(
     db: Session,
-    datos: TransferenciaMarcoCreate
+    datos: TransferenciaMarcoCreate,
+    *,
+    commit: bool = True,
 ):
-
     # ------------------------------------------------------
-    # VALIDAR ORIGEN Y DESTINO DIFERENTES
+    # VALIDACIONES GENERALES
     # ------------------------------------------------------
 
-    if (
-        datos.colmena_origen_id
-        == datos.colmena_destino_id
-    ):
+    if datos.colmena_origen_id == datos.colmena_destino_id:
         raise ValueError(
             "La colmena de origen y destino deben ser diferentes"
         )
-
-    # ------------------------------------------------------
-    # VALIDAR CANTIDAD
-    # ------------------------------------------------------
 
     if datos.cantidad_marcos <= 0:
         raise ValueError(
@@ -166,30 +224,27 @@ def crear_transferencia(
         )
 
     # ------------------------------------------------------
-    # OBTENER Y BLOQUEAR LAS COLMENAS
+    # VALIDACIÓN DE INSPECCIÓN
     # ------------------------------------------------------
 
-    (
-        colmena_origen,
-        colmena_destino
-    ) = obtener_colmenas_para_transferencia(
-        db,
-        datos.colmena_origen_id,
-        datos.colmena_destino_id
+    validar_inspeccion_transferencia(db, datos)
+
+    # ------------------------------------------------------
+    # BLOQUEAR COLMENAS
+    # ------------------------------------------------------
+
+    colmena_origen, colmena_destino = (
+        obtener_colmenas_para_transferencia(
+            db,
+            datos.colmena_origen_id,
+            datos.colmena_destino_id,
+        )
     )
-
-    # ------------------------------------------------------
-    # VALIDAR COLMENA DE ORIGEN
-    # ------------------------------------------------------
 
     if colmena_origen is None:
         raise ValueError(
             "La colmena de origen no existe o está inactiva"
         )
-
-    # ------------------------------------------------------
-    # VALIDAR COLMENA DE DESTINO
-    # ------------------------------------------------------
 
     if colmena_destino is None:
         raise ValueError(
@@ -197,7 +252,7 @@ def crear_transferencia(
         )
 
     # ------------------------------------------------------
-    # OBTENER CANTIDAD ACTUAL DE MARCOS
+    # CANTIDADES ACTUALES
     # ------------------------------------------------------
 
     marcos_origen = (
@@ -213,105 +268,75 @@ def crear_transferencia(
     )
 
     # ------------------------------------------------------
-    # VALIDAR MARCOS DISPONIBLES
+    # VALIDAR DISPONIBILIDAD
     # ------------------------------------------------------
 
     if marcos_origen < datos.cantidad_marcos:
         raise ValueError(
-            (
-                "La colmena de origen no tiene suficientes "
-                f"marcos disponibles. Tiene {marcos_origen} "
-                f"y se intentan transferir "
-                f"{datos.cantidad_marcos}."
-            )
+            "La colmena de origen no tiene suficientes "
+            "marcos disponibles. "
+            f"Tiene {marcos_origen} y se intentan "
+            f"transferir {datos.cantidad_marcos}."
         )
 
     # ------------------------------------------------------
-    # CALCULAR NUEVAS CANTIDADES
+    # ACTUALIZAR CANTIDADES
     # ------------------------------------------------------
 
-    nueva_cantidad_origen = (
-        marcos_origen
-        - datos.cantidad_marcos
-    )
-
-    nueva_cantidad_destino = (
-        marcos_destino
-        + datos.cantidad_marcos
-    )
-
-    # ------------------------------------------------------
-    # ACTUALIZAR COLMENA ORIGEN
-    # ------------------------------------------------------
+    ahora = datetime.now(timezone.utc)
 
     colmena_origen.cantidad_marcos = (
-        nueva_cantidad_origen
+        marcos_origen - datos.cantidad_marcos
     )
-
-    colmena_origen.fecha_actualizacion = (
-        datetime.now(timezone.utc)
-    )
-
-    # ------------------------------------------------------
-    # ACTUALIZAR COLMENA DESTINO
-    # ------------------------------------------------------
 
     colmena_destino.cantidad_marcos = (
-        nueva_cantidad_destino
+        marcos_destino + datos.cantidad_marcos
     )
 
-    colmena_destino.fecha_actualizacion = (
-        datetime.now(timezone.utc)
-    )
+    colmena_origen.fecha_actualizacion = ahora
+    colmena_destino.fecha_actualizacion = ahora
 
     # ------------------------------------------------------
-    # CREAR REGISTRO HISTÓRICO DE LA TRANSFERENCIA
+    # CREAR REGISTRO
     # ------------------------------------------------------
 
     transferencia = TransferenciaMarco(
         colmena_origen_id=datos.colmena_origen_id,
         colmena_destino_id=datos.colmena_destino_id,
         usuario_id=datos.usuario_id,
+        inspeccion_id=datos.inspeccion_id,
         cantidad_marcos=datos.cantidad_marcos,
         tipo_marco=datos.tipo_marco,
+        ubicacion=datos.ubicacion,
+        numero_marco=datos.numero_marco,
+        contenido=datos.contenido,
         motivo=datos.motivo,
-        observaciones=datos.observaciones
+        observaciones=datos.observaciones,
     )
 
-    db.add(
-        transferencia
-    )
+    db.add(transferencia)
 
     # ------------------------------------------------------
-    # GUARDAR TODO EN UNA MISMA TRANSACCIÓN
-    # ------------------------------------------------------
-    #
-    # Se guardan juntos:
-    #
-    # 1. Descuento en colmena origen.
-    # 2. Aumento en colmena destino.
-    # 3. Registro de transferencia.
-    #
-    # Si ocurre un error antes del commit, se revierte.
+    # PERSISTENCIA
     # ------------------------------------------------------
 
-    try:
-        db.commit()
+    if commit:
+        try:
+            db.flush()
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
 
-    except Exception:
-        db.rollback()
-        raise
+        db.refresh(transferencia)
+        db.refresh(colmena_origen)
+        db.refresh(colmena_destino)
 
-    db.refresh(
-        transferencia
-    )
-
-    db.refresh(
-        colmena_origen
-    )
-
-    db.refresh(
-        colmena_destino
-    )
+    else:
+        # No confirmar: la transacción mayor se encargará
+        # del commit o rollback de todas las operaciones.
+        #
+        # Si falla, el llamador debe hacer rollback.
+        db.flush()
 
     return transferencia
