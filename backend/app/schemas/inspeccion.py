@@ -1,6 +1,7 @@
 
 from datetime import datetime, timezone
 from typing import Literal
+from uuid import UUID
 
 from pydantic import (
     BaseModel,
@@ -420,6 +421,9 @@ class InspeccionBase(BaseModel):
 class InspeccionCreate(InspeccionBase):
     fecha_inspeccion: datetime | None = None
 
+    # UUID generado en el telefono para sincronizar sin duplicar.
+    id_cliente: UUID | None = None
+
     @model_validator(mode="after")
     def validar_fecha_inspeccion(self):
         fecha = self.fecha_inspeccion
@@ -559,6 +563,9 @@ class InspeccionUpdate(BaseModel):
 class InspeccionResponse(InspeccionBase):
 
     id: int
+
+    # UUID generado en el telefono para sincronizar sin duplicar.
+    id_cliente: UUID | None = None
 
     fecha_inspeccion: datetime
 

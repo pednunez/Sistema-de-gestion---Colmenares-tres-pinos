@@ -1,4 +1,5 @@
 from datetime import date, datetime
+from uuid import UUID
 
 from sqlalchemy import (
     BigInteger,
@@ -11,6 +12,7 @@ from sqlalchemy import (
     Text,
     text,
 )
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
@@ -37,6 +39,11 @@ class Tratamiento(Base):
         Index(
             "idx_tratamientos_fecha",
             "fecha_inicio",
+        ),
+        Index(
+            "uq_tratamientos_id_cliente",
+            "id_cliente",
+            unique=True,
         ),
     )
 
@@ -151,6 +158,19 @@ class Tratamiento(Base):
 
     observaciones: Mapped[str | None] = mapped_column(
         Text,
+        nullable=True,
+    )
+
+    # ======================================================
+    # ID GENERADO EN EL TELEFONO (SINCRONIZACION)
+    # ======================================================
+    #
+    # La app movil lo envia al sincronizar. Si llega dos
+    # veces, la API devuelve el registro ya creado.
+    # ======================================================
+
+    id_cliente: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
         nullable=True,
     )
 

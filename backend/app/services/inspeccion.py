@@ -166,6 +166,13 @@ def transferencia_a_dict(transferencia):
 # CREAR INSPECCIÓN Y TRANSFERENCIAS
 # ==========================================================
 
+def obtener_por_id_cliente(db: Session, id_cliente) -> Inspeccion | None:
+    """Inspeccion ya sincronizada con ese id del telefono."""
+    return db.scalar(
+        select(Inspeccion).where(Inspeccion.id_cliente == id_cliente)
+    )
+
+
 def crear_inspeccion(
     db: Session,
     datos: InspeccionCreate,
@@ -278,6 +285,7 @@ def crear_inspeccion(
         enfermedad_observada=datos.enfermedad_observada,
         tiras_medicamento=datos.tiras_medicamento,
         observaciones=datos.observaciones,
+        id_cliente=datos.id_cliente,
     )
 
     # ======================================================
