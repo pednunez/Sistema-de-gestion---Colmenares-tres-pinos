@@ -13,10 +13,10 @@ import { useAuth } from "../hooks/useAuth";
 import { useAvisos } from "../hooks/useAvisos";
 import { useDatos } from "../hooks/useDatos";
 import { useNavegacion } from "../hooks/useNavegacion";
+import { useGuardarInspeccion } from "../hooks/useGuardarInspeccion";
 import { inspeccionesService } from "../services/inspeccionesService";
-import { tratamientosService } from "../services/tratamientosService";
 import { ESTADO_GENERAL_TODOS, NIVEL, NIVEL_MIEL, opciones, siNo, texto } from "../utils/etiquetas";
-import { formatearFechaHora, hoyISO, humanizar } from "../utils/formato";
+import { formatearFechaHora } from "../utils/formato";
 
 const POR_PAGINA = 30;
 
@@ -49,54 +49,16 @@ export default function InspeccionesPage() {
 
   const puedeGestionar = (inspeccion) => esAdmin || inspeccion.usuario_id === usuario.id;
 
-  // Finaliza con fecha de hoy los tratamientos marcados en la inspección.
-  const finalizarTratamientos = async (ids) => {
-    const fallidos = [];
-    for (const id of ids) {
-      try {
-        await tratamientosService.actualizar(id, { estado: "FINALIZADO", fecha_fin: hoyISO() });
-      } catch (error) {
-        const tratamiento = datos.tratamientos.find((t) => t.id === id);
-        fallidos.push({ id, nombre: tratamiento ? humanizar(tratamiento.tipo_tratamiento) : `Tratamiento #${id}`, mensaje: error.message });
-      }
-    }
-    return fallidos;
-  };
+  const guardarInspeccion = useGuardarInspeccion();
 
-  const textoFinalizados = (cantidad) =>
-    cantidad > 0 ? ` ${cantidad === 1 ? "Se finalizó 1 tratamiento" : `Se finalizaron ${cantidad} tratamientos`}.` : "";
-
-  // Las transferencias marcadas en la revisión de marcos viajan dentro de la
-  // inspección (marcos[].transferido_a_colmena_id) y el backend las crea en la
-  // misma operación: si algo falla, no se guarda nada y el formulario muestra el error.
   const guardar = async (valores, cantidadTransferencias = 0, finalizar = []) => {
-    if (formulario?.inspeccion) {
-      // Al editar, el backend no permite cambiar la colmena.
-      const cambios = { ...valores };
-      delete cambios.colmena_id;
-      await inspeccionesService.actualizar(formulario.inspeccion.id, cambios);
-      const tratamientosFallidos = await finalizarTratamientos(finalizar);
-      avisos.exito(`Inspección actualizada.${textoFinalizados(finalizar.length - tratamientosFallidos.length)}`);
-      await recargar().catch(() => {});
-      setFormulario(null);
-      const codigo = codigoColmena(formulario.inspeccion.colmena_id);
-      setPendientes(tratamientosFallidos.length > 0 ? { codigo, tratamientos: tratamientosFallidos } : null);
-      return;
-    }
-
-    // El backend reemplaza usuario_id por el usuario de la sesión; se envía porque el esquema lo exige.
-    await inspeccionesService.crear({ ...valores, usuario_id: usuario.id });
-    const tratamientosFallidos = await finalizarTratamientos(finalizar);
-
-    await recargar().catch(() => {});
+    const { codigo, tratamientosFallidos } = await guardarInspeccion({
+      existente: formulario?.inspeccion,
+      valores,
+      cantidadTransferencias,
+      finalizar,
+    });
     setFormulario(null);
-
-    const codigo = codigoColmena(valores.colmena_id);
-    avisos.exito(
-      (cantidadTransferencias > 0
-        ? `Inspección de ${codigo} registrada con ${cantidadTransferencias} ${cantidadTransferencias === 1 ? "transferencia" : "transferencias"}.`
-        : `Inspección de ${codigo} registrada.`) + textoFinalizados(finalizar.length - tratamientosFallidos.length)
-    );
     setPendientes(tratamientosFallidos.length > 0 ? { codigo, tratamientos: tratamientosFallidos } : null);
   };
 

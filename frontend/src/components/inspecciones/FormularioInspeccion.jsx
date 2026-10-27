@@ -58,7 +58,9 @@ function opcionesMiel(valorActual) {
 
 // Al registrar una inspección se revisan los marcos uno por uno. Las transferencias
 // marcadas en esa revisión las crea el backend al guardar la inspección.
-export default function FormularioInspeccion({ inspeccion, colmenaInicial, onGuardar, onCerrar }) {
+// Con "sesionRevisionId" la inspección se registra dentro de una revisión por grupo:
+// la colmena viene fija y el backend la marca como revisada en esa sesión.
+export default function FormularioInspeccion({ inspeccion, colmenaInicial, sesionRevisionId, contexto, onGuardar, onCerrar }) {
   const esEdicion = Boolean(inspeccion?.id);
   const idFormulario = useId();
   const { datos, indices, codigoColmena } = useDatos();
@@ -151,6 +153,7 @@ export default function FormularioInspeccion({ inspeccion, colmenaInicial, onGua
       return onGuardar(
         {
           ...datos,
+          ...(sesionRevisionId ? { sesion_revision_id: sesionRevisionId } : {}),
           cantidad_marcos: totalMarcos(v),
           tiene_alza: v.tieneAlza,
           marcos: detalleMarcos(v),
@@ -171,7 +174,13 @@ export default function FormularioInspeccion({ inspeccion, colmenaInicial, onGua
   return (
     <Modal
       titulo={esEdicion ? "Editar inspección" : "Registrar inspección"}
-      descripcion={esEdicion ? `Colmena ${codigoColmena(inspeccion.colmena_id)}` : undefined}
+      descripcion={
+        esEdicion
+          ? `Colmena ${codigoColmena(inspeccion.colmena_id)}`
+          : sesionRevisionId
+            ? [`Colmena ${codigoColmena(Number(valores.colmena_id))}`, contexto].filter(Boolean).join(" · ")
+            : undefined
+      }
       onCerrar={onCerrar}
       ancho={esEdicion ? "sm:max-w-2xl" : "sm:max-w-4xl"}
       pie={
@@ -198,7 +207,7 @@ export default function FormularioInspeccion({ inspeccion, colmenaInicial, onGua
       }
     >
       <form ref={refFormulario} id={idFormulario} onSubmit={enviar} noValidate className="grid gap-5">
-        {!esEdicion && (
+        {!esEdicion && !sesionRevisionId && (
           <SelectorApiarioColmena
             apiarioId={valores.apiario_id}
             colmenaId={valores.colmena_id}

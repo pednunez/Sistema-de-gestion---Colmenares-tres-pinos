@@ -11,13 +11,7 @@ const MAXIMO_POR_VEZ = 100;
 
 // Elegir colmenas del mismo apiario para agregarlas al grupo. "grupoDe" indica en
 // qué otro grupo está cada colmena: el backend la mueve y conserva el historial.
-export default function AsignarColmenas({
-  grupo,
-  idsEnGrupo,
-  grupoDe,
-  onGuardar,
-  onCerrar,
-}) {
+export default function AsignarColmenas({ grupo, idsEnGrupo, grupoDe, onGuardar, onCerrar }) {
   const idTitulo = useId();
   const { datos } = useDatos();
   const [seleccion, setSeleccion] = useState([]);
@@ -28,33 +22,18 @@ export default function AsignarColmenas({
   const disponibles = useMemo(() => {
     const termino = busqueda.trim().toLowerCase();
     return datos.colmenas
-      .filter(
-        (c) =>
-          c.apiario_id === grupo.apiario_id &&
-          colmenaOperativa(c) &&
-          !idsEnGrupo.has(c.id),
-      )
+      .filter((c) => c.apiario_id === grupo.apiario_id && colmenaOperativa(c) && !idsEnGrupo.has(c.id))
       .filter((c) => !termino || c.codigo.toLowerCase().includes(termino))
-      .sort((a, b) =>
-        a.codigo.localeCompare(b.codigo, "es", { numeric: true }),
-      );
+      .sort((a, b) => a.codigo.localeCompare(b.codigo, "es", { numeric: true }));
   }, [datos.colmenas, grupo.apiario_id, idsEnGrupo, busqueda]);
 
-  const alternar = (id) =>
-    setSeleccion((s) =>
-      s.includes(id) ? s.filter((otro) => otro !== id) : [...s, id],
-    );
-  const sinGrupo = disponibles
-    .filter((c) => !grupoDe.has(c.id))
-    .map((c) => c.id);
+  const alternar = (id) => setSeleccion((s) => (s.includes(id) ? s.filter((otro) => otro !== id) : [...s, id]));
+  const sinGrupo = disponibles.filter((c) => !grupoDe.has(c.id)).map((c) => c.id);
   const moviendo = seleccion.filter((id) => grupoDe.has(id)).length;
 
   const guardar = async () => {
     if (seleccion.length === 0) return setError("Elige al menos una colmena.");
-    if (seleccion.length > MAXIMO_POR_VEZ)
-      return setError(
-        `Puedes agregar hasta ${MAXIMO_POR_VEZ} colmenas por vez.`,
-      );
+    if (seleccion.length > MAXIMO_POR_VEZ) return setError(`Puedes agregar hasta ${MAXIMO_POR_VEZ} colmenas por vez.`);
     setEnviando(true);
     setError("");
     try {
@@ -74,21 +53,14 @@ export default function AsignarColmenas({
       pie={
         <>
           {error && (
-            <p
-              role="alert"
-              className="text-sm text-red-700 sm:mr-auto sm:self-center"
-            >
+            <p role="alert" className="text-sm text-red-700 sm:mr-auto sm:self-center">
               {error}
             </p>
           )}
           <Boton variante="secundario" onClick={onCerrar}>
             Cancelar
           </Boton>
-          <Boton
-            onClick={guardar}
-            cargando={enviando}
-            disabled={seleccion.length === 0}
-          >
+          <Boton onClick={guardar} cargando={enviando} disabled={seleccion.length === 0}>
             {seleccion.length === 0
               ? "Agregar colmenas"
               : `Agregar ${seleccion.length} ${seleccion.length === 1 ? "colmena" : "colmenas"}`}
@@ -110,9 +82,7 @@ export default function AsignarColmenas({
             <Boton
               variante="secundario"
               tamano="sm"
-              onClick={() =>
-                setSeleccion((s) => [...new Set([...s, ...sinGrupo])])
-              }
+              onClick={() => setSeleccion((s) => [...new Set([...s, ...sinGrupo])])}
             >
               {sinGrupo.length === 1 ? "Elegir la que no tiene grupo" : `Elegir las ${sinGrupo.length} sin grupo`}
             </Boton>
@@ -121,11 +91,8 @@ export default function AsignarColmenas({
 
         {moviendo > 0 && (
           <Alerta tipo="aviso">
-            {moviendo === 1
-              ? "1 colmena elegida está"
-              : `${moviendo} colmenas elegidas están`}{" "}
-            en otro grupo y se moverá{moviendo === 1 ? "" : "n"} a{" "}
-            {grupo.nombre}.
+            {moviendo === 1 ? "1 colmena elegida está" : `${moviendo} colmenas elegidas están`} en otro grupo y se
+            moverá{moviendo === 1 ? "" : "n"} a {grupo.nombre}.
           </Alerta>
         )}
 
@@ -144,9 +111,7 @@ export default function AsignarColmenas({
                 <li key={c.id}>
                   <label
                     className={`flex min-h-12 cursor-pointer items-center gap-3 rounded-xl border px-3 py-2 ${
-                      marcada
-                        ? "border-amber-400 bg-amber-50"
-                        : "border-slate-200 bg-white hover:bg-slate-50"
+                      marcada ? "border-amber-400 bg-amber-50" : "border-slate-200 bg-white hover:bg-slate-50"
                     }`}
                   >
                     <input

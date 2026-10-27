@@ -13,29 +13,16 @@ import { ESTADO_COLMENA } from "../../utils/etiquetas";
 import { formatearFecha } from "../../utils/formato";
 
 // Ficha del grupo con sus colmenas. El administrador agrega o retira colmenas.
-export default function DetalleGrupo({
-  grupoId,
-  gruposDelApiario,
-  puedeEditar,
-  onEditar,
-  onCambio,
-  onCerrar,
-}) {
+export default function DetalleGrupo({ grupoId, gruposDelApiario, puedeEditar, onEditar, onCambio, onCerrar }) {
   const { nombreApiario } = useDatos();
   const avisos = useAvisos();
   const [version, setVersion] = useState(0);
   const [asignando, setAsignando] = useState(null);
   const [retirando, setRetirando] = useState(null);
-  const consulta = useConsulta(
-    () => gruposService.obtener(grupoId),
-    [grupoId, version],
-  );
+  const consulta = useConsulta(() => gruposService.obtener(grupoId), [grupoId, version]);
   const grupo = consulta.datos;
 
-  const idsEnGrupo = useMemo(
-    () => new Set((grupo?.colmenas ?? []).map((c) => c.colmena_id)),
-    [grupo],
-  );
+  const idsEnGrupo = useMemo(() => new Set((grupo?.colmenas ?? []).map((c) => c.colmena_id)), [grupo]);
 
   // Para avisar si una colmena ya está en otro grupo del apiario, se consulta el
   // detalle de los otros grupos al abrir "Agregar colmenas".
@@ -43,12 +30,8 @@ export default function DetalleGrupo({
     const otros = gruposDelApiario.filter((g) => g.id !== grupoId);
     const grupoDe = new Map();
     try {
-      const detalles = await Promise.all(
-        otros.map((g) => gruposService.obtener(g.id)),
-      );
-      for (const detalle of detalles)
-        for (const c of detalle.colmenas ?? [])
-          grupoDe.set(c.colmena_id, detalle.nombre);
+      const detalles = await Promise.all(otros.map((g) => gruposService.obtener(g.id)));
+      for (const detalle of detalles) for (const c of detalle.colmenas ?? []) grupoDe.set(c.colmena_id, detalle.nombre);
     } catch {
       // Si no se puede saber, se asigna igual: el backend mueve la colmena de grupo.
     }
@@ -57,9 +40,7 @@ export default function DetalleGrupo({
 
   const asignar = async (ids) => {
     await gruposService.asignarColmenas(grupoId, ids);
-    avisos.exito(
-      `${ids.length} ${ids.length === 1 ? "colmena agregada" : "colmenas agregadas"} a ${grupo.nombre}.`,
-    );
+    avisos.exito(`${ids.length} ${ids.length === 1 ? "colmena agregada" : "colmenas agregadas"} a ${grupo.nombre}.`);
     setAsignando(null);
     setVersion((v) => v + 1);
     onCambio();
@@ -97,11 +78,7 @@ export default function DetalleGrupo({
             </Boton>
             {puedeEditar && grupo?.activo && (
               <>
-                <Boton
-                  variante="secundario"
-                  icono={Pencil}
-                  onClick={() => onEditar(grupo)}
-                >
+                <Boton variante="secundario" icono={Pencil} onClick={() => onEditar(grupo)}>
                   Editar
                 </Boton>
                 <Boton icono={Plus} onClick={abrirAsignar}>
@@ -113,26 +90,15 @@ export default function DetalleGrupo({
         }
       >
         {consulta.cargando && !grupo && <Cargando texto="Cargando grupo..." />}
-        {consulta.error && (
-          <ErrorCarga
-            mensaje={consulta.error}
-            onReintentar={consulta.recargar}
-          />
-        )}
+        {consulta.error && <ErrorCarga mensaje={consulta.error} onReintentar={consulta.recargar} />}
         {grupo && (
           <div className="grid gap-4">
-            {grupo.descripcion && (
-              <p className="text-sm text-slate-600">{grupo.descripcion}</p>
-            )}
+            {grupo.descripcion && <p className="text-sm text-slate-600">{grupo.descripcion}</p>}
             {grupo.colmenas.length === 0 ? (
               <EstadoVacio
                 icono={Boxes}
                 titulo="Este grupo no tiene colmenas"
-                texto={
-                  puedeEditar
-                    ? "Usa «Agregar colmenas» para elegirlas."
-                    : "Un administrador puede asignarlas."
-                }
+                texto={puedeEditar ? "Usa «Agregar colmenas» para elegirlas." : "Un administrador puede asignarlas."}
               />
             ) : (
               <ul className="grid gap-2 sm:grid-cols-2">
@@ -143,9 +109,7 @@ export default function DetalleGrupo({
                   >
                     <div className="min-w-0">
                       <p className="font-semibold">{c.codigo}</p>
-                      <p className="text-xs text-slate-500">
-                        Desde {formatearFecha(c.fecha_asignacion)}
-                      </p>
+                      <p className="text-xs text-slate-500">Desde {formatearFecha(c.fecha_asignacion)}</p>
                     </div>
                     <div className="flex items-center gap-1">
                       <InsigniaDe mapa={ESTADO_COLMENA} valor={c.estado} />

@@ -11,13 +11,7 @@ const LARGO_NOMBRE = 60;
 const LARGO_DESCRIPCION = 500;
 
 // Crear o renombrar un grupo. El apiario no se cambia después de crearlo.
-export default function FormularioGrupo({
-  grupo,
-  apiarioInicial,
-  gruposExistentes = [],
-  onGuardar,
-  onCerrar,
-}) {
+export default function FormularioGrupo({ grupo, apiarioInicial, gruposExistentes = [], onGuardar, onCerrar }) {
   const esEdicion = Boolean(grupo?.id);
   const idFormulario = useId();
   const { datos, nombreApiario } = useDatos();
@@ -34,7 +28,7 @@ export default function FormularioGrupo({
       (otro) =>
         otro.id !== grupo?.id &&
         String(otro.apiario_id) === String(v.apiario_id) &&
-        otro.nombre.toLowerCase() === nombre.toLowerCase(),
+        otro.nombre.toLowerCase() === nombre.toLowerCase()
     );
     return {
       apiario_id: !v.apiario_id && "Selecciona el apiario del grupo.",
@@ -43,9 +37,7 @@ export default function FormularioGrupo({
         : nombre.length > LARGO_NOMBRE
           ? `El nombre no puede superar los ${LARGO_NOMBRE} caracteres.`
           : repetido && "Ya existe un grupo con ese nombre en este apiario.",
-      descripcion:
-        v.descripcion.length > LARGO_DESCRIPCION &&
-        `Máximo ${LARGO_DESCRIPCION} caracteres.`,
+      descripcion: v.descripcion.length > LARGO_DESCRIPCION && `Máximo ${LARGO_DESCRIPCION} caracteres.`,
     };
   };
 
@@ -54,11 +46,7 @@ export default function FormularioGrupo({
     formulario.enviar(validar, (v) => {
       const nombre = v.nombre.trim().replace(/\s+/g, " ");
       const descripcion = textoONulo(v.descripcion);
-      return onGuardar(
-        esEdicion
-          ? { nombre, descripcion }
-          : { apiario_id: Number(v.apiario_id), nombre, descripcion },
-      );
+      return onGuardar(esEdicion ? { nombre, descripcion } : { apiario_id: Number(v.apiario_id), nombre, descripcion });
     });
   };
 
@@ -66,9 +54,7 @@ export default function FormularioGrupo({
     <Modal
       titulo={esEdicion ? `Editar ${grupo.nombre}` : "Nuevo grupo"}
       descripcion={
-        esEdicion
-          ? nombreApiario(grupo.apiario_id)
-          : "Agrupa colmenas de un apiario para revisarlas juntas."
+        esEdicion ? nombreApiario(grupo.apiario_id) : "Agrupa colmenas de un apiario para revisarlas juntas."
       }
       onCerrar={onCerrar}
       pie={
@@ -76,22 +62,13 @@ export default function FormularioGrupo({
           <Boton variante="secundario" onClick={onCerrar}>
             Cancelar
           </Boton>
-          <Boton
-            type="submit"
-            form={idFormulario}
-            cargando={formulario.enviando}
-          >
+          <Boton type="submit" form={idFormulario} cargando={formulario.enviando}>
             {esEdicion ? "Guardar cambios" : "Crear grupo"}
           </Boton>
         </>
       }
     >
-      <form
-        id={idFormulario}
-        onSubmit={enviar}
-        noValidate
-        className="grid gap-4"
-      >
+      <form id={idFormulario} onSubmit={enviar} noValidate className="grid gap-4">
         {formulario.errorGeneral && <Alerta>{formulario.errorGeneral}</Alerta>}
         {!esEdicion && (
           <Seleccion
