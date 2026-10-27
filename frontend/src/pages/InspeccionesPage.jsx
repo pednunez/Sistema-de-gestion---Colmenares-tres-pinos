@@ -14,7 +14,6 @@ import { useAvisos } from "../hooks/useAvisos";
 import { useDatos } from "../hooks/useDatos";
 import { useNavegacion } from "../hooks/useNavegacion";
 import { inspeccionesService } from "../services/inspeccionesService";
-import { transferenciasService } from "../services/transferenciasService";
 import { tratamientosService } from "../services/tratamientosService";
 import { ESTADO_GENERAL_TODOS, NIVEL, NIVEL_MIEL, opciones, siNo, texto } from "../utils/etiquetas";
 import { formatearFechaHora, hoyISO, humanizar } from "../utils/formato";
@@ -34,7 +33,7 @@ export default function InspeccionesPage() {
   const [formulario, setFormulario] = useState(parametros.nuevaPara ? { colmenaInicial: parametros.nuevaPara } : null);
   const [aDarDeBaja, setADarDeBaja] = useState(null);
   const [detalle, setDetalle] = useState(null);
-  // Lo que no se pudo guardar después de la inspección (transferencias o tratamientos).
+  // Tratamientos que no se pudieron finalizar después de guardar la inspección.
   const [pendientes, setPendientes] = useState(null);
 
   const filtradas = useMemo(() => {
@@ -50,8 +49,6 @@ export default function InspeccionesPage() {
 
   const puedeGestionar = (inspeccion) => esAdmin || inspeccion.usuario_id === usuario.id;
 
-  // Las transferencias marcadas en la revisión de marcos se guardan después de la
-  // inspección, que es la que deja en la colmena la cantidad de marcos de la que se descuentan.
   // Finaliza con fecha de hoy los tratamientos marcados en la inspección.
   const finalizarTratamientos = async (ids) => {
     const fallidos = [];
@@ -69,7 +66,10 @@ export default function InspeccionesPage() {
   const textoFinalizados = (cantidad) =>
     cantidad > 0 ? ` ${cantidad === 1 ? "Se finalizó 1 tratamiento" : `Se finalizaron ${cantidad} tratamientos`}.` : "";
 
-  const guardar = async (valores, transferencias = [], finalizar = []) => {
+  // Las transferencias marcadas en la revisión de marcos viajan dentro de la
+  // inspección (marcos[].transferido_a_colmena_id) y el backend las crea en la
+  // misma operación: si algo falla, no se guarda nada y el formulario muestra el error.
+  const guardar = async (valores, cantidadTransferencias = 0, finalizar = []) => {
     if (formulario?.inspeccion) {
       // Al editar, el backend no permite cambiar la colmena.
       const cambios = { ...valores };
@@ -80,40 +80,24 @@ export default function InspeccionesPage() {
       await recargar().catch(() => {});
       setFormulario(null);
       const codigo = codigoColmena(formulario.inspeccion.colmena_id);
-      setPendientes(tratamientosFallidos.length > 0 ? { codigo, transferencias: [], tratamientos: tratamientosFallidos } : null);
+      setPendientes(tratamientosFallidos.length > 0 ? { codigo, tratamientos: tratamientosFallidos } : null);
       return;
     }
 
     // El backend reemplaza usuario_id por el usuario de la sesión; se envía porque el esquema lo exige.
-    const inspeccion = await inspeccionesService.crear({ ...valores, usuario_id: usuario.id });
-
-    // Desde aquí la inspección ya existe: un fallo en una transferencia no debe
-    // hacer que el formulario se reenvíe y la duplique.
-    const fallidas = [];
-    for (const transferencia of transferencias) {
-      try {
-        await transferenciasService.crear({ ...transferencia, usuario_id: usuario.id, inspeccion_id: inspeccion.id });
-      } catch (error) {
-        fallidas.push({ ...transferencia, mensaje: error.message });
-      }
-    }
+    await inspeccionesService.crear({ ...valores, usuario_id: usuario.id });
     const tratamientosFallidos = await finalizarTratamientos(finalizar);
 
     await recargar().catch(() => {});
     setFormulario(null);
 
-    const guardadas = transferencias.length - fallidas.length;
     const codigo = codigoColmena(valores.colmena_id);
     avisos.exito(
-      (guardadas > 0
-        ? `Inspección de ${codigo} registrada con ${guardadas} ${guardadas === 1 ? "transferencia" : "transferencias"}.`
+      (cantidadTransferencias > 0
+        ? `Inspección de ${codigo} registrada con ${cantidadTransferencias} ${cantidadTransferencias === 1 ? "transferencia" : "transferencias"}.`
         : `Inspección de ${codigo} registrada.`) + textoFinalizados(finalizar.length - tratamientosFallidos.length)
     );
-    setPendientes(
-      fallidas.length > 0 || tratamientosFallidos.length > 0
-        ? { codigo, transferencias: fallidas, tratamientos: tratamientosFallidos }
-        : null
-    );
+    setPendientes(tratamientosFallidos.length > 0 ? { codigo, tratamientos: tratamientosFallidos } : null);
   };
 
   const darDeBaja = async () => {
@@ -145,12 +129,6 @@ export default function InspeccionesPage() {
               La inspección de {pendientes.codigo} quedó guardada, pero no se pudo completar lo siguiente:
             </p>
             <ul className="mt-2 list-disc pl-5">
-              {pendientes.transferencias.map((fallida) => (
-                <li key={`${fallida.ubicacion}-${fallida.numero_marco}`}>
-                  Transferencia: {fallida.observaciones.replace(/\.$/, "")}, hacia {codigoColmena(fallida.colmena_destino_id)}.{" "}
-                  {fallida.mensaje}
-                </li>
-              ))}
               {pendientes.tratamientos.map((fallido) => (
                 <li key={fallido.id}>
                   Finalizar el tratamiento {fallido.nombre}. {fallido.mensaje} Puedes finalizarlo desde Tratamientos.

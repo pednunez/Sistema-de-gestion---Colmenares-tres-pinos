@@ -1,7 +1,6 @@
 // Registro unitario de marcos durante una inspección: una caja (cámara de cría
 // o alza) tiene 10 posiciones y cada una guarda su contenido y, si corresponde,
 // la colmena a la que se transfiere ese marco.
-import { CONTENIDO_MARCO, UBICACION_MARCO, texto } from "./etiquetas";
 
 export const MARCOS_POR_CAJA = 10;
 export const SIN_MARCO = "SIN_MARCO";
@@ -35,16 +34,6 @@ export function marcosATransferir(caja) {
   return caja.filter((marco) => tieneMarco(marco) && marco.transferir);
 }
 
-// El backend clasifica las transferencias con un tipo de marco más general.
-const TIPO_POR_CONTENIDO = {
-  MIEL_Y_CRIA: "CRIA",
-  SOLO_CRIA: "CRIA",
-  SOLO_MIEL: "MIEL",
-  CERA_ESTIRADA: "VACIO",
-  CERA_ESTAMPADA: "VACIO",
-  CERA_UNTADA: "VACIO",
-};
-
 function cajasRegistradas({ camara, tieneAlza, alza }) {
   const cajas = [{ ubicacion: "CAMARA_CRIA", marcos: camara }];
   if (tieneAlza) cajas.push({ ubicacion: "ALZA", marcos: alza });
@@ -71,24 +60,11 @@ export function detalleMarcos(registro) {
   );
 }
 
-// Una transferencia por cada marco marcado para salir de la colmena inspeccionada.
-export function planDeTransferencias(registro, colmenaOrigenId) {
-  return cajasRegistradas(registro).flatMap((caja) =>
-    marcosATransferir(caja.marcos).map((marco) => ({
-      colmena_origen_id: Number(colmenaOrigenId),
-      colmena_destino_id: Number(marco.destino),
-      cantidad_marcos: 1,
-      tipo_marco: TIPO_POR_CONTENIDO[marco.contenido] ?? "OTRO",
-      motivo: "Transferencia registrada durante la inspección",
-      observaciones: `Marco ${marco.numero} de ${texto(UBICACION_MARCO, caja.ubicacion).toLowerCase()}: ${texto(
-        CONTENIDO_MARCO,
-        marco.contenido
-      ).toLowerCase()}.`,
-      ubicacion: caja.ubicacion,
-      numero_marco: marco.numero,
-      contenido: marco.contenido,
-    }))
-  );
+// Cantidad de marcos marcados para salir de la colmena inspeccionada. El backend
+// crea esas transferencias al guardar la inspección, a partir de
+// marcos[].transferido_a_colmena_id, en la misma operación.
+export function contarTransferencias(registro) {
+  return cajasRegistradas(registro).reduce((total, caja) => total + marcosATransferir(caja.marcos).length, 0);
 }
 
 // Devuelve el mensaje de error de una caja, o "" si está bien.

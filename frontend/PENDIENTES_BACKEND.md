@@ -1,6 +1,6 @@
 # Pendientes del backend para el frontend de escritorio
 
-Actualizado el 26-10-2026: estado de la colmena (sección 6) y finalizar tratamientos desde la inspección (sección 7).
+Actualizado el 27-10-2026: las transferencias de la inspección las crea el backend (sección 3).
 
 ## 1. Detalle por marco en la inspección (bloquea el guardado)
 
@@ -39,15 +39,9 @@ Cuando la inspección registra signos de enfermedad, el frontend pide cuántas t
 - Entero de 1 a 3, o `null` si no se aplicaron o no hay signos de enfermedad.
 - Hoy el backend lo ignora porque `InspeccionCreate` e `InspeccionUpdate` no lo definen. Falta agregarlo al modelo, a los esquemas (con validación de 1 a 3) y a `InspeccionResponse`.
 
-## 3. Transferencias dentro de la inspección
+## 3. Transferencias dentro de la inspección (resuelto, 27-10)
 
-Hoy el frontend crea la inspección y después hace un `POST /transferencias-marcos/` por cada marco marcado con «Transferir» (cantidad 1). Funciona, pero:
-
-- **No es atómico:** si una transferencia falla, la inspección ya quedó guardada. Lo ideal es que el backend cree las transferencias a partir de `marcos[].transferido_a_colmena_id` en la misma transacción de la inspección.
-- **Sin vínculo:** el frontend envía `inspeccion_id`, `ubicacion`, `numero_marco` y `contenido` en cada transferencia, pero `TransferenciaMarcoCreate` no los define y se pierden. Por ahora el detalle queda como texto en `observaciones`.
-- **Tipo de marco:** se traduce el contenido a `tipo_marco` así: cría o miel y cría → `CRIA`; solo miel → `MIEL`; cera estirada, estampada o untada → `VACIO`.
-
-Si el backend pasa a crear las transferencias, avisar para quitar esas llamadas del frontend y no duplicarlas.
+El backend crea las transferencias al guardar la inspección, a partir de `marcos[].transferido_a_colmena_id`, en la misma operación. El frontend ya **no** envía `POST /transferencias-marcos/` después de la inspección: si el destino no es válido, la inspección no se guarda y el formulario muestra el error del backend.
 
 ## 4. Otros pendientes
 

@@ -13,7 +13,7 @@ import {
   crearCaja,
   detalleMarcos,
   marcosATransferir,
-  planDeTransferencias,
+  contarTransferencias,
   totalMarcos,
   validarCaja,
 } from "../../utils/marcos";
@@ -57,7 +57,7 @@ function opcionesMiel(valorActual) {
 }
 
 // Al registrar una inspección se revisan los marcos uno por uno. Las transferencias
-// marcadas en esa revisión se guardan junto con la inspección.
+// marcadas en esa revisión las crea el backend al guardar la inspección.
 export default function FormularioInspeccion({ inspeccion, colmenaInicial, onGuardar, onCerrar }) {
   const esEdicion = Boolean(inspeccion?.id);
   const idFormulario = useId();
@@ -146,7 +146,7 @@ export default function FormularioInspeccion({ inspeccion, colmenaInicial, onGua
         tiras_medicamento: v.signos_enfermedad ? v.tiras_medicamento : null,
         observaciones: textoONulo(v.observaciones),
       };
-      if (esEdicion) return onGuardar(datos, [], v.finalizar);
+      if (esEdicion) return onGuardar(datos, 0, v.finalizar);
 
       return onGuardar(
         {
@@ -155,7 +155,7 @@ export default function FormularioInspeccion({ inspeccion, colmenaInicial, onGua
           tiene_alza: v.tieneAlza,
           marcos: detalleMarcos(v),
         },
-        planDeTransferencias(v, v.colmena_id),
+        contarTransferencias(v),
         v.finalizar
       );
     });
