@@ -60,6 +60,14 @@ class Inspeccion(Base):
             "tiras_medicamento BETWEEN 1 AND 3",
             name="ck_inspecciones_tiras_medicamento"
         ),
+        # Escala nueva (H005-E4) y la anterior, para leer
+        # inspecciones antiguas. Migracion b3d7f9a2c5e8.
+        CheckConstraint(
+            "estado_general IS NULL OR estado_general IN ("
+            "'COMPLETA', 'EN_DESARROLLO', 'DONANTE', 'DEBIL', "
+            "'REQUIERE_REVISION', 'BUENO', 'REGULAR', 'CRITICO')",
+            name="inspecciones_estado_general_check"
+        ),
         Index(
             "idx_inspecciones_colmena",
             "colmena_id",
