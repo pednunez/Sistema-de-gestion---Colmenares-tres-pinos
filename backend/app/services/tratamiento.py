@@ -91,6 +91,13 @@ def obtener_inspeccion(
 # CREAR TRATAMIENTO
 # ==========================================================
 
+def obtener_por_id_cliente(db: Session, id_cliente) -> Tratamiento | None:
+    """Tratamiento ya sincronizado con ese id del telefono."""
+    return db.scalar(
+        select(Tratamiento).where(Tratamiento.id_cliente == id_cliente)
+    )
+
+
 def crear_tratamiento(
     db: Session,
     datos: TratamientoCreate
@@ -106,7 +113,8 @@ def crear_tratamiento(
         fecha_inicio=datos.fecha_inicio,
         fecha_fin=datos.fecha_fin,
         estado=datos.estado,
-        observaciones=datos.observaciones
+        observaciones=datos.observaciones,
+        id_cliente=datos.id_cliente
     )
 
     db.add(tratamiento)

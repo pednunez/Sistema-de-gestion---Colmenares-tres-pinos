@@ -4,8 +4,9 @@ from decimal import Decimal
 from enum import Enum
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import inspect as sa_inspect
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import (
@@ -23,6 +24,7 @@ from app.schemas.inspeccion import (
 from app.schemas.auditoria import AuditoriaCreate
 
 from app.services import inspeccion as inspeccion_service
+from app.services import revision as revision_service
 from app.services import auditoria as auditoria_service
 
 
@@ -132,6 +134,29 @@ def obtener_inspeccion(
 
 
 # ==========================================================
+# SINCRONIZACIÓN DESDE LA APP MÓVIL
+# ==========================================================
+#
+# Si el id_cliente ya llegó antes (la app reintentó porque
+# se cortó la señal), se devuelve el registro existente con
+# 200 en vez de crear otro. Un id_cliente de otro usuario
+# se rechaza: no se entrega un registro ajeno.
+# ==========================================================
+
+def registro_ya_sincronizado(registro, usuario: Usuario, response: Response):
+
+    if registro.usuario_id != usuario.id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="El id_cliente ya fue usado por otro usuario"
+        )
+
+    response.status_code = status.HTTP_200_OK
+
+    return registro
+
+
+# ==========================================================
 # CREAR INSPECCIÓN
 # ==========================================================
 
@@ -142,11 +167,26 @@ def obtener_inspeccion(
 )
 def crear_inspeccion(
     datos: InspeccionCreate,
+    response: Response,
     db: Session = Depends(get_db),
     usuario_actual: Usuario = Depends(
         obtener_usuario_actual
     ),
 ):
+    # ------------------------------------------------------
+    # REINTENTO DE SINCRONIZACIÓN
+    # ------------------------------------------------------
+
+    if datos.id_cliente is not None:
+
+        existente = inspeccion_service.obtener_por_id_cliente(
+            db,
+            datos.id_cliente,
+        )
+
+        if existente is not None:
+            return registro_ya_sincronizado(existente, usuario_actual, response)
+
     # ------------------------------------------------------
     # VALIDAR COLMENA
     # ------------------------------------------------------
@@ -163,6 +203,44 @@ def crear_inspeccion(
                 "La colmena indicada no existe o está inactiva"
             ),
         )
+
+    # ------------------------------------------------------
+    # REVISIÓN POR GRUPO ("GUARDAR Y SIGUIENTE")
+    # ------------------------------------------------------
+
+    fila_sesion = None
+
+    if datos.sesion_revision_id is not None:
+
+        sesion = revision_service.obtener_sesion(db, datos.sesion_revision_id)
+
+        if sesion is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Sesión de revisión no encontrada",
+            )
+
+        verificar_autor_o_admin(usuario_actual, sesion.usuario_id)
+
+        if sesion.estado != "EN_CURSO":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="La sesión de revisión ya fue finalizada",
+            )
+
+        fila_sesion = revision_service.fila_de_colmena(db, sesion.id, datos.colmena_id)
+
+        if fila_sesion is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="La colmena no forma parte de esta sesión de revisión",
+            )
+
+        if fila_sesion.estado == "REVISADA":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="La colmena ya fue revisada en esta sesión",
+            )
 
     # ------------------------------------------------------
     # UTILIZAR EL USUARIO DEL JWT
@@ -185,6 +263,9 @@ def crear_inspeccion(
             datos_seguros,
             commit=False,
         )
+
+        if fila_sesion is not None:
+            revision_service.marcar_revisada(db, fila_sesion, inspeccion.id)
 
         # Crear la auditoría sin hacer commit.
         auditoria_service.registrar_auditoria(
@@ -214,6 +295,21 @@ def crear_inspeccion(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=str(error),
         ) from error
+
+    except IntegrityError:
+        db.rollback()
+
+        # Dos envíos simultáneos del mismo id_cliente: gana el primero.
+        existente = (
+            inspeccion_service.obtener_por_id_cliente(db, datos.id_cliente)
+            if datos.id_cliente is not None
+            else None
+        )
+
+        if existente is None:
+            raise
+
+        return registro_ya_sincronizado(existente, usuario_actual, response)
 
     except Exception:
         db.rollback()

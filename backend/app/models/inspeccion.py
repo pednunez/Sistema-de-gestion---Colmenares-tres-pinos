@@ -1,4 +1,5 @@
 from datetime import datetime
+from uuid import UUID
 
 from sqlalchemy import (
     BigInteger,
@@ -13,6 +14,7 @@ from sqlalchemy import (
     Text,
     text,
 )
+from sqlalchemy.dialects.postgresql import UUID as PG_UUID
 from sqlalchemy.orm import (
     Mapped,
     mapped_column,
@@ -58,9 +60,22 @@ class Inspeccion(Base):
             "tiras_medicamento BETWEEN 1 AND 3",
             name="ck_inspecciones_tiras_medicamento"
         ),
+        # Escala nueva (H005-E4) y la anterior, para leer
+        # inspecciones antiguas. Migracion b3d7f9a2c5e8.
+        CheckConstraint(
+            "estado_general IS NULL OR estado_general IN ("
+            "'COMPLETA', 'EN_DESARROLLO', 'DONANTE', 'DEBIL', "
+            "'REQUIERE_REVISION', 'BUENO', 'REGULAR', 'CRITICO')",
+            name="inspecciones_estado_general_check"
+        ),
         Index(
             "idx_inspecciones_colmena",
             "colmena_id",
+        ),
+        Index(
+            "uq_inspecciones_id_cliente",
+            "id_cliente",
+            unique=True,
         ),
         Index(
             "idx_inspecciones_fecha",
@@ -269,6 +284,19 @@ class Inspeccion(Base):
     observaciones: Mapped[str | None] = mapped_column(
         Text,
         nullable=True
+    )
+
+    # ======================================================
+    # ID GENERADO EN EL TELEFONO (SINCRONIZACION)
+    # ======================================================
+    #
+    # La app movil lo envia al sincronizar. Si llega dos
+    # veces, la API devuelve el registro ya creado.
+    # ======================================================
+
+    id_cliente: Mapped[UUID | None] = mapped_column(
+        PG_UUID(as_uuid=True),
+        nullable=True,
     )
 
     # ======================================================
