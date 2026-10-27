@@ -24,6 +24,7 @@ from app.schemas.auth import (
     RestablecerPasswordRequest,
     SolicitarRecuperacionPasswordRequest,
     LoginResponse,
+    TokenMovilResponse,
     UsuarioAutenticado
 )
 
@@ -95,6 +96,67 @@ def login(
         samesite=settings.SESSION_COOKIE_SAMESITE)
     return LoginResponse(usuario=UsuarioAutenticado(id=usuario.id, nombre=usuario.nombre,
         email=usuario.email, rol=usuario.rol), csrf_token=csrf)
+
+
+# ==========================================================
+# LOGIN DE LA APP MOVIL
+# ==========================================================
+#
+# Devuelve el token en el cuerpo para la app nativa, que lo
+# envia como Authorization: Bearer. Sin cookie no hay CSRF
+# que validar.
+#
+# Un navegador siempre envia Origin en un POST; la app nativa
+# no. Se rechaza cualquier peticion con Origin para que una
+# pagina web no obtenga un token legible por JavaScript: la
+# web usa /auth/login (cookie HttpOnly).
+# ==========================================================
+
+@router.post(
+    "/token",
+    response_model=TokenMovilResponse
+)
+def login_movil(
+    datos: LoginRequest,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db)
+):
+    if request.headers.get("origin") is not None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Este acceso es solo para la app móvil; la web usa /auth/login"
+        )
+
+    usuario = auth_service.autenticar_usuario(
+        db,
+        datos.email,
+        datos.password
+    )
+
+    auditoria_service.registrar_auditoria(db, AuditoriaCreate(
+        usuario_id=usuario.id if usuario else None,
+        entidad="sesion", entidad_id=usuario.id if usuario else None,
+        accion="CREAR", datos_nuevos={"evento": "LOGIN_MOVIL", "resultado": "EXITO" if usuario else "FALLO"}))
+    if usuario is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Correo o contraseña incorrectos"
+        )
+
+    token = crear_access_token(
+        usuario_id=usuario.id,
+        email=usuario.email,
+        rol=usuario.rol,
+        version_sesion=usuario.version_sesion
+    )
+    response.headers["Cache-Control"] = "no-store"
+    return TokenMovilResponse(
+        access_token=token,
+        expira_en=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        usuario=UsuarioAutenticado(id=usuario.id, nombre=usuario.nombre,
+            email=usuario.email, rol=usuario.rol)
+    )
 
 
 @router.get("/csrf")
