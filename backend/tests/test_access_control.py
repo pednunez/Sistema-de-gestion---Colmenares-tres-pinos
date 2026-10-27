@@ -72,14 +72,14 @@ class AccessControlTests(unittest.TestCase):
         self.connection.start()
         self.addCleanup(self.connection.stop)
         prefixes = ('/apiarios', '/colmenas', '/inspecciones', '/tratamientos',
-                    '/transferencias', '/historial', '/grupos')
+                    '/transferencias', '/historial', '/grupos', '/movil')
         self.paths = []
         for path, methods in app.openapi()['paths'].items():
             if path.startswith(prefixes) and 'get' in methods:
                 import re
                 path = path.replace('{codigo_qr}', '00000000-0000-0000-0000-000000000001')
                 self.paths.append(re.sub(r'\{[^}]+\}', '1', path))
-        self.assertEqual(len(self.paths), 17)
+        self.assertEqual(len(self.paths), 18)
 
     def token(self, expired=False):
         return jwt.encode({'sub': '1', 'rol': 'ADMIN', 'ver': 0,
@@ -114,7 +114,7 @@ class AccessControlTests(unittest.TestCase):
             for path in self.paths:
                 with self.subTest(role=role, path=path):
                     # Los listados responden 200 con lista vacía; los detalles, 404.
-                    listado = path.endswith('/') or path == '/colmenas/sin-revision'
+                    listado = path.endswith('/') or path in ('/colmenas/sin-revision', '/movil/catalogo')
                     expected = 200 if listado else 404
                     self.assertEqual(self.status(path, self.token()), expected)
 
