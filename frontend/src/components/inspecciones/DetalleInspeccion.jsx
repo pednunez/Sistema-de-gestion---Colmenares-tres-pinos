@@ -1,4 +1,4 @@
-import { ArrowRight, Pencil } from "lucide-react";
+import { ArrowRight, Pencil, Warehouse } from "lucide-react";
 import Modal from "../ui/Modal";
 import Boton from "../ui/Boton";
 import Insignia, { InsigniaDe } from "../ui/Insignia";
@@ -49,6 +49,11 @@ function Caja({ caja, codigoColmena }) {
             {marco.transferido_a_colmena_id && (
               <Insignia tono="ambar" icono={ArrowRight}>
                 {codigoColmena(marco.transferido_a_colmena_id)}
+              </Insignia>
+            )}
+            {marco.retirar_a_bodega && (
+              <Insignia tono="azul" icono={Warehouse}>
+                Bodega
               </Insignia>
             )}
           </li>
@@ -105,7 +110,9 @@ export default function DetalleInspeccion({ inspeccion, puedeEditar, onEditar, o
             <Dato nombre="Población">{texto(NIVEL, inspeccion.nivel_poblacion, "No revisado")}</Dato>
             <Dato nombre="Reservas de alimento">{texto(NIVEL, inspeccion.reservas_alimento, "No revisado")}</Dato>
             <Dato nombre="Alimentación suministrada">{inspeccion.alimentacion_suministrada || "No se alimentó"}</Dato>
-            <Dato nombre="Alza">{siNo(inspeccion.tiene_alza, cajas.some((c) => c.ubicacion === "ALZA") ? "Sí" : "Sin registrar")}</Dato>
+            <Dato nombre="Alza">
+              {siNo(inspeccion.tiene_alza, cajas.some((c) => c.ubicacion === "ALZA") ? "Sí" : "Sin registrar")}
+            </Dato>
           </dl>
         </Seccion>
 
@@ -155,7 +162,10 @@ export default function DetalleInspeccion({ inspeccion, puedeEditar, onEditar, o
             <>
               <ul className="grid gap-2 text-sm">
                 {transferencias.lista.map((t) => (
-                  <li key={t.id} className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 px-3 py-2">
+                  <li
+                    key={t.id}
+                    className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 px-3 py-2"
+                  >
                     <span className="font-semibold">{codigoColmena(t.colmena_origen_id)}</span>
                     <ArrowRight size={16} className="text-amber-500" aria-label="hacia" />
                     <span className="font-semibold">{codigoColmena(t.colmena_destino_id)}</span>

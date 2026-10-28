@@ -9,6 +9,7 @@ import { useFormulario } from "../../hooks/useFormulario";
 import { useDatos } from "../../hooks/useDatos";
 import { ESTADO_GENERAL, ESTADO_GENERAL_ANTERIOR, NIVEL, NIVEL_MIEL, opciones, texto } from "../../utils/etiquetas";
 import { textoONulo } from "../../utils/validacion";
+import { RETIRO_A_BODEGA } from "../../config/funciones";
 import {
   crearCaja,
   detalleMarcos,
@@ -60,7 +61,14 @@ function opcionesMiel(valorActual) {
 // marcadas en esa revisión las crea el backend al guardar la inspección.
 // Con "sesionRevisionId" la inspección se registra dentro de una revisión por grupo:
 // la colmena viene fija y el backend la marca como revisada en esa sesión.
-export default function FormularioInspeccion({ inspeccion, colmenaInicial, sesionRevisionId, contexto, onGuardar, onCerrar }) {
+export default function FormularioInspeccion({
+  inspeccion,
+  colmenaInicial,
+  sesionRevisionId,
+  contexto,
+  onGuardar,
+  onCerrar,
+}) {
   const esEdicion = Boolean(inspeccion?.id);
   const idFormulario = useId();
   const { datos, indices, codigoColmena } = useDatos();
@@ -92,7 +100,8 @@ export default function FormularioInspeccion({ inspeccion, colmenaInicial, sesio
   const { valores, cambiar, errores } = formulario;
 
   const tratamientosEnCurso = useMemo(
-    () => datos.tratamientos.filter((t) => String(t.colmena_id) === String(valores.colmena_id) && t.estado === "EN_CURSO"),
+    () =>
+      datos.tratamientos.filter((t) => String(t.colmena_id) === String(valores.colmena_id) && t.estado === "EN_CURSO"),
     [datos.tratamientos, valores.colmena_id]
   );
   // Los apicultores rotan entre apiarios: quien inspecciona puede finalizar el
@@ -156,7 +165,7 @@ export default function FormularioInspeccion({ inspeccion, colmenaInicial, sesio
           ...(sesionRevisionId ? { sesion_revision_id: sesionRevisionId } : {}),
           cantidad_marcos: totalMarcos(v),
           tiene_alza: v.tieneAlza,
-          marcos: detalleMarcos(v),
+          marcos: detalleMarcos(v, { conRetiro: RETIRO_A_BODEGA }),
         },
         contarTransferencias(v),
         v.finalizar
@@ -191,8 +200,7 @@ export default function FormularioInspeccion({ inspeccion, colmenaInicial, sesio
               {formulario.errorGeneral && <p className="font-medium">{formulario.errorGeneral}</p>}
               {camposConError.length > 0 && (
                 <p>
-                  Revisa lo marcado en rojo:{" "}
-                  {camposConError.map((campo) => NOMBRES_CAMPO[campo] ?? campo).join(", ")}.
+                  Revisa lo marcado en rojo: {camposConError.map((campo) => NOMBRES_CAMPO[campo] ?? campo).join(", ")}.
                 </p>
               )}
             </div>
@@ -235,7 +243,8 @@ export default function FormularioInspeccion({ inspeccion, colmenaInicial, sesio
           />
           {inspeccion?.estado_general in ESTADO_GENERAL_ANTERIOR && (
             <p className="text-sm text-slate-500">
-              Esta inspección tenía el estado «{texto(ESTADO_GENERAL_ANTERIOR, inspeccion.estado_general)}». Elige el estado actual.
+              Esta inspección tenía el estado «{texto(ESTADO_GENERAL_ANTERIOR, inspeccion.estado_general)}». Elige el
+              estado actual.
             </p>
           )}
         </div>
@@ -332,6 +341,7 @@ export default function FormularioInspeccion({ inspeccion, colmenaInicial, sesio
               onCambiar={(caja) => cambiar("camara", caja)}
               colmenaId={valores.colmena_id}
               error={errores.camara}
+              retiroDisponible={RETIRO_A_BODEGA}
             />
 
             <Segmentado
@@ -349,6 +359,7 @@ export default function FormularioInspeccion({ inspeccion, colmenaInicial, sesio
                 onCambiar={(caja) => cambiar("alza", caja)}
                 colmenaId={valores.colmena_id}
                 error={errores.alza}
+                retiroDisponible={RETIRO_A_BODEGA}
               />
             )}
 
@@ -361,7 +372,8 @@ export default function FormularioInspeccion({ inspeccion, colmenaInicial, sesio
                 en la colmena
                 {cantidadTransferencias > 0 && (
                   <>
-                    {" "}y{" "}
+                    {" "}
+                    y{" "}
                     <strong>
                       {cantidadTransferencias} {cantidadTransferencias === 1 ? "transferencia" : "transferencias"}
                     </strong>{" "}

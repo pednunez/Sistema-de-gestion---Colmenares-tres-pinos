@@ -165,3 +165,23 @@ PATCH /tratamientos/{id}
 - Hoy `verificar_autor_o_admin` responde **403** si el apicultor no es el autor. Falta permitir este caso (por ejemplo, que un APICULTOR pueda pasar un tratamiento `EN_CURSO` a `FINALIZADO` con `fecha_fin`, dejando el resto de la edición solo para el autor o un ADMIN). Registrar en auditoría quién lo finalizó.
 - Mientras tanto, si el backend lo rechaza, la inspección queda guardada y el frontend avisa que falta finalizar el tratamiento.
 - Opcional: guardar la inspección en la que se finalizó, para mostrarlo en el detalle.
+
+## 8. Transferencias con límite de 10 marcos y retiro a bodega
+
+Regla definida por el Product Owner (28-10). Detalle completo en el documento "Transferencias con límite de 10 marcos y retiro a bodega".
+
+| Contenido | Acción permitida |
+|---|---|
+| `MIEL_Y_CRIA`, `SOLO_CRIA` | Solo transferir a otra colmena |
+| `CERA_ESTIRADA`, `CERA_UNTADA`, `CERA_ESTAMPADA`, `SOLO_MIEL` | Solo retirar a bodega (entran al stock tal como están) |
+
+**Ya está en el frontend:**
+- "Transferir" solo se habilita en marcos con cría. Si el contenido cambia, la transferencia se quita.
+- "A bodega" en marcos de cera o miel. Está **apagado** hasta que el backend lo acepte, para no perder el retiro sin aviso. Se activa con `VITE_RETIRO_A_BODEGA=true` en `frontend/.env.local`; entonces cada marco envía `retirar_a_bodega: true | false`.
+- El detalle de la inspección muestra la insignia "Bodega" si el marco trae `retirar_a_bodega: true`.
+
+**Falta en el backend:**
+- Aceptar `retirar_a_bodega` en `marcos[]` y crear el `INGRESO` en stock (`CERA_ESTIRADA` → `MARCO_CERA_ESTIRADA`, `CERA_UNTADA` → `MARCO_CERA_UNTADA`, `CERA_ESTAMPADA` → `MARCO_CERA_ESTAMPADA`, `SOLO_MIEL` → `MARCO_MIEL`) en la misma transacción.
+- Rechazar con 422 (con `loc` del marco) transferir marcos sin cría o retirar marcos con cría.
+- `GET /colmenas/{id}/marcos`, `ubicacion_destino` y `marco_desplazado_numero` para no superar 10 marcos por piso (intercambio o retiro del marco desplazado según su contenido).
+- Materiales `MARCO_CERA_ESTAMPADA` y `MARCO_MIEL`, y el movimiento `EXTRACCION` (`MARCO_MIEL` → `MARCO_CERA_UNTADA`).
