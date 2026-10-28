@@ -116,6 +116,17 @@ export const MATERIAL_STOCK = {
   MARCO_VACIO: { texto: "Marcos vacíos", textoDanado: "Marcos rotos", unidad: "marco", plural: "marcos", puedeDanarse: true },
   MARCO_CERA_ESTIRADA: { texto: "Marcos con cera estirada", unidad: "marco", plural: "marcos", puedeDanarse: false },
   MARCO_CERA_UNTADA: { texto: "Marcos con cera untada", unidad: "marco", plural: "marcos", puedeDanarse: false },
+  // Materiales nuevos (28-10): llegan desde la inspección cuando un marco se
+  // transfiere a bodega. `requiereServidor`: si el backend no los trae, todavía
+  // no los acepta (PENDIENTES_BACKEND.md, sección 8).
+  MARCO_CERA_ESTAMPADA: {
+    texto: "Marcos con cera estampada",
+    unidad: "marco",
+    plural: "marcos",
+    puedeDanarse: false,
+    requiereServidor: true,
+  },
+  MARCO_MIEL: { texto: "Marcos con miel", unidad: "marco", plural: "marcos", puedeDanarse: false, requiereServidor: true },
 };
 
 // Movimientos de stock. Cada unidad está en un solo estado:
@@ -128,6 +139,12 @@ export const TIPO_MOVIMIENTO_STOCK = {
   ENVIO_REPARACION: { texto: "A reparación", tono: "ambar", signo: "", ayuda: "Material dañado que se lleva a reparar: pasa de dañado a en reparación." },
   REPARACION: { texto: "Reparado", tono: "verde", signo: "+", ayuda: "Material que volvió reparado: pasa de en reparación a disponible." },
   DESCARTE: { texto: "Merma", tono: "gris", signo: "", ayuda: "Material sin arreglo que se bota: sale de dañado o de en reparación." },
+  EXTRACCION: {
+    texto: "Extracción de miel",
+    tono: "ambar",
+    signo: "",
+    ayuda: "Marcos con miel que se vaciaron en la extracción: pasan a marcos con cera untada.",
+  },
 };
 
 // Desde dónde sale la merma.

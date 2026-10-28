@@ -39,7 +39,11 @@ export default function StockPage() {
   const registrar = async (movimiento) => {
     await stockService.registrarMovimiento(movimiento);
     const { texto: nombreTipo } = TIPO_MOVIMIENTO_STOCK[movimiento.tipo];
-    avisos.exito(`${nombreTipo} registrado: ${movimiento.cantidad} · ${MATERIAL_STOCK[movimiento.material].texto.toLowerCase()}.`);
+    avisos.exito(
+      movimiento.tipo === "EXTRACCION"
+        ? `Extracción registrada: ${movimiento.cantidad} ${movimiento.cantidad === 1 ? "marco con miel pasa" : "marcos con miel pasan"} a cera untada.`
+        : `${nombreTipo} registrado: ${movimiento.cantidad} · ${MATERIAL_STOCK[movimiento.material].texto.toLowerCase()}.`
+    );
     setFormulario(null);
     recargar();
     setVersionHistorial((v) => v + 1);
@@ -77,7 +81,7 @@ export default function StockPage() {
 
       <div className="mb-6 grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
         <TarjetaIndicador titulo="Material disponible" valor={totalDisponible} detalle="unidades listas para usar" icono={Package} />
-        <TarjetaIndicador titulo="Marcos listos para usar" valor={marcosListos} detalle="vacíos, con cera estirada y untada" icono={Frame} />
+        <TarjetaIndicador titulo="Marcos listos para usar" valor={marcosListos} detalle="vacíos y con cera (sin contar los de miel)" icono={Frame} />
         <TarjetaIndicador
           titulo="Dañado"
           valor={totalDanado}

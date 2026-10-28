@@ -179,3 +179,47 @@ it("muestra el historial con destino u origen y filtra en el backend", async () 
     expect(llamadas.some((l) => l.ruta === "/stock/movimientos/" && l.params?.tipo === "ENVIO_REPARACION")).toBe(true)
   );
 });
+
+it("la extracción pasa marcos con miel a marcos con cera untada", async () => {
+  const conMiel = [...STOCK, { material: "MARCO_MIEL", disponible: 10 }, { material: "MARCO_CERA_ESTAMPADA", disponible: 0 }];
+  expect(stockResultante(armarInventario(conMiel).items.find((i) => i.material === "MARCO_MIEL"), "EXTRACCION", 4)).toMatchObject({
+    disponible: 6,
+  });
+  const llamadas = simularBackend({ usuario: ADMIN, datos: { ...datos, "/stock/": conMiel } });
+  await montarApp();
+  await irA("Stock");
+  fireEvent.click(await screen.findByRole("button", { name: "Registrar movimiento" }));
+  const dialogo = await screen.findByRole("dialog");
+
+  fireEvent.click(within(dialogo).getByRole("radio", { name: "Extracción de miel" }));
+  // El material se elige solo: la extracción es solo de marcos con miel.
+  const material = within(dialogo).getByLabelText(/Material/);
+  expect(material.value).toBe("MARCO_MIEL");
+  expect([...material.options].map((o) => o.value)).toEqual(["", "MARCO_MIEL"]);
+  fireEvent.change(within(dialogo).getByLabelText(/Cantidad/), { target: { value: "11" } });
+  fireEvent.click(within(dialogo).getByRole("button", { name: "Registrar movimiento" }));
+  await within(dialogo).findByText("Solo hay 10 marcos disponibles.");
+
+  fireEvent.change(within(dialogo).getByLabelText(/Cantidad/), { target: { value: "4" } });
+  within(dialogo).getByText(/Después: 6 con miel y 19 con cera untada\./);
+  fireEvent.click(within(dialogo).getByRole("button", { name: "Registrar movimiento" }));
+  await screen.findByText("Extracción registrada: 4 marcos con miel pasan a cera untada.");
+  const post = llamadas.find((l) => l.ruta === "/stock/movimientos/" && l.metodo === "POST");
+  expect(post.cuerpo).toEqual({ material: "MARCO_MIEL", tipo: "EXTRACCION", cantidad: 4 });
+});
+
+it("los materiales nuevos no se registran mientras el servidor no los tenga", async () => {
+  const llamadas = simularBackend({ usuario: ADMIN, datos });
+  await montarApp();
+  await irA("Stock");
+  const tarjeta = await screen.findByRole("article", { name: "Marcos con miel" });
+  within(tarjeta).getByText("Pendiente en el servidor");
+  fireEvent.click(screen.getByRole("button", { name: "Registrar movimiento" }));
+  const dialogo = await screen.findByRole("dialog");
+  fireEvent.click(within(dialogo).getByRole("radio", { name: "Extracción de miel" }));
+  within(dialogo).getByText(/Marcos con miel todavía no está habilitado en el servidor/);
+  fireEvent.change(within(dialogo).getByLabelText(/Cantidad/), { target: { value: "1" } });
+  fireEvent.click(within(dialogo).getByRole("button", { name: "Registrar movimiento" }));
+  await within(dialogo).findByText("Este material todavía no está habilitado en el servidor.");
+  expect(llamadas.some((l) => l.ruta === "/stock/movimientos/" && l.metodo === "POST")).toBe(false);
+});

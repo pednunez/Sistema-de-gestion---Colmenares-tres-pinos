@@ -19,6 +19,8 @@ export function armarInventario(filas = []) {
     const item = {
       material,
       ...info,
+      // Un material nuevo que el backend no trae todavía no se puede usar.
+      pendienteServidor: Boolean(info.requiereServidor) && filas.length > 0 && !porMaterial.has(material),
       disponible: entero(fila.disponible),
       danado: conEstados ? entero(fila.danado) : 0,
       enReparacion: conEstados ? entero(fila.en_reparacion) : 0,
@@ -31,7 +33,8 @@ export function armarInventario(filas = []) {
     return item;
   });
 
-  const marcos = items.filter((i) => i.material.startsWith("MARCO_"));
+  // Marcos listos para poner en una colmena: los de miel van primero a extracción.
+  const marcos = items.filter((i) => i.material.startsWith("MARCO_") && i.material !== MATERIAL_EXTRAIDO);
   return {
     items,
     totalDisponible: sumar(items, "disponible"),
@@ -54,10 +57,14 @@ export function cantidadCon(cantidad, item) {
 // ---------------------------------------------------------------------------
 
 export const MAXIMO_POR_MOVIMIENTO = 10000;
+// La extracción vacía marcos con miel y los deja como marcos con cera untada.
+export const MATERIAL_EXTRAIDO = "MARCO_MIEL";
+export const MATERIAL_TRAS_EXTRACCION = "MARCO_CERA_UNTADA";
 // Movimientos que solo aplican a material que pasa por dañado y reparación.
 const CON_ESTADOS = ["ENVIO_REPARACION", "REPARACION", "DESCARTE"];
 
 export function materialesPara(tipo) {
+  if (tipo === "EXTRACCION") return [{ valor: MATERIAL_EXTRAIDO, texto: MATERIAL_STOCK[MATERIAL_EXTRAIDO].texto }];
   return Object.entries(MATERIAL_STOCK)
     .filter(([, info]) => !CON_ESTADOS.includes(tipo) || info.puedeDanarse)
     .map(([valor, info]) => ({ valor, texto: info.texto }));
@@ -68,6 +75,7 @@ export function estadoQueDescuenta(tipo, origen) {
   switch (tipo) {
     case "ENVIO":
     case "DANO":
+    case "EXTRACCION":
       return "disponible";
     case "ENVIO_REPARACION":
       return "danado";
@@ -96,6 +104,7 @@ export function stockResultante(item, tipo, cantidad, origen) {
       r.disponible += n;
       break;
     case "ENVIO":
+    case "EXTRACCION":
       r.disponible -= n;
       break;
     case "DANO":
@@ -135,13 +144,17 @@ export function validarMovimiento(v, inventario) {
   else if (cantidad > MAXIMO_POR_MOVIMIENTO) errorCantidad = `La cantidad no puede superar ${MAXIMO_POR_MOVIMIENTO}.`;
   else if (item && estado && cantidad > item[estado]) errorCantidad = `Solo hay ${textoExistencia(item, estado)}.`;
 
+  let errorMaterial;
+  if (!v.material) errorMaterial = "Elige el material.";
+  else if (item?.pendienteServidor) errorMaterial = "Este material todavía no está habilitado en el servidor.";
+  else if (v.tipo === "EXTRACCION" && v.material !== MATERIAL_EXTRAIDO)
+    errorMaterial = "La extracción solo se registra en marcos con miel.";
+  else if (CON_ESTADOS.includes(v.tipo) && !MATERIAL_STOCK[v.material]?.puedeDanarse)
+    errorMaterial = "Este material no pasa por reparación: si se rompe, cuenta como marco roto.";
+
   return {
     tipo: !v.tipo && "Elige el tipo de movimiento.",
-    material: !v.material
-      ? "Elige el material."
-      : CON_ESTADOS.includes(v.tipo) && !MATERIAL_STOCK[v.material]?.puedeDanarse
-        ? "Este material no pasa por reparación: si se rompe, cuenta como marco roto."
-        : undefined,
+    material: errorMaterial,
     cantidad: errorCantidad,
     estado_origen: v.tipo === "DESCARTE" && !v.estado_origen && "Indica si la merma sale de dañado o de en reparación.",
     observaciones: v.observaciones.length > 500 && "Las observaciones no pueden superar los 500 caracteres.",

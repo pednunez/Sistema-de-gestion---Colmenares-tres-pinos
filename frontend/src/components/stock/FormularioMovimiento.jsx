@@ -7,6 +7,8 @@ import { useFormulario } from "../../hooks/useFormulario";
 import { useDatos } from "../../hooks/useDatos";
 import { MATERIAL_STOCK, ORIGEN_MERMA, TIPO_MOVIMIENTO_STOCK, opciones } from "../../utils/etiquetas";
 import {
+  MATERIAL_EXTRAIDO,
+  MATERIAL_TRAS_EXTRACCION,
   MAXIMO_POR_MOVIMIENTO,
   estadoQueDescuenta,
   materialesPara,
@@ -35,8 +37,10 @@ export default function FormularioMovimiento({ inventario, inicial = {}, onGuard
 
   const cambiarTipo = (tipo) => {
     cambiar("tipo", tipo);
+    // La extracción solo aplica a marcos con miel: se elige solo.
+    if (tipo === "EXTRACCION") cambiar("material", MATERIAL_EXTRAIDO);
     // Si el material elegido no aplica al nuevo tipo, se limpia.
-    if (valores.material && !materialesPara(tipo).some((m) => m.valor === valores.material)) cambiar("material", "");
+    else if (valores.material && !materialesPara(tipo).some((m) => m.valor === valores.material)) cambiar("material", "");
   };
 
   const cambiarApiario = (id) => {
@@ -49,6 +53,8 @@ export default function FormularioMovimiento({ inventario, inicial = {}, onGuard
   const resultado = stockResultante(item, valores.tipo, valores.cantidad, valores.estado_origen);
   const esSalida = valores.tipo === "ENVIO";
   const esMerma = valores.tipo === "DESCARTE";
+  const esExtraccion = valores.tipo === "EXTRACCION";
+  const ceraUntada = inventario.items.find((i) => i.material === MATERIAL_TRAS_EXTRACCION);
   const colmenasDelApiario = datos.colmenas.filter(
     (c) => colmenaOperativa(c) && String(c.apiario_id) === valores.apiario_id
   );
@@ -59,9 +65,11 @@ export default function FormularioMovimiento({ inventario, inicial = {}, onGuard
     const valido = resultado && Object.values(resultado).every((n) => n >= 0);
     const despues = !valido
       ? ""
-      : item.puedeDanarse
-        ? ` Después: ${resultado.disponible} disponibles, ${resultado.danado} por reparar, ${resultado.enReparacion} en reparación.`
-        : ` Después: ${resultado.disponible} disponibles.`;
+      : esExtraccion
+        ? ` Después: ${resultado.disponible} con miel y ${ceraUntada.disponible + Number(valores.cantidad)} con cera untada.`
+        : item.puedeDanarse
+          ? ` Después: ${resultado.disponible} disponibles, ${resultado.danado} por reparar, ${resultado.enReparacion} en reparación.`
+          : ` Después: ${resultado.disponible} disponibles.`;
     ayudaCantidad = actual + despues;
   }
 
@@ -135,9 +143,21 @@ export default function FormularioMovimiento({ inventario, inicial = {}, onGuard
           />
         </div>
 
+        {item?.pendienteServidor && (
+          <Alerta tipo="aviso">
+            {item.texto} todavía no está habilitado en el servidor. Se podrá registrar cuando el backend lo tenga.
+          </Alerta>
+        )}
+
+        {esExtraccion && !item?.pendienteServidor && (
+          <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            Los marcos vaciados se restan de marcos con miel y se suman a marcos con cera untada.
+          </p>
+        )}
+
         {valores.tipo === "DANO" && item && !MATERIAL_STOCK[item.material].puedeDanarse && (
           <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-800">
-            Los marcos con cera rotos se suman a los marcos rotos.
+            Los marcos con cera o miel rotos se suman a los marcos rotos.
           </p>
         )}
 

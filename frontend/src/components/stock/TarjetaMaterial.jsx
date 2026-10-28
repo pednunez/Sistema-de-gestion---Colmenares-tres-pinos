@@ -19,7 +19,11 @@ export default function TarjetaMaterial({ item, onCambiarMinimo }) {
     >
       <div className="flex items-start justify-between gap-2">
         <h3 className="text-sm font-medium text-slate-500">{item.texto}</h3>
-        {item.bajoMinimo && <Insignia tono="ambar">Stock bajo</Insignia>}
+        {item.pendienteServidor ? (
+          <Insignia tono="gris">Pendiente en el servidor</Insignia>
+        ) : (
+          item.bajoMinimo && <Insignia tono="ambar">Stock bajo</Insignia>
+        )}
       </div>
       <p className={`mt-2 text-3xl font-bold ${item.bajoMinimo ? "text-amber-700" : "text-slate-900"}`}>{item.disponible}</p>
       <p className="text-xs text-slate-500">disponibles en bodega</p>
@@ -36,7 +40,7 @@ export default function TarjetaMaterial({ item, onCambiarMinimo }) {
         )}
         <div className="flex items-center justify-between gap-2 border-t border-slate-100 pt-2">
           <span className="text-slate-500">{item.minimo === null ? "Sin mínimo" : `Mínimo: ${item.minimo}`}</span>
-          {onCambiarMinimo && (
+          {onCambiarMinimo && !item.pendienteServidor && (
             <Boton
               variante="fantasma"
               tamano="sm"

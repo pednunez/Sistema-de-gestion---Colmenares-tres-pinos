@@ -16,9 +16,9 @@ const STOCK = [
   { material: "ENTRETAPA", disponible: 6, danado: 0, en_reparacion: 2 },
 ];
 
-it("muestra los nueve materiales, aunque el backend no traiga alguno", () => {
+it("muestra los once materiales, aunque el backend no traiga alguno", () => {
   const inv = armarInventario(STOCK);
-  expect(inv.items).toHaveLength(9);
+  expect(inv.items).toHaveLength(11);
   expect(inv.items.find((i) => i.material === "TECHO")).toMatchObject({ disponible: 0, danado: 0, enReparacion: 0, merma: 0 });
   expect(inv.totalDisponible).toBe(110);
   expect(inv.totalDanado).toBe(5);
@@ -28,6 +28,18 @@ it("muestra los nueve materiales, aunque el backend no traiga alguno", () => {
   // Los marcos con cera no llevan estados propios.
   expect(inv.items.find((i) => i.material === "MARCO_CERA_UNTADA")).toMatchObject({ danado: 0, enReparacion: 0 });
   expect(inv.conPendientes.map((i) => i.material)).toEqual(["CAJON", "ALZA", "ENTRETAPA", "MARCO_VACIO"]);
+});
+
+it("los materiales nuevos quedan pendientes si el backend no los trae", () => {
+  const inv = armarInventario(STOCK);
+  expect(inv.items.find((i) => i.material === "MARCO_MIEL").pendienteServidor).toBe(true);
+  expect(inv.items.find((i) => i.material === "MARCO_CERA_ESTAMPADA").pendienteServidor).toBe(true);
+  // Un material de siempre que no viene se muestra en 0, no como pendiente.
+  expect(inv.items.find((i) => i.material === "TECHO").pendienteServidor).toBe(false);
+  const conNuevos = armarInventario([...STOCK, { material: "MARCO_MIEL", disponible: 6 }, { material: "MARCO_CERA_ESTAMPADA", disponible: 3 }]);
+  expect(conNuevos.items.find((i) => i.material === "MARCO_MIEL")).toMatchObject({ pendienteServidor: false, disponible: 6 });
+  // Los marcos con miel no cuentan como listos para usar: primero van a extracción.
+  expect(conNuevos.marcosListos).toBe(83);
 });
 
 it("no acepta cantidades negativas y usa el plural correcto", () => {
