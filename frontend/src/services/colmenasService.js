@@ -9,6 +9,16 @@ export const colmenasService = {
     if (apiarioId) parametros.set("apiario_id", String(apiarioId));
     return api.get(`/colmenas/?${parametros}`);
   },
+  // Marcos actuales de la colmena por piso (límite de 10 marcos por piso).
+  // null si el backend todavía no tiene el endpoint o la colmena no tiene detalle.
+  async obtenerMarcos(id) {
+    try {
+      return await api.sondear(`/colmenas/${id}/marcos`);
+    } catch (err) {
+      if ([404, 405, 501].includes(err.estado)) return null;
+      throw err;
+    }
+  },
   obtenerPorQr: (codigoQr) => api.get(`/colmenas/qr/${codigoQr}`),
   // Se pide como blob con la sesión, así funciona aunque el endpoint esté protegido.
   obtenerImagenQr: (id) => api.blob(`/colmenas/${id}/qr`),

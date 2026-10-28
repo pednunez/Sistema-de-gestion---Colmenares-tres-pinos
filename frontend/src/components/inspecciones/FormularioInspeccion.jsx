@@ -10,6 +10,8 @@ import { useDatos } from "../../hooks/useDatos";
 import { ESTADO_GENERAL, ESTADO_GENERAL_ANTERIOR, NIVEL, NIVEL_MIEL, opciones, texto } from "../../utils/etiquetas";
 import { textoONulo } from "../../utils/validacion";
 import { RETIRO_A_BODEGA } from "../../config/funciones";
+import { useMarcosDestinos } from "../../hooks/useMarcosDestinos";
+import { PISO_ALZA, PISO_CAMARA, planDeDestinos, validarCapacidad } from "../../utils/capacidad";
 import {
   crearCaja,
   quitarDestinosColmena,
@@ -18,6 +20,7 @@ import {
   contarTransferencias,
   totalMarcos,
   validarCaja,
+  vaAColmena,
 } from "../../utils/marcos";
 
 const OPCIONES_SI_NO = [
@@ -123,6 +126,19 @@ export default function FormularioInspeccion({
     cambiar("finalizar", []);
   };
 
+  // Marcos actuales de las colmenas que reciben, para no superar 10 por piso.
+  const destinos = [...valores.camara, ...(valores.tieneAlza ? valores.alza : [])]
+    .filter(vaAColmena)
+    .map((marco) => marco.destino);
+  const marcosDestinos = useMarcosDestinos(destinos);
+  const plan = planDeDestinos(valores, marcosDestinos);
+
+  const validarConCapacidad = (v, caja, ubicacion, nombre, opciones) => {
+    const error = validarCaja(caja, nombre, v.colmena_id, opciones);
+    if (error) return error;
+    return validarCapacidad(caja, ubicacion, nombre, planDeDestinos(v, marcosDestinos), codigoColmena);
+  };
+
   const validar = (v) => ({
     apiario_id: !esEdicion && !v.apiario_id && "Selecciona el apiario.",
     colmena_id: !v.colmena_id && "Selecciona la colmena inspeccionada.",
@@ -132,8 +148,9 @@ export default function FormularioInspeccion({
     alimentacion_suministrada:
       v.alimentacion_suministrada.trim().length > LARGO_MAXIMO_ALIMENTACION &&
       `Máximo ${LARGO_MAXIMO_ALIMENTACION} caracteres.`,
-    camara: !esEdicion && validarCaja(v.camara, "de la cámara de cría", v.colmena_id, { obligatoria: v.tieneAlza }),
-    alza: !esEdicion && v.tieneAlza && validarCaja(v.alza, "del alza", v.colmena_id, { obligatoria: true }),
+    camara:
+      !esEdicion && validarConCapacidad(v, v.camara, PISO_CAMARA, "de la cámara de cría", { obligatoria: v.tieneAlza }),
+    alza: !esEdicion && v.tieneAlza && validarConCapacidad(v, v.alza, PISO_ALZA, "del alza", { obligatoria: true }),
   });
 
   // Lleva la vista al primer campo marcado en rojo para que el usuario vea qué falta.
@@ -334,8 +351,8 @@ export default function FormularioInspeccion({
             <div>
               <h3 className="font-semibold text-slate-900">Revisión de marcos</h3>
               <p className="text-sm text-slate-500">
-                Indica qué contiene cada marco. Si mueves un marco a otra colmena del apiario o a bodega, márcalo
-                con «Transferir»: se guarda solo al registrar la inspección.
+                Indica qué contiene cada marco. Si mueves un marco a otra colmena del apiario o a bodega, márcalo con
+                «Transferir»: se guarda solo al registrar la inspección.
               </p>
             </div>
 
@@ -345,6 +362,8 @@ export default function FormularioInspeccion({
               onCambiar={(caja) => cambiar("camara", caja)}
               colmenaId={valores.colmena_id}
               apiarioId={valores.apiario_id}
+              ubicacion={PISO_CAMARA}
+              plan={plan}
               error={errores.camara}
               retiroDisponible={RETIRO_A_BODEGA}
             />
@@ -364,6 +383,8 @@ export default function FormularioInspeccion({
                 onCambiar={(caja) => cambiar("alza", caja)}
                 colmenaId={valores.colmena_id}
                 apiarioId={valores.apiario_id}
+                ubicacion={PISO_ALZA}
+                plan={plan}
                 error={errores.alza}
                 retiroDisponible={RETIRO_A_BODEGA}
               />

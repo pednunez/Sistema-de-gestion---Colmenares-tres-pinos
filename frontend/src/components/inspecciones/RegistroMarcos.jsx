@@ -10,9 +10,13 @@ import {
   contarMarcos,
   marcosARetirar,
   marcosATransferir,
+  MARCOS_POR_CAJA,
   puedeRetirarse,
   puedeTransferirse,
+  vaAColmena,
 } from "../../utils/marcos";
+import { CARGANDO, CON_DATOS, PISO_ALZA, PISO_CAMARA, claveMarco, destinoDelDesplazado } from "../../utils/capacidad";
+import { useDatos } from "../../hooks/useDatos";
 
 const OPCIONES_CONTENIDO = opciones(CONTENIDO_MARCO);
 
@@ -32,6 +36,8 @@ export default function RegistroMarcos({
   onCambiar,
   colmenaId,
   apiarioId,
+  ubicacion,
+  plan,
   error,
   retiroDisponible = false,
 }) {
@@ -116,6 +122,8 @@ export default function RegistroMarcos({
                 titulo={titulo}
                 colmenaId={colmenaId}
                 apiarioId={apiarioId}
+                ubicacion={ubicacion}
+                plan={plan}
                 error={error}
                 retiroDisponible={retiroDisponible}
                 onCambiar={(cambios) => cambiarMarco(marco.numero, cambios)}
@@ -136,9 +144,24 @@ export default function RegistroMarcos({
 
 // Franja «Hacia» de un marco que se transfiere. Los marcos con cría solo eligen
 // colmena; los de cera o miel eligen primero «Colmena» o «Bodega» (uno u otro).
-function DestinoMarco({ marco, titulo, colmenaId, apiarioId, error, retiroDisponible, onCambiar }) {
+function DestinoMarco({ marco, titulo, colmenaId, apiarioId, ubicacion, plan, error, retiroDisponible, onCambiar }) {
   const conBodega = puedeRetirarse(marco);
   const aBodega = marco.destino === DESTINO_BODEGA;
+  const capacidad = vaAColmena(marco) && (
+    <>
+      <span />
+      <CapacidadDestino
+        marco={marco}
+        titulo={titulo}
+        ubicacion={ubicacion}
+        colmenaId={colmenaId}
+        info={plan?.get(claveMarco(ubicacion, marco.numero))}
+        error={error}
+        onCambiar={onCambiar}
+      />
+      <span />
+    </>
+  );
 
   const selector = (
     <SelectorColmena
@@ -147,7 +170,8 @@ function DestinoMarco({ marco, titulo, colmenaId, apiarioId, error, retiroDispon
       valor={marco.destino}
       excluir={colmenaId}
       apiarioId={apiarioId}
-      onCambiar={(valor) => onCambiar({ destino: valor })}
+      // Otra colmena de destino: el piso y el marco que sale se eligen de nuevo.
+      onCambiar={(valor) => onCambiar({ destino: valor, pisoDestino: PISO_CAMARA, desplazado: "" })}
     />
   );
   const quitar = (
@@ -173,6 +197,7 @@ function DestinoMarco({ marco, titulo, colmenaId, apiarioId, error, retiroDispon
         {hacia}
         {selector}
         {quitar}
+        {capacidad}
       </div>
     );
   }
@@ -217,6 +242,89 @@ function DestinoMarco({ marco, titulo, colmenaId, apiarioId, error, retiroDispon
         selector
       )}
       <span />
+      {capacidad}
+    </div>
+  );
+}
+
+// Debajo del selector: cuántos marcos tiene el piso de la colmena que recibe y,
+// si está lleno, qué marco sale de ella (a bodega o de vuelta, según su contenido).
+function CapacidadDestino({ marco, titulo, ubicacion, colmenaId, info, error, onCambiar }) {
+  const { codigoColmena } = useDatos();
+  const destino = codigoColmena(Number(marco.destino));
+  const nota = "text-xs text-slate-600";
+
+  if (!info || info.estado === CARGANDO) return <p className={nota}>Revisando cuántos marcos tiene {destino}…</p>;
+  if (info.estado !== CON_DATOS) {
+    return (
+      <p className={nota}>No se pudo revisar cuántos marcos tiene {destino}: el servidor todavía no lo informa.</p>
+    );
+  }
+
+  const nombrePiso = info.piso === PISO_ALZA ? "Alza" : "Cámara de cría";
+  const elegido = info.posiciones.find((p) => String(p.numero) === String(marco.desplazado));
+  const pisoOrigen = ubicacion === PISO_ALZA ? "del alza" : "de la cámara de cría";
+
+  return (
+    <div className="grid gap-1.5">
+      {info.tieneAlza && (
+        <div
+          role="radiogroup"
+          aria-label={`Piso de ${destino} que recibe el marco ${marco.numero} de ${titulo}`}
+          className="flex flex-wrap items-center gap-1 text-xs"
+        >
+          <span className="text-slate-600">Va a:</span>
+          {[
+            [PISO_CAMARA, "Cámara de cría"],
+            [PISO_ALZA, "Alza"],
+          ].map(([valor, textoPiso]) => (
+            <button
+              key={valor}
+              type="button"
+              role="radio"
+              aria-checked={info.piso === valor}
+              onClick={() => onCambiar({ pisoDestino: valor, desplazado: "" })}
+              className={`rounded-lg border px-2 py-1 font-medium ${
+                info.piso === valor
+                  ? "border-amber-400 bg-amber-100 text-slate-950"
+                  : "border-slate-200 bg-white text-slate-700"
+              }`}
+            >
+              {textoPiso}
+            </button>
+          ))}
+        </div>
+      )}
+      <p className={info.requiereDesplazado ? "text-xs font-medium text-amber-900" : nota}>
+        {nombrePiso} de {destino}: {info.ocupados} de {MARCOS_POR_CAJA} marcos.
+        {!info.requiereDesplazado
+          ? " Hay espacio."
+          : info.ocupados >= MARCOS_POR_CAJA
+            ? ` Está llena: elige qué marco sale de ${destino}.`
+            : ` El espacio que queda lo usa otro marco de esta inspección: elige qué marco sale de ${destino}.`}
+      </p>
+      {info.requiereDesplazado && (
+        <>
+          <Seleccion
+            aria-label={`Marco que sale de ${destino} para recibir el marco ${marco.numero} de ${titulo}`}
+            value={marco.desplazado ?? ""}
+            onChange={(evento) => onCambiar({ desplazado: evento.target.value })}
+            placeholder={`Marco que sale de ${destino}`}
+            error={Boolean(error) && !marco.desplazado}
+            opciones={info.posiciones.map((p) => ({
+              valor: String(p.numero),
+              texto: `Marco ${p.numero} · ${texto(CONTENIDO_MARCO, p.contenido)}`,
+            }))}
+          />
+          {elegido && (
+            <p className="text-xs text-amber-800">
+              {destinoDelDesplazado(elegido.contenido) === "BODEGA"
+                ? `El marco ${elegido.numero} de ${destino} se retira a bodega.`
+                : `Intercambio: el marco ${elegido.numero} de ${destino} vuelve a ${codigoColmena(Number(colmenaId))}, al marco ${marco.numero} ${pisoOrigen}.`}
+            </p>
+          )}
+        </>
+      )}
     </div>
   );
 }

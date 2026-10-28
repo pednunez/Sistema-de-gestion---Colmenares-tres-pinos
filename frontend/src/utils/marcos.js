@@ -20,6 +20,10 @@ export function puedeRetirarse(marco) {
   return CONTENIDOS_RETIRABLES.includes(marco.contenido);
 }
 
+export function vaAColmena(marco) {
+  return puedeTransferirse(marco) && marco.transferir && Boolean(marco.destino) && marco.destino !== DESTINO_BODEGA;
+}
+
 export function vaABodega(marco) {
   return puedeRetirarse(marco) && marco.transferir && marco.destino === DESTINO_BODEGA;
 }
@@ -97,11 +101,16 @@ export function detalleMarcos(registro) {
       ubicacion: caja.ubicacion,
       numero: marco.numero,
       contenido: marco.contenido,
-      transferido_a_colmena_id:
-        puedeTransferirse(marco) && marco.transferir && marco.destino && marco.destino !== DESTINO_BODEGA
-          ? Number(marco.destino)
-          : null,
+      transferido_a_colmena_id: vaAColmena(marco) ? Number(marco.destino) : null,
       retirar_a_bodega: vaABodega(marco),
+      // Límite de 10 marcos por piso: piso de la colmena que recibe y, si está
+      // llena, qué marco sale de ella. El backend actual ignora estos campos.
+      ...(vaAColmena(marco)
+        ? {
+            ubicacion_destino: marco.pisoDestino === "ALZA" ? "ALZA" : "CAMARA_CRIA",
+            marco_desplazado_numero: marco.desplazado ? Number(marco.desplazado) : null,
+          }
+        : {}),
     }))
   );
 }
