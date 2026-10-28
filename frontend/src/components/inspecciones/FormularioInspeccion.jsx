@@ -12,6 +12,7 @@ import { textoONulo } from "../../utils/validacion";
 import { RETIRO_A_BODEGA } from "../../config/funciones";
 import {
   crearCaja,
+  quitarDestinosColmena,
   detalleMarcos,
   marcosATransferir,
   contarTransferencias,
@@ -112,6 +113,9 @@ export default function FormularioInspeccion({
     cambiar("apiario_id", id);
     cambiar("colmena_id", "");
     cambiar("finalizar", []);
+    // Las transferencias solo van a colmenas del mismo apiario.
+    cambiar("camara", quitarDestinosColmena(valores.camara));
+    cambiar("alza", quitarDestinosColmena(valores.alza));
   };
 
   const cambiarColmena = (id) => {
@@ -165,7 +169,7 @@ export default function FormularioInspeccion({
           ...(sesionRevisionId ? { sesion_revision_id: sesionRevisionId } : {}),
           cantidad_marcos: totalMarcos(v),
           tiene_alza: v.tieneAlza,
-          marcos: detalleMarcos(v, { conRetiro: RETIRO_A_BODEGA }),
+          marcos: detalleMarcos(v),
         },
         contarTransferencias(v),
         v.finalizar
@@ -330,8 +334,8 @@ export default function FormularioInspeccion({
             <div>
               <h3 className="font-semibold text-slate-900">Revisión de marcos</h3>
               <p className="text-sm text-slate-500">
-                Indica qué contiene cada marco. Si mueves un marco a otra colmena, márcalo con «Transferir»: la
-                transferencia se guarda sola al registrar la inspección.
+                Indica qué contiene cada marco. Si mueves un marco a otra colmena del apiario o a bodega, márcalo
+                con «Transferir»: se guarda solo al registrar la inspección.
               </p>
             </div>
 
@@ -340,6 +344,7 @@ export default function FormularioInspeccion({
               caja={valores.camara}
               onCambiar={(caja) => cambiar("camara", caja)}
               colmenaId={valores.colmena_id}
+              apiarioId={valores.apiario_id}
               error={errores.camara}
               retiroDisponible={RETIRO_A_BODEGA}
             />
@@ -358,6 +363,7 @@ export default function FormularioInspeccion({
                 caja={valores.alza}
                 onCambiar={(caja) => cambiar("alza", caja)}
                 colmenaId={valores.colmena_id}
+                apiarioId={valores.apiario_id}
                 error={errores.alza}
                 retiroDisponible={RETIRO_A_BODEGA}
               />

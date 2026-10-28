@@ -3,7 +3,7 @@ import { render, screen, fireEvent, within, cleanup } from "@testing-library/rea
 
 let llamadas, rechazarInspeccion;
 const usuario = { id: 7, nombre: "Ana", email: "a@tp.cl", rol: "APICULTOR" };
-const col = (id) => ({ id, apiario_id: 1, codigo: `COL-00${id}`, estado: "ACTIVA", cantidad_marcos: 0 });
+const col = (id, apiario_id = 1) => ({ id, apiario_id, codigo: `COL-00${id}`, estado: "ACTIVA", cantidad_marcos: 0 });
 
 beforeEach(() => {
   llamadas = []; rechazarInspeccion = null;
@@ -16,8 +16,8 @@ beforeEach(() => {
     const json = (c, s = 200) => new Response(JSON.stringify(c), { status: s });
     if (ruta === "/auth/me") return json(usuario);
     if (ruta === "/auth/csrf") return json({ csrf_token: "t" });
-    if (ruta === "/apiarios/") return json([{ id: 1, nombre: "Mandinga" }]);
-    if (ruta === "/colmenas/") return json([col(1), col(2), col(3)]);
+    if (ruta === "/apiarios/") return json([{ id: 1, nombre: "Mandinga" }, { id: 2, nombre: "Culibrán" }]);
+    if (ruta === "/colmenas/") return json([col(1), col(2), col(3), col(4, 2)]);
     if (ruta === "/inspecciones/" && o.method === "POST") {
       if (rechazarInspeccion) return json({ detail: rechazarInspeccion }, 404);
       return json({ id: 50 }, 201);
@@ -55,8 +55,9 @@ it("registra 10 marcos, alza y transferencias en una sola petición", async () =
   expect(within(d).getByRole("button", { name: "Transferir el marco 2 de Cámara de cría" }).disabled).toBe(true);
   fireEvent.click(within(d).getByRole("button", { name: "Transferir el marco 1 de Cámara de cría" }));
   enviar(d);
-  await within(d).findByText("Elige la colmena de destino del marco 1 de la cámara de cría.");
+  await within(d).findByText("Elige el destino del marco 1 de la cámara de cría.");
   const destino = within(d).getByLabelText("Colmena de destino del marco 1 de Cámara de cría");
+  // Solo colmenas del apiario elegido (COL-004 es de otro apiario).
   expect([...destino.options].map((o) => o.value)).toEqual(["", "2", "3"]);
   fireEvent.change(destino, { target: { value: "2" } });
 
@@ -76,10 +77,10 @@ it("registra 10 marcos, alza y transferencias en una sola petición", async () =
   const insp = posts[0].cuerpo;
   expect(insp).toMatchObject({ colmena_id: 1, usuario_id: 7, estado_general: "COMPLETA", cantidad_marcos: 19, tiene_alza: true });
   expect(insp.marcos).toHaveLength(20);
-  expect(insp.marcos[0]).toEqual({ ubicacion: "CAMARA_CRIA", numero: 1, contenido: "SOLO_CRIA", transferido_a_colmena_id: 2 });
-  expect(insp.marcos[1]).toEqual({ ubicacion: "CAMARA_CRIA", numero: 2, contenido: "SIN_MARCO", transferido_a_colmena_id: null });
+  expect(insp.marcos[0]).toEqual({ ubicacion: "CAMARA_CRIA", numero: 1, contenido: "SOLO_CRIA", transferido_a_colmena_id: 2, retirar_a_bodega: false });
+  expect(insp.marcos[1]).toEqual({ ubicacion: "CAMARA_CRIA", numero: 2, contenido: "SIN_MARCO", transferido_a_colmena_id: null, retirar_a_bodega: false });
   expect(insp.marcos.find((m) => m.ubicacion === "ALZA" && m.numero === 4)).toEqual({
-    ubicacion: "ALZA", numero: 4, contenido: "MIEL_Y_CRIA", transferido_a_colmena_id: 3,
+    ubicacion: "ALZA", numero: 4, contenido: "MIEL_Y_CRIA", transferido_a_colmena_id: 3, retirar_a_bodega: false,
   });
 });
 
@@ -114,54 +115,87 @@ it("Transferencias es solo lectura", async () => {
   expect(screen.queryByRole("button", { name: /Registrar transferencia/ })).toBeNull();
 });
 
-it("solo los marcos con cría se pueden transferir", async () => {
+it("cualquier marco va a otra colmena y los de cera o miel también pueden ir a bodega", async () => {
   const d = await abrirFormulario();
-  const select = within(d).getByLabelText("Contenido del marco 1 de Cámara de cría");
-  expect([...select.options].map((o) => o.textContent)).toContain("Cera untada");
   elegir(d, "Completar los marcos sin registrar de Cámara de cría", "CERA_UNTADA");
-  const boton = within(d).getByRole("button", { name: "Transferir el marco 2 de Cámara de cría" });
-  expect(boton.disabled).toBe(true);
-  expect(boton.title).toBe("Solo se transfieren marcos con cría");
-  // Sin el retiro activado, no aparece el botón de bodega.
-  expect(within(d).queryByRole("button", { name: /Retirar a bodega/ })).toBeNull();
+  // Una posición sin marco no se transfiere.
+  elegir(d, "Contenido del marco 3 de Cámara de cría", "SIN_MARCO");
+  const vacio = within(d).getByRole("button", { name: "Transferir el marco 3 de Cámara de cría" });
+  expect(vacio.disabled).toBe(true);
+  expect(vacio.title).toBe("No hay marco en esta posición");
 
-  elegir(d, "Contenido del marco 2 de Cámara de cría", "SOLO_CRIA");
-  fireEvent.click(within(d).getByRole("button", { name: "Transferir el marco 2 de Cámara de cría" }));
-  elegir(d, "Colmena de destino del marco 2 de Cámara de cría", "3");
-  // Si se cambia a un contenido que no se transfiere, la transferencia se quita.
+  // Un marco de miel se puede transferir a una colmena débil…
   elegir(d, "Contenido del marco 2 de Cámara de cría", "SOLO_MIEL");
+  fireEvent.click(within(d).getByRole("button", { name: "Transferir el marco 2 de Cámara de cría" }));
+  const grupo = within(d).getByRole("radiogroup", { name: "Destino del marco 2 de Cámara de cría" });
+  expect(within(grupo).getByRole("radio", { name: "Colmena" }).getAttribute("aria-checked")).toBe("true");
+  elegir(d, "Colmena de destino del marco 2 de Cámara de cría", "3");
+  // …o a bodega: se elige una sola de las dos opciones.
+  fireEvent.click(within(grupo).getByRole("radio", { name: "Bodega" }));
+  expect(within(grupo).getByRole("radio", { name: "Bodega" }).getAttribute("aria-checked")).toBe("true");
+  expect(within(grupo).getByRole("radio", { name: "Colmena" }).getAttribute("aria-checked")).toBe("false");
   expect(within(d).queryByLabelText("Colmena de destino del marco 2 de Cámara de cría")).toBeNull();
+  within(d).getByText(/Entra al stock como «Solo miel»\. El servidor todavía no lo suma/);
+  within(d).getByText(/9 marcos, 1 a bodega/);
+
+  // Los marcos con cría solo van a colmenas: no ofrecen bodega.
+  elegir(d, "Contenido del marco 4 de Cámara de cría", "SOLO_CRIA");
+  fireEvent.click(within(d).getByRole("button", { name: "Transferir el marco 4 de Cámara de cría" }));
+  expect(within(d).queryByRole("radiogroup", { name: "Destino del marco 4 de Cámara de cría" })).toBeNull();
+  elegir(d, "Colmena de destino del marco 4 de Cámara de cría", "3");
+  within(d).getByText(/9 marcos, 1 para transferir, 1 a bodega/);
+
+  // Si un marco que iba a bodega pasa a tener cría, hay que elegir otra vez el destino.
+  elegir(d, "Contenido del marco 2 de Cámara de cría", "MIEL_Y_CRIA");
+  expect(within(d).queryByRole("radiogroup", { name: "Destino del marco 2 de Cámara de cría" })).toBeNull();
+  expect(within(d).getByLabelText("Colmena de destino del marco 2 de Cámara de cría").value).toBe("");
   enviar(d);
+  await within(d).findByText("Elige el destino del marco 2 de la cámara de cría.");
+  elegir(d, "Colmena de destino del marco 2 de Cámara de cría", "3");
+  enviar(d);
+
+  await screen.findByText("Inspección de COL-001 registrada con 2 transferencias.");
+  const insp = llamadas.find((l) => l.ruta === "/inspecciones/" && l.metodo === "POST").cuerpo;
+  expect(insp.marcos[1]).toEqual({
+    ubicacion: "CAMARA_CRIA", numero: 2, contenido: "MIEL_Y_CRIA", transferido_a_colmena_id: 3, retirar_a_bodega: false,
+  });
+  expect(insp.marcos[3]).toMatchObject({ contenido: "SOLO_CRIA", transferido_a_colmena_id: 3, retirar_a_bodega: false });
+});
+
+it("los marcos de cera o miel enviados a bodega viajan en la inspección", async () => {
+  const d = await abrirFormulario();
+  elegir(d, "Completar los marcos sin registrar de Cámara de cría", "SOLO_CRIA");
+  elegir(d, "Contenido del marco 9 de Cámara de cría", "SOLO_MIEL");
+  elegir(d, "Contenido del marco 10 de Cámara de cría", "CERA_ESTAMPADA");
+  fireEvent.click(within(d).getByRole("button", { name: "Transferir el marco 9 de Cámara de cría" }));
+  fireEvent.click(within(d).getByRole("radiogroup", { name: "Destino del marco 9 de Cámara de cría" }).querySelector("[aria-checked=false]"));
+  fireEvent.click(within(d).getByRole("button", { name: "Transferir el marco 10 de Cámara de cría" }));
+  fireEvent.click(within(d).getByRole("radiogroup", { name: "Destino del marco 10 de Cámara de cría" }).querySelector("[aria-checked=false]"));
+  within(d).getByText(/10 marcos, 2 a bodega/);
+  fireEvent.click(within(d).getByRole("button", { name: "No transferir el marco 10 de Cámara de cría" }));
+  within(d).getByText(/10 marcos, 1 a bodega/);
+  enviar(d);
+
   await screen.findByText("Inspección de COL-001 registrada.");
   const insp = llamadas.find((l) => l.ruta === "/inspecciones/" && l.metodo === "POST").cuerpo;
-  expect(insp.marcos[1]).toEqual({ ubicacion: "CAMARA_CRIA", numero: 2, contenido: "SOLO_MIEL", transferido_a_colmena_id: null });
+  expect(insp.marcos[0]).toMatchObject({ contenido: "SOLO_CRIA", retirar_a_bodega: false });
+  expect(insp.marcos[8]).toEqual({
+    ubicacion: "CAMARA_CRIA", numero: 9, contenido: "SOLO_MIEL", transferido_a_colmena_id: null, retirar_a_bodega: true,
+  });
+  expect(insp.marcos[9]).toMatchObject({ contenido: "CERA_ESTAMPADA", retirar_a_bodega: false });
   expect(llamadas.some((l) => l.ruta === "/transferencias-marcos/" && l.metodo === "POST")).toBe(false);
 });
 
-describe("con el retiro a bodega activado", () => {
+describe("con el retiro a bodega activo en el servidor", () => {
   beforeEach(() => vi.stubEnv("VITE_RETIRO_A_BODEGA", "true"));
   afterEach(() => vi.unstubAllEnvs());
 
-  it("los marcos de cera o miel se retiran a bodega y los de cría no", async () => {
+  it("no muestra el aviso de registrar también en Stock", async () => {
     const d = await abrirFormulario();
-    elegir(d, "Completar los marcos sin registrar de Cámara de cría", "SOLO_CRIA");
-    expect(within(d).queryByRole("button", { name: "Retirar a bodega el marco 9 de Cámara de cría" })).toBeNull();
-    elegir(d, "Contenido del marco 9 de Cámara de cría", "SOLO_MIEL");
-    elegir(d, "Contenido del marco 10 de Cámara de cría", "CERA_ESTAMPADA");
-    fireEvent.click(within(d).getByRole("button", { name: "Retirar a bodega el marco 9 de Cámara de cría" }));
-    fireEvent.click(within(d).getByRole("button", { name: "Retirar a bodega el marco 10 de Cámara de cría" }));
-    within(d).getByText("Se retira y entra al stock como «Solo miel».");
-    within(d).getByText(/10 marcos, 2 a bodega/);
-    fireEvent.click(within(d).getByRole("button", { name: "No retirar el marco 10 de Cámara de cría" }));
-    within(d).getByText(/10 marcos, 1 a bodega/);
-    enviar(d);
-
-    await screen.findByText("Inspección de COL-001 registrada.");
-    const insp = llamadas.find((l) => l.ruta === "/inspecciones/" && l.metodo === "POST").cuerpo;
-    expect(insp.marcos[0]).toMatchObject({ contenido: "SOLO_CRIA", retirar_a_bodega: false });
-    expect(insp.marcos[8]).toEqual({
-      ubicacion: "CAMARA_CRIA", numero: 9, contenido: "SOLO_MIEL", transferido_a_colmena_id: null, retirar_a_bodega: true,
-    });
-    expect(insp.marcos[9]).toMatchObject({ contenido: "CERA_ESTAMPADA", retirar_a_bodega: false });
+    elegir(d, "Contenido del marco 1 de Cámara de cría", "SOLO_MIEL");
+    fireEvent.click(within(d).getByRole("button", { name: "Transferir el marco 1 de Cámara de cría" }));
+    fireEvent.click(within(d).getByRole("radiogroup", { name: "Destino del marco 1 de Cámara de cría" }).querySelector("[aria-checked=false]"));
+    within(d).getByText("Entra al stock como «Solo miel».");
+    expect(within(d).queryByText(/El servidor todavía no lo suma/)).toBeNull();
   });
 });

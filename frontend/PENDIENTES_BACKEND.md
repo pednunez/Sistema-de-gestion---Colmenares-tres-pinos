@@ -170,18 +170,18 @@ PATCH /tratamientos/{id}
 
 Regla definida por el Product Owner (28-10). Detalle completo en el documento "Transferencias con límite de 10 marcos y retiro a bodega".
 
-| Contenido | Acción permitida |
+| Contenido | Destinos permitidos |
 |---|---|
-| `MIEL_Y_CRIA`, `SOLO_CRIA` | Solo transferir a otra colmena |
-| `CERA_ESTIRADA`, `CERA_UNTADA`, `CERA_ESTAMPADA`, `SOLO_MIEL` | Solo retirar a bodega (entran al stock tal como están) |
+| `MIEL_Y_CRIA`, `SOLO_CRIA` | Otra colmena |
+| `CERA_ESTIRADA`, `CERA_UNTADA`, `CERA_ESTAMPADA`, `SOLO_MIEL` | Otra colmena **o** bodega (entran al stock tal como están) |
 
 **Ya está en el frontend:**
-- "Transferir" solo se habilita en marcos con cría. Si el contenido cambia, la transferencia se quita.
-- "A bodega" en marcos de cera o miel. Está **apagado** hasta que el backend lo acepte, para no perder el retiro sin aviso. Se activa con `VITE_RETIRO_A_BODEGA=true` en `frontend/.env.local`; entonces cada marco envía `retirar_a_bodega: true | false`.
+- "Transferir" se habilita en cualquier posición con marco. El selector "Hacia" lista las colmenas y, en marcos de cera o miel, también "Bodega (Stock)". Si el contenido cambia a cría, el destino bodega se borra.
+- Cada marco envía siempre `retirar_a_bodega: true | false` (hoy el backend lo ignora). Mientras tanto el formulario avisa "regístralo también en Stock"; el aviso se quita con `VITE_RETIRO_A_BODEGA=true` en `frontend/.env.local` cuando el backend sume el marco al stock.
 - El detalle de la inspección muestra la insignia "Bodega" si el marco trae `retirar_a_bodega: true`.
 
 **Falta en el backend:**
 - Aceptar `retirar_a_bodega` en `marcos[]` y crear el `INGRESO` en stock (`CERA_ESTIRADA` → `MARCO_CERA_ESTIRADA`, `CERA_UNTADA` → `MARCO_CERA_UNTADA`, `CERA_ESTAMPADA` → `MARCO_CERA_ESTAMPADA`, `SOLO_MIEL` → `MARCO_MIEL`) en la misma transacción.
-- Rechazar con 422 (con `loc` del marco) transferir marcos sin cría o retirar marcos con cría.
+- Rechazar con 422 (con `loc` del marco) retirar a bodega marcos con cría o `SIN_MARCO`, o enviar `retirar_a_bodega: true` junto con `transferido_a_colmena_id`. **Corrección al documento del 28-10:** los marcos de cera o miel también se pueden transferir a otra colmena.
 - `GET /colmenas/{id}/marcos`, `ubicacion_destino` y `marco_desplazado_numero` para no superar 10 marcos por piso (intercambio o retiro del marco desplazado según su contenido).
 - Materiales `MARCO_CERA_ESTAMPADA` y `MARCO_MIEL`, y el movimiento `EXTRACCION` (`MARCO_MIEL` → `MARCO_CERA_UNTADA`).
