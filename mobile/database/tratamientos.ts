@@ -1,6 +1,13 @@
 
 import * as SQLite from 'expo-sqlite';
 
+import { leerSesionGuardada } from '../api/auth';
+import { leerCatalogoLocal } from './catalogo';
+import {
+  crearIdCliente,
+  listarInspeccionesLocales,
+} from './inspecciones';
+
 export type EstadoTratamiento =
   | 'PLANIFICADO'
   | 'EN_CURSO'
@@ -35,10 +42,13 @@ export type TratamientoGuardado = {
   sincronizacion: 'PENDIENTE' | 'SINCRONIZADO';
   creado_local: string;
   actualizado_local: string;
+  id_cliente: string;
+  servidor_id: number | null;
+  usuario_local_id: number | null;
 };
 
-// CATÁLOGOS TEMPORALES PARA PRUEBAS.
-// NO SON TRATAMIENTOS NI PRODUCTOS AUTORIZADOS.
+// Valores temporales para probar la interfaz.
+// No son tratamientos ni productos autorizados.
 export const TIPOS_TRATAMIENTO = [
   'Simulación sanitaria',
   'Evaluación sanitaria de prueba',
@@ -61,6 +71,10 @@ export const UNIDADES_DOSIS = [
 const caracteresTexto =
   /[^A-Za-zÀ-ÖØ-öø-ÿ0-9 \n.,;:¿?¡!()%+°ºµ'/-]/g;
 
+// ==========================================
+// TEXTOS
+// ==========================================
+
 export function limpiarTexto(
   valor: string,
   maximo = 1000
@@ -73,8 +87,13 @@ export function limpiarTexto(
     .slice(0, maximo);
 }
 
+// ==========================================
+// FECHAS
+// ==========================================
+
 export function fechaLocalISO(): string {
   const f = new Date();
+
   const anio = f.getFullYear();
   const mes = String(f.getMonth() + 1).padStart(2, '0');
   const dia = String(f.getDate()).padStart(2, '0');
@@ -83,21 +102,32 @@ export function fechaLocalISO(): string {
 }
 
 export function fechaValida(fecha: string): boolean {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) return false;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(fecha)) {
+    return false;
+  }
 
   const [a, m, d] = fecha.split('-').map(Number);
-  if (a < 2000 || a > 2100) return false;
+
+  if (a < 2000 || a > 2100) {
+    return false;
+  }
 
   const real = new Date(Date.UTC(a, m - 1, d));
 
-  return real.getUTCFullYear() === a &&
+  return (
+    real.getUTCFullYear() === a &&
     real.getUTCMonth() + 1 === m &&
-    real.getUTCDate() === d;
+    real.getUTCDate() === d
+  );
 }
 
-function sumarAnios(fecha: string, cantidad: number) {
+function sumarAnios(
+  fecha: string,
+  cantidad: number
+): string {
   const [a, m, d] = fecha.split('-').map(Number);
   const f = new Date(Date.UTC(a + cantidad, m - 1, d));
+
   return f.toISOString().slice(0, 10);
 }
 
@@ -105,7 +135,7 @@ function validarTexto(
   valor: string,
   nombre: string,
   maximo: number
-) {
+): void {
   if (
     valor.length > maximo ||
     limpiarTexto(valor, maximo) !== valor
@@ -116,15 +146,23 @@ function validarTexto(
   }
 }
 
+// ==========================================
+// VALIDACIONES
+// ==========================================
+
 export function validarTratamiento(
   datos: DatosTratamiento
 ): void {
-  if (!/^[A-Za-z0-9_-]{3,80}$/.test(datos.codigoQR)) {
+  if (
+    !/^[A-Za-z0-9_-]{3,80}$/.test(datos.codigoQR)
+  ) {
     throw new Error('Selecciona una colmena válida.');
   }
 
   if (
-    !TIPOS_TRATAMIENTO.some(t => t === datos.tipoTratamiento)
+    !TIPOS_TRATAMIENTO.some(
+      t => t === datos.tipoTratamiento
+    )
   ) {
     throw new Error(
       'Selecciona un tipo del catálogo de prueba.'
@@ -132,7 +170,9 @@ export function validarTratamiento(
   }
 
   if (
-    !PRODUCTOS_TRATAMIENTO.some(p => p === datos.producto)
+    !PRODUCTOS_TRATAMIENTO.some(
+      p => p === datos.producto
+    )
   ) {
     throw new Error(
       'Selecciona un producto del catálogo de prueba.'
@@ -159,10 +199,17 @@ export function validarTratamiento(
       );
     }
 
-    const cantidad = Number(dosis[1].replace(',', '.'));
+    const cantidad = Number(
+      dosis[1].replace(',', '.')
+    );
 
-    if (cantidad <= 0 || !Number.isFinite(cantidad)) {
-      throw new Error('La dosis debe ser mayor que cero.');
+    if (
+      cantidad <= 0 ||
+      !Number.isFinite(cantidad)
+    ) {
+      throw new Error(
+        'La dosis debe ser mayor que cero.'
+      );
     }
   }
 
@@ -185,9 +232,11 @@ export function validarTratamiento(
 
   if (
     datos.fechaFin &&
-    (!fechaValida(datos.fechaFin) ||
+    (
+      !fechaValida(datos.fechaFin) ||
       datos.fechaFin < datos.fechaInicio ||
-      datos.fechaFin > limitePosterior)
+      datos.fechaFin > limitePosterior
+    )
   ) {
     throw new Error('Fecha de término inválida.');
   }
@@ -242,19 +291,28 @@ export function validarTratamiento(
 
   if (
     datos.inspeccionLocalId !== null &&
-    (!Number.isSafeInteger(datos.inspeccionLocalId) ||
-      datos.inspeccionLocalId <= 0)
+    (
+      !Number.isSafeInteger(datos.inspeccionLocalId) ||
+      datos.inspeccionLocalId <= 0
+    )
   ) {
     throw new Error('Inspección asociada inválida.');
   }
 }
 
-let conexion: Promise<SQLite.SQLiteDatabase> | null = null;
+// ==========================================
+// BASE DE DATOS
+// ==========================================
+
+let conexion:
+  Promise<SQLite.SQLiteDatabase> | null = null;
 
 async function iniciarBD() {
   const db = await SQLite.openDatabaseAsync('colmenas.db');
 
   await db.execAsync(`
+    PRAGMA journal_mode = WAL;
+
     CREATE TABLE IF NOT EXISTS tratamientos_locales (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       codigo_qr TEXT NOT NULL,
@@ -269,11 +327,80 @@ async function iniciarBD() {
       observaciones TEXT NOT NULL DEFAULT '',
       sincronizacion TEXT NOT NULL DEFAULT 'PENDIENTE',
       creado_local TEXT NOT NULL,
-      actualizado_local TEXT NOT NULL
+      actualizado_local TEXT NOT NULL,
+      id_cliente TEXT,
+      servidor_id INTEGER,
+      usuario_local_id INTEGER
     );
 
     CREATE INDEX IF NOT EXISTS idx_tratamientos_codigo
     ON tratamientos_locales(codigo_qr);
+  `);
+
+  // Migrar registros anteriores sin eliminarlos.
+  const columnas = await db.getAllAsync<{
+    name: string;
+  }>(
+    'PRAGMA table_info(tratamientos_locales)'
+  );
+
+  const existentes = new Set(
+    columnas.map(columna => columna.name)
+  );
+
+  if (!existentes.has('id_cliente')) {
+    await db.execAsync(`
+      ALTER TABLE tratamientos_locales
+      ADD COLUMN id_cliente TEXT;
+    `);
+  }
+
+  if (!existentes.has('servidor_id')) {
+    await db.execAsync(`
+      ALTER TABLE tratamientos_locales
+      ADD COLUMN servidor_id INTEGER;
+    `);
+  }
+
+  if (!existentes.has('usuario_local_id')) {
+    await db.execAsync(`
+      ALTER TABLE tratamientos_locales
+      ADD COLUMN usuario_local_id INTEGER;
+    `);
+  }
+
+  const anteriores = await db.getAllAsync<{
+    id: number;
+  }>(
+    `SELECT id
+     FROM tratamientos_locales
+     WHERE id_cliente IS NULL
+        OR id_cliente = ''`
+  );
+
+  if (anteriores.length > 0) {
+    await db.withExclusiveTransactionAsync(
+      async tx => {
+        for (const registro of anteriores) {
+          await tx.runAsync(
+            `UPDATE tratamientos_locales
+             SET id_cliente = ?
+             WHERE id = ?
+               AND (
+                 id_cliente IS NULL
+                 OR id_cliente = ''
+               )`,
+            [crearIdCliente(), registro.id]
+          );
+        }
+      }
+    );
+  }
+
+  await db.execAsync(`
+    CREATE UNIQUE INDEX IF NOT EXISTS
+      idx_tratamientos_id_cliente
+    ON tratamientos_locales(id_cliente);
   `);
 
   return db;
@@ -290,36 +417,78 @@ function obtenerBD() {
   return conexion;
 }
 
+// ==========================================
+// COLMENA DEL CATÁLOGO OFICIAL
+// ==========================================
+
 async function validarReferencias(
   db: SQLite.SQLiteDatabase,
   datos: DatosTratamiento
-) {
-  const colmena = await db.getFirstAsync<{ id: number }>(
-    `SELECT id FROM inspecciones_locales
-     WHERE codigo_qr = ? LIMIT 1`,
-    [datos.codigoQR]
+): Promise<number> {
+  const sesion = await leerSesionGuardada();
+
+  if (!sesion) {
+    throw new Error(
+      'Debes iniciar sesión para registrar tratamientos oficiales.'
+    );
+  }
+
+  const catalogo = await leerCatalogoLocal(
+    sesion.usuario.id
+  );
+
+  if (!catalogo) {
+    throw new Error(
+      'No hay un catálogo oficial descargado para este usuario.'
+    );
+  }
+
+  const codigo = datos.codigoQR.trim().toLowerCase();
+
+  const colmena = catalogo.colmenas.find(
+    item =>
+      item.codigo_qr.trim().toLowerCase() === codigo
   );
 
   if (!colmena) {
     throw new Error(
-      'Colmena no registrada en la base local.'
+      'La colmena no existe en el catálogo oficial.'
     );
   }
 
+  // La inspección asociada es opcional.
   if (datos.inspeccionLocalId !== null) {
-    const inspeccion = await db.getFirstAsync<{ id: number }>(
-      `SELECT id FROM inspecciones_locales
-       WHERE id = ? AND codigo_qr = ?`,
-      [datos.inspeccionLocalId, datos.codigoQR]
+    // Garantizar que exista la tabla principal.
+    await listarInspeccionesLocales();
+
+    const inspeccion = await db.getFirstAsync<{
+      id: number;
+    }>(
+      `SELECT id
+       FROM inspecciones_locales
+       WHERE id = ?
+         AND LOWER(codigo_qr) = ?
+         AND usuario_local_id = ?`,
+      [
+        datos.inspeccionLocalId,
+        codigo,
+        sesion.usuario.id,
+      ]
     );
 
     if (!inspeccion) {
       throw new Error(
-        'La inspección no corresponde a la colmena.'
+        'La inspección asociada no pertenece a esta colmena o usuario.'
       );
     }
   }
+
+  return sesion.usuario.id;
 }
+
+// ==========================================
+// GUARDAR
+// ==========================================
 
 export async function guardarTratamientoLocal(
   datos: DatosTratamiento
@@ -336,21 +505,37 @@ export async function guardarTratamientoLocal(
   }
 
   const db = await obtenerBD();
-  await validarReferencias(db, datos);
 
+  const usuarioLocalId =
+    await validarReferencias(db, datos);
+
+  const idCliente = crearIdCliente();
   const ahora = new Date().toISOString();
 
   const resultado = await db.runAsync(
     `INSERT INTO tratamientos_locales (
-      codigo_qr, inspeccion_local_id,
-      tipo_tratamiento, producto, dosis,
-      motivo, fecha_inicio, fecha_fin,
-      estado, observaciones, sincronizacion,
-      creado_local, actualizado_local
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?,
-      ?, ?, 'PENDIENTE', ?, ?)`,
+      codigo_qr,
+      inspeccion_local_id,
+      tipo_tratamiento,
+      producto,
+      dosis,
+      motivo,
+      fecha_inicio,
+      fecha_fin,
+      estado,
+      observaciones,
+      sincronizacion,
+      creado_local,
+      actualizado_local,
+      id_cliente,
+      servidor_id,
+      usuario_local_id
+    ) VALUES (
+      ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+      'PENDIENTE', ?, ?, ?, NULL, ?
+    )`,
     [
-      datos.codigoQR,
+      datos.codigoQR.trim(),
       datos.inspeccionLocalId,
       datos.tipoTratamiento,
       datos.producto,
@@ -362,21 +547,32 @@ export async function guardarTratamientoLocal(
       datos.observaciones.trim(),
       ahora,
       ahora,
+      idCliente,
+      usuarioLocalId,
     ]
   );
 
   return resultado.lastInsertRowId;
 }
 
+// ==========================================
+// LISTAR
+// ==========================================
+
 export async function listarTratamientosLocales():
   Promise<TratamientoGuardado[]> {
   const db = await obtenerBD();
 
   return db.getAllAsync<TratamientoGuardado>(
-    `SELECT * FROM tratamientos_locales
+    `SELECT *
+     FROM tratamientos_locales
      ORDER BY id DESC`
   );
 }
+
+// ==========================================
+// EDITAR
+// ==========================================
 
 export async function actualizarTratamientoLocal(
   id: number,
@@ -387,7 +583,9 @@ export async function actualizarTratamientoLocal(
   const db = await obtenerBD();
 
   const actual = await db.getFirstAsync<TratamientoGuardado>(
-    'SELECT * FROM tratamientos_locales WHERE id = ?',
+    `SELECT *
+     FROM tratamientos_locales
+     WHERE id = ?`,
     [id]
   );
 
@@ -415,14 +613,27 @@ export async function actualizarTratamientoLocal(
     );
   }
 
-  await validarReferencias(db, datos);
+  const usuarioLocalId =
+    await validarReferencias(db, datos);
+
+  if (actual.usuario_local_id !== usuarioLocalId) {
+    throw new Error(
+      'Este tratamiento pertenece a otro usuario o no tiene propietario confirmado.'
+    );
+  }
 
   const resultado = await db.runAsync(
     `UPDATE tratamientos_locales
-     SET tipo_tratamiento = ?, producto = ?,
-         dosis = ?, motivo = ?, fecha_fin = ?,
-         observaciones = ?, actualizado_local = ?
-     WHERE id = ? AND sincronizacion = 'PENDIENTE'
+     SET tipo_tratamiento = ?,
+         producto = ?,
+         dosis = ?,
+         motivo = ?,
+         fecha_fin = ?,
+         observaciones = ?,
+         actualizado_local = ?
+     WHERE id = ?
+       AND usuario_local_id = ?
+       AND sincronizacion = 'PENDIENTE'
        AND estado IN ('PLANIFICADO','EN_CURSO')`,
     [
       datos.tipoTratamiento,
@@ -433,13 +644,22 @@ export async function actualizarTratamientoLocal(
       datos.observaciones.trim(),
       new Date().toISOString(),
       id,
+      usuarioLocalId,
     ]
   );
 
   if (resultado.changes !== 1) {
-    throw new Error('No se pudo editar el tratamiento.');
+    throw new Error(
+      'No se pudo editar el tratamiento.'
+    );
   }
+
+  // No se cambia id_cliente.
 }
+
+// ==========================================
+// FINALIZAR O CANCELAR
+// ==========================================
 
 export async function cambiarEstadoTratamientoLocal(
   id: number,
@@ -448,7 +668,9 @@ export async function cambiarEstadoTratamientoLocal(
   const db = await obtenerBD();
 
   const actual = await db.getFirstAsync<TratamientoGuardado>(
-    'SELECT * FROM tratamientos_locales WHERE id = ?',
+    `SELECT *
+     FROM tratamientos_locales
+     WHERE id = ?`,
     [id]
   );
 
@@ -462,6 +684,17 @@ export async function cambiarEstadoTratamientoLocal(
   ) {
     throw new Error(
       'El tratamiento está cerrado o sincronizado.'
+    );
+  }
+
+  const sesion = await leerSesionGuardada();
+
+  if (
+    !sesion ||
+    actual.usuario_local_id !== sesion.usuario.id
+  ) {
+    throw new Error(
+      'No puedes modificar un tratamiento de otro usuario.'
     );
   }
 
@@ -487,14 +720,25 @@ export async function cambiarEstadoTratamientoLocal(
 
   const resultado = await db.runAsync(
     `UPDATE tratamientos_locales
-     SET estado = ?, fecha_fin = ?,
+     SET estado = ?,
+         fecha_fin = ?,
          actualizado_local = ?
-     WHERE id = ? AND sincronizacion = 'PENDIENTE'
+     WHERE id = ?
+       AND usuario_local_id = ?
+       AND sincronizacion = 'PENDIENTE'
        AND estado IN ('PLANIFICADO','EN_CURSO')`,
-    [estado, fechaFin, new Date().toISOString(), id]
+    [
+      estado,
+      fechaFin,
+      new Date().toISOString(),
+      id,
+      sesion.usuario.id,
+    ]
   );
 
   if (resultado.changes !== 1) {
-    throw new Error('No se pudo cambiar el estado.');
+    throw new Error(
+      'No se pudo cambiar el estado.'
+    );
   }
 }

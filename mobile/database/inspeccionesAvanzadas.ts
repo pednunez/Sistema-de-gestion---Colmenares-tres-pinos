@@ -1,14 +1,41 @@
 
 import * as SQLite from 'expo-sqlite';
 
+import {
+  leerSesionGuardada,
+  tokenVigente,
+} from '../api/auth';
+
+import {
+  leerCatalogoLocal,
+} from './catalogo';
+
+import {
+  crearIdCliente,
+  listarInspeccionesLocales,
+} from './inspecciones';
+
+// ==========================================
+// TIPOS DE INSPECCIÓN
+// ==========================================
+
 export type EstadoGeneral =
-  | 'BUENO' | 'REGULAR' | 'CRITICO';
+  | 'COMPLETA'
+  | 'EN_DESARROLLO'
+  | 'DONANTE'
+  | 'DEBIL'
+  | 'REQUIERE_REVISION';
 
 export type Nivel =
-  | 'BAJO' | 'MEDIO' | 'ALTO';
+  | 'BAJO'
+  | 'MEDIO'
+  | 'ALTO';
 
 export type NivelMiel =
-  | 'SIN_MIEL' | 'POCA' | 'MEDIA' | 'ABUNDANTE';
+  | 'SIN_MIEL'
+  | 'POCA'
+  | 'MEDIA'
+  | 'ABUNDANTE';
 
 export type ContenidoMarco =
   | 'MIEL_Y_CRIA'
@@ -49,6 +76,10 @@ export type InspeccionAvanzada = {
   alza: MarcoLocal[];
 };
 
+// ==========================================
+// CATÁLOGOS PERMITIDOS
+// ==========================================
+
 export const OPCIONES_MARCOS: {
   valor: ContenidoMarco;
   texto: string;
@@ -63,19 +94,50 @@ export const OPCIONES_MARCOS: {
 ];
 
 const CONTENIDOS = new Set<string>(
-  OPCIONES_MARCOS.map(o => o.valor)
+  OPCIONES_MARCOS.map(opcion => opcion.valor)
 );
 
+const ESTADOS = new Set<string>([
+  'COMPLETA',
+  'EN_DESARROLLO',
+  'DONANTE',
+  'DEBIL',
+  'REQUIERE_REVISION',
+]);
+
+const NIVELES = new Set<string>([
+  'BAJO',
+  'MEDIO',
+  'ALTO',
+]);
+
+const NIVELES_MIEL = new Set<string>([
+  'SIN_MIEL',
+  'POCA',
+  'MEDIA',
+  'ABUNDANTE',
+]);
+
+// ==========================================
+// CREAR CAJA
+// ==========================================
+
 export function crearCaja(): MarcoLocal[] {
-  return Array.from({ length: 10 }, (_, i) => ({
-    numero: i + 1,
-    contenido: '',
-    transferir: false,
-    destino: '',
-  }));
+  return Array.from(
+    { length: 10 },
+    (_, indice) => ({
+      numero: indice + 1,
+      contenido: '',
+      transferir: false,
+      destino: '',
+    })
+  );
 }
 
-// CARACTERES PERMITIDOS EN TEXTOS
+// ==========================================
+// VALIDACIÓN DE TEXTOS
+// ==========================================
+
 const NO_PERMITIDOS =
   /[^A-Za-zÀ-ÖØ-öø-ÿ0-9 \n.,;:¿?¡!()%+°ºµ'/-]/g;
 
@@ -95,7 +157,7 @@ function validarTexto(
   texto: string,
   nombre: string,
   limite: number
-) {
+): void {
   if (
     texto.length > limite ||
     limpiarObservacion(texto, limite) !== texto
@@ -105,6 +167,88 @@ function validarTexto(
     );
   }
 }
+
+// ==========================================
+// NORMALIZAR UUID
+// ==========================================
+
+function normalizarQR(
+  codigo: string
+): string {
+  return codigo.trim().toLowerCase();
+}
+
+// ==========================================
+// OBTENER SESIÓN Y CATÁLOGO
+// ==========================================
+
+async function obtenerContextoAutorizado() {
+  const sesion = await leerSesionGuardada();
+
+  if (!sesion) {
+    throw new Error(
+      'Debes iniciar sesión para registrar una inspección oficial.'
+    );
+  }
+
+  if (!tokenVigente(sesion)) {
+    throw new Error(
+      'Tu sesión ha vencido. Inicia sesión nuevamente.'
+    );
+  }
+
+  const catalogo = await leerCatalogoLocal(
+    sesion.usuario.id
+  );
+
+  if (!catalogo) {
+    throw new Error(
+      'No existe un catálogo oficial descargado para este usuario.'
+    );
+  }
+
+  return {
+    sesion,
+    catalogo,
+  };
+}
+
+// ==========================================
+// DESTINOS OFICIALES
+// ==========================================
+
+export async function listarDestinosLocales(
+  origen: string
+): Promise<string[]> {
+  const { catalogo } =
+    await obtenerContextoAutorizado();
+
+  const origenNormalizado = normalizarQR(origen);
+
+  const existeOrigen = catalogo.colmenas.some(
+    colmena =>
+      normalizarQR(colmena.codigo_qr) ===
+      origenNormalizado
+  );
+
+  if (!existeOrigen) {
+    throw new Error(
+      'La colmena de origen no existe en el catálogo oficial.'
+    );
+  }
+
+  return catalogo.colmenas
+    .filter(
+      colmena =>
+        normalizarQR(colmena.codigo_qr) !==
+        origenNormalizado
+    )
+    .map(colmena => colmena.codigo_qr);
+}
+
+// ==========================================
+// RESUMEN AUTOMÁTICO DE MARCOS
+// ==========================================
 
 export function resumenMarcos(
   datos: Pick<
@@ -119,39 +263,43 @@ export function resumenMarcos(
 
   return {
     total: activos.filter(
-      m =>
-        m.contenido !== '' &&
-        m.contenido !== 'SIN_MARCO'
+      marco =>
+        marco.contenido !== '' &&
+        marco.contenido !== 'SIN_MARCO'
     ).length,
 
     cria: activos.filter(
-      m =>
-        m.contenido === 'MIEL_Y_CRIA' ||
-        m.contenido === 'SOLO_CRIA'
+      marco =>
+        marco.contenido === 'MIEL_Y_CRIA' ||
+        marco.contenido === 'SOLO_CRIA'
     ).length,
 
     miel: activos.filter(
-      m =>
-        m.contenido === 'MIEL_Y_CRIA' ||
-        m.contenido === 'SOLO_MIEL'
+      marco =>
+        marco.contenido === 'MIEL_Y_CRIA' ||
+        marco.contenido === 'SOLO_MIEL'
     ).length,
 
     transferencias: activos.filter(
-      m => m.transferir
+      marco => marco.transferir
     ).length,
 
     sinRegistrar: activos.filter(
-      m => m.contenido === ''
+      marco => marco.contenido === ''
     ).length,
   };
 }
+
+// ==========================================
+// VALIDAR CADA CAJA
+// ==========================================
 
 function validarCaja(
   caja: MarcoLocal[],
   nombre: string,
   origen: string,
   destinos: Set<string>
-) {
+): void {
   if (caja.length !== 10) {
     throw new Error(
       `${nombre}: deben existir exactamente 10 posiciones.`
@@ -160,55 +308,65 @@ function validarCaja(
 
   const numeros = new Set<number>();
 
-  for (const m of caja) {
+  for (const marco of caja) {
     if (
-      !Number.isInteger(m.numero) ||
-      m.numero < 1 ||
-      m.numero > 10 ||
-      numeros.has(m.numero)
+      !Number.isInteger(marco.numero) ||
+      marco.numero < 1 ||
+      marco.numero > 10 ||
+      numeros.has(marco.numero)
     ) {
       throw new Error(
         `Posición inválida o repetida en ${nombre}.`
       );
     }
 
-    numeros.add(m.numero);
+    numeros.add(marco.numero);
 
-    if (!m.contenido || !CONTENIDOS.has(m.contenido)) {
+    if (
+      !marco.contenido ||
+      !CONTENIDOS.has(marco.contenido)
+    ) {
       throw new Error(
-        `Falta registrar el marco ${m.numero} de ${nombre}.`
+        `Falta registrar el marco ${marco.numero} de ${nombre}.`
       );
     }
 
-    if (typeof m.transferir !== 'boolean') {
-      throw new Error('Transferencia inválida.');
+    if (typeof marco.transferir !== 'boolean') {
+      throw new Error(
+        'El estado de transferencia no es válido.'
+      );
     }
 
-    if (m.transferir) {
-      if (m.contenido === 'SIN_MARCO') {
+    if (marco.transferir) {
+      if (marco.contenido === 'SIN_MARCO') {
         throw new Error(
-          `No se puede transferir el espacio vacío ${m.numero}.`
+          `No se puede transferir la posición vacía ${marco.numero}.`
         );
       }
 
-      if (!m.destino) {
+      if (!marco.destino) {
         throw new Error(
-          `Selecciona el destino del marco ${m.numero}.`
+          `Selecciona el destino del marco ${marco.numero}.`
         );
       }
 
-      if (m.destino === origen) {
+      if (
+        normalizarQR(marco.destino) ===
+        normalizarQR(origen)
+      ) {
         throw new Error(
           'Una colmena no puede transferir marcos a sí misma.'
         );
       }
 
-      if (!destinos.has(m.destino)) {
+      if (
+        !destinos.has(normalizarQR(marco.destino))
+      ) {
         throw new Error(
-          `Destino no registrado: marco ${m.numero}.`
+          `El destino del marco ${marco.numero} no pertenece al catálogo oficial.`
         );
       }
-    } else if (m.destino !== '') {
+    } else if (marco.destino !== '') {
       throw new Error(
         'Un marco sin transferencia no debe tener destino.'
       );
@@ -216,20 +374,26 @@ function validarCaja(
   }
 }
 
+// ==========================================
+// VALIDAR INSPECCIÓN
+// ==========================================
+
 export function validarInspeccionAvanzada(
   datos: InspeccionAvanzada,
   destinosDisponibles: string[]
 ) {
   if (
-    !/^[A-Za-z0-9_-]{3,80}$/.test(datos.codigoQR)
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+      .test(datos.codigoQR)
   ) {
-    throw new Error('Código QR de colmena inválido.');
+    throw new Error(
+      'El UUID de la colmena no es válido.'
+    );
   }
 
   if (
     !datos.estadoGeneral ||
-    !['BUENO', 'REGULAR', 'CRITICO']
-      .includes(datos.estadoGeneral)
+    !ESTADOS.has(datos.estadoGeneral)
   ) {
     throw new Error(
       'Selecciona un estado general válido.'
@@ -245,7 +409,9 @@ export function validarInspeccionAvanzada(
       valor !== null &&
       typeof valor !== 'boolean'
     ) {
-      throw new Error('Respuesta inválida.');
+      throw new Error(
+        'Respuesta de inspección inválida.'
+      );
     }
   }
 
@@ -255,18 +421,21 @@ export function validarInspeccionAvanzada(
   ]) {
     if (
       nivel !== null &&
-      !['BAJO', 'MEDIO', 'ALTO'].includes(nivel)
+      !NIVELES.has(nivel)
     ) {
-      throw new Error('Nivel inválido.');
+      throw new Error(
+        'Nivel de inspección inválido.'
+      );
     }
   }
 
   if (
     datos.nivelMiel !== null &&
-    !['SIN_MIEL', 'POCA', 'MEDIA', 'ABUNDANTE']
-      .includes(datos.nivelMiel)
+    !NIVELES_MIEL.has(datos.nivelMiel)
   ) {
-    throw new Error('Nivel de miel inválido.');
+    throw new Error(
+      'Nivel de miel inválido.'
+    );
   }
 
   validarTexto(
@@ -291,7 +460,9 @@ export function validarInspeccionAvanzada(
     typeof datos.signosEnfermedad !== 'boolean' ||
     typeof datos.tieneAlza !== 'boolean'
   ) {
-    throw new Error('Datos de inspección inválidos.');
+    throw new Error(
+      'Datos de inspección inválidos.'
+    );
   }
 
   if (
@@ -329,7 +500,9 @@ export function validarInspeccionAvanzada(
     }
   }
 
-  const destinos = new Set(destinosDisponibles);
+  const destinos = new Set(
+    destinosDisponibles.map(normalizarQR)
+  );
 
   validarCaja(
     datos.camara,
@@ -347,10 +520,10 @@ export function validarInspeccionAvanzada(
     );
   } else if (
     datos.alza.some(
-      m =>
-        m.contenido !== '' ||
-        m.transferir ||
-        m.destino !== ''
+      marco =>
+        marco.contenido !== '' ||
+        marco.transferir ||
+        marco.destino !== ''
     )
   ) {
     throw new Error(
@@ -381,11 +554,17 @@ export function validarInspeccionAvanzada(
   return resumen;
 }
 
-let conexion: Promise<SQLite.SQLiteDatabase> | null =
-  null;
+// ==========================================
+// SQLITE
+// ==========================================
+
+let conexion:
+  Promise<SQLite.SQLiteDatabase> | null = null;
 
 async function iniciarBD() {
-  const db = await SQLite.openDatabaseAsync('colmenas.db');
+  const db = await SQLite.openDatabaseAsync(
+    'colmenas.db'
+  );
 
   await db.execAsync(`
     PRAGMA foreign_keys = ON;
@@ -412,17 +591,25 @@ async function iniciarBD() {
       inspeccion_local_id INTEGER NOT NULL
         REFERENCES inspecciones_locales(id),
       ubicacion TEXT NOT NULL
-        CHECK(ubicacion IN ('CAMARA_CRIA','ALZA')),
+        CHECK(
+          ubicacion IN ('CAMARA_CRIA','ALZA')
+        ),
       numero INTEGER NOT NULL
         CHECK(numero BETWEEN 1 AND 10),
       contenido TEXT NOT NULL,
       transferir INTEGER NOT NULL DEFAULT 0,
       destino_codigo TEXT,
-      UNIQUE(inspeccion_local_id, ubicacion, numero)
+      UNIQUE(
+        inspeccion_local_id,
+        ubicacion,
+        numero
+      )
     );
 
     CREATE INDEX IF NOT EXISTS idx_marcos_inspeccion_local
-    ON marcos_inspeccion_local(inspeccion_local_id);
+    ON marcos_inspeccion_local(
+      inspeccion_local_id
+    );
   `);
 
   return db;
@@ -430,44 +617,59 @@ async function iniciarBD() {
 
 function obtenerBD() {
   if (!conexion) {
-    conexion = iniciarBD().catch(e => {
+    conexion = iniciarBD().catch(error => {
       conexion = null;
-      throw e;
+      throw error;
     });
   }
 
   return conexion;
 }
 
-export async function listarDestinosLocales(
-  origen: string
-): Promise<string[]> {
-  const db = await obtenerBD();
-
-  const registros = await db.getAllAsync<{
-    codigo_qr: string;
-  }>(
-    `SELECT DISTINCT codigo_qr
-     FROM inspecciones_locales
-     WHERE codigo_qr <> ?
-     ORDER BY codigo_qr`,
-    [origen]
-  );
-
-  return registros.map(r => r.codigo_qr);
-}
+// ==========================================
+// GUARDAR INSPECCIÓN AVANZADA
+// ==========================================
 
 export async function guardarInspeccionAvanzada(
   datos: InspeccionAvanzada
 ): Promise<number> {
-  const db = await obtenerBD();
+  // 1. Recuperar identidad y catálogo.
+  const { sesion, catalogo } =
+    await obtenerContextoAutorizado();
 
-  const destinos =
-    await listarDestinosLocales(datos.codigoQR);
+  const origenQR = normalizarQR(
+    datos.codigoQR
+  );
 
-  const resumen =
-    validarInspeccionAvanzada(datos, destinos);
+  // 2. Comprobar origen oficial.
+  const origen = catalogo.colmenas.find(
+    colmena =>
+      normalizarQR(colmena.codigo_qr) ===
+      origenQR
+  );
 
+  if (!origen) {
+    throw new Error(
+      'La colmena de origen no pertenece al catálogo oficial.'
+    );
+  }
+
+  // 3. Preparar destinos válidos.
+  const destinosOficiales = catalogo.colmenas
+    .filter(
+      colmena =>
+        normalizarQR(colmena.codigo_qr) !==
+        origenQR
+    )
+    .map(colmena => colmena.codigo_qr);
+
+  // 4. Validar todos los datos.
+  const resumen = validarInspeccionAvanzada(
+    datos,
+    destinosOficiales
+  );
+
+  // 5. Preparar marcos.
   const cajas: {
     ubicacion: UbicacionMarco;
     marcos: MarcoLocal[];
@@ -492,139 +694,132 @@ export async function guardarInspeccionAvanzada(
         ? 'Vista'
         : 'No vista';
 
+  // 6. Crear tabla principal y migrarla.
+  // No borra registros existentes.
+  await listarInspeccionesLocales();
+
+  const db = await obtenerBD();
+
+  // 7. Crear UUID y fecha original.
+  // Ambos quedan guardados para que
+  // los reintentos sean seguros.
+  const idCliente = crearIdCliente();
+  const fechaReal = new Date().toISOString();
+
   let nuevoId = 0;
 
-  await db.withExclusiveTransactionAsync(async tx => {
-    // NO ACEPTAR ORÍGENES INVENTADOS
-    const origen = await tx.getFirstAsync<{
-      id: number;
-    }>(
-      `SELECT id FROM inspecciones_locales
-       WHERE codigo_qr = ? LIMIT 1`,
-      [datos.codigoQR]
-    );
-
-    if (!origen) {
-      throw new Error(
-        'Colmena de origen no registrada localmente.'
+  // 8. Guardar toda la inspección en una
+  // sola transacción SQLite.
+  await db.withExclusiveTransactionAsync(
+    async tx => {
+      const resultado = await tx.runAsync(
+        `INSERT INTO inspecciones_locales (
+          codigo_qr,
+          marcos_totales,
+          marcos_cria,
+          marcos_miel,
+          reina,
+          observaciones,
+          fecha_local,
+          estado,
+          id_cliente,
+          servidor_id,
+          usuario_local_id
+        ) VALUES (
+          ?, ?, ?, ?, ?, ?, ?,
+          'PENDIENTE', ?, NULL, ?
+        )`,
+        [
+          datos.codigoQR,
+          resumen.total,
+          resumen.cria,
+          resumen.miel,
+          reina,
+          datos.observaciones.trim(),
+          fechaReal,
+          idCliente,
+          sesion.usuario.id,
+        ]
       );
-    }
 
-    // REVALIDAR DESTINOS
-    for (const caja of cajas) {
-      for (const m of caja.marcos) {
-        if (!m.transferir) continue;
+      nuevoId = resultado.lastInsertRowId;
 
-        const destino = await tx.getFirstAsync<{
-          id: number;
-        }>(
-          `SELECT id FROM inspecciones_locales
-           WHERE codigo_qr = ? LIMIT 1`,
-          [m.destino]
-        );
+      // Guardar datos de la inspección.
+      await tx.runAsync(
+        `INSERT INTO inspecciones_detalle_local (
+          inspeccion_local_id,
+          estado_general,
+          reina_observada,
+          presencia_cria,
+          postura,
+          nivel_poblacion,
+          reservas_alimento,
+          nivel_miel,
+          alimentacion,
+          signos_enfermedad,
+          enfermedad_observada,
+          tiras_medicamento,
+          tiene_alza
+        ) VALUES (
+          ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+        )`,
+        [
+          nuevoId,
+          datos.estadoGeneral!,
+          datos.reinaObservada === null
+            ? null
+            : Number(datos.reinaObservada),
+          datos.presenciaCria === null
+            ? null
+            : Number(datos.presenciaCria),
+          datos.postura === null
+            ? null
+            : Number(datos.postura),
+          datos.nivelPoblacion,
+          datos.reservasAlimento,
+          datos.nivelMiel,
+          datos.alimentacion.trim(),
+          Number(datos.signosEnfermedad),
+          datos.enfermedadObservada.trim(),
+          datos.tirasMedicamento,
+          Number(datos.tieneAlza),
+        ]
+      );
 
-        if (
-          !destino ||
-          m.destino === datos.codigoQR
-        ) {
-          throw new Error(
-            'La colmena de destino no es válida.'
+      // Guardar los diez marcos de cada caja.
+      for (const caja of cajas) {
+        for (const marco of caja.marcos) {
+          await tx.runAsync(
+            `INSERT INTO marcos_inspeccion_local (
+              inspeccion_local_id,
+              ubicacion,
+              numero,
+              contenido,
+              transferir,
+              destino_codigo
+            ) VALUES (?, ?, ?, ?, ?, ?)`,
+            [
+              nuevoId,
+              caja.ubicacion,
+              marco.numero,
+              marco.contenido,
+              Number(marco.transferir),
+              marco.transferir
+                ? marco.destino
+                : null,
+            ]
           );
         }
       }
     }
-
-    const resultado = await tx.runAsync(
-      `INSERT INTO inspecciones_locales (
-        codigo_qr,
-        marcos_totales,
-        marcos_cria,
-        marcos_miel,
-        reina,
-        observaciones,
-        fecha_local,
-        estado
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, 'PENDIENTE')`,
-      [
-        datos.codigoQR,
-        resumen.total,
-        resumen.cria,
-        resumen.miel,
-        reina,
-        datos.observaciones.trim(),
-        new Date().toISOString(),
-      ]
-    );
-
-    nuevoId = resultado.lastInsertRowId;
-
-    await tx.runAsync(
-      `INSERT INTO inspecciones_detalle_local (
-        inspeccion_local_id,
-        estado_general,
-        reina_observada,
-        presencia_cria,
-        postura,
-        nivel_poblacion,
-        reservas_alimento,
-        nivel_miel,
-        alimentacion,
-        signos_enfermedad,
-        enfermedad_observada,
-        tiras_medicamento,
-        tiene_alza
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        nuevoId,
-        datos.estadoGeneral!,
-        datos.reinaObservada === null
-          ? null
-          : Number(datos.reinaObservada),
-        datos.presenciaCria === null
-          ? null
-          : Number(datos.presenciaCria),
-        datos.postura === null
-          ? null
-          : Number(datos.postura),
-        datos.nivelPoblacion,
-        datos.reservasAlimento,
-        datos.nivelMiel,
-        datos.alimentacion.trim(),
-        Number(datos.signosEnfermedad),
-        datos.enfermedadObservada.trim(),
-        datos.tirasMedicamento,
-        Number(datos.tieneAlza),
-      ]
-    );
-
-    for (const caja of cajas) {
-      for (const marco of caja.marcos) {
-        await tx.runAsync(
-          `INSERT INTO marcos_inspeccion_local (
-            inspeccion_local_id,
-            ubicacion,
-            numero,
-            contenido,
-            transferir,
-            destino_codigo
-          ) VALUES (?, ?, ?, ?, ?, ?)`,
-          [
-            nuevoId,
-            caja.ubicacion,
-            marco.numero,
-            marco.contenido,
-            Number(marco.transferir),
-            marco.transferir
-              ? marco.destino
-              : null,
-          ]
-        );
-      }
-    }
-  });
+  );
 
   return nuevoId;
 }
+
+// ==========================================
+// CONSULTAR TRANSFERENCIAS PREPARADAS
+// ==========================================
 
 export async function listarTransferenciasPreparadas() {
   const db = await obtenerBD();
@@ -650,6 +845,8 @@ export async function listarTransferenciasPreparadas() {
      JOIN inspecciones_locales AS i
        ON i.id = m.inspeccion_local_id
      WHERE m.transferir = 1
-     ORDER BY i.id DESC, m.numero`
+     ORDER BY
+       i.id DESC,
+       m.numero`
   );
 }
