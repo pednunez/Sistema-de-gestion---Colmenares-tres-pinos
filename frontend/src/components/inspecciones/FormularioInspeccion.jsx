@@ -5,6 +5,8 @@ import { AreaTexto, Entrada, Segmentado } from "../ui/Campo";
 import SelectorApiarioColmena from "../colmenas/SelectorApiarioColmena";
 import RegistroMarcos from "./RegistroMarcos";
 import TratamientosEnCurso from "./TratamientosEnCurso";
+import TratamientoEnInspeccion from "./TratamientoEnInspeccion";
+import { TRATAMIENTO_VACIO, tratamientoParaEnviar, validarTratamiento } from "../../utils/tratamientoInspeccion";
 import { useFormulario } from "../../hooks/useFormulario";
 import { useDatos } from "../../hooks/useDatos";
 import { ESTADO_GENERAL, ESTADO_GENERAL_ANTERIOR, NIVEL, NIVEL_MIEL, opciones, texto } from "../../utils/etiquetas";
@@ -45,6 +47,7 @@ const NOMBRES_CAMPO = {
   colmena_id: "Colmena",
   estado_general: "Estado de la colmena",
   enfermedad_observada: "Qué se observó",
+  tratamiento: "Tratamiento",
   alimentacion_suministrada: "Alimentación suministrada",
   camara: "Cámara de cría",
   alza: "Alza",
@@ -96,6 +99,9 @@ export default function FormularioInspeccion({
     signos_enfermedad: inspeccion?.signos_enfermedad ?? false,
     enfermedad_observada: inspeccion?.enfermedad_observada ?? "",
     tiras_medicamento: inspeccion?.tiras_medicamento ?? null,
+    // Tratamiento nuevo que se registra junto con la inspección.
+    registrarTratamiento: false,
+    tratamiento: TRATAMIENTO_VACIO,
     observaciones: inspeccion?.observaciones ?? "",
     camara: crearCaja(),
     tieneAlza: false,
@@ -145,6 +151,7 @@ export default function FormularioInspeccion({
     estado_general: !v.estado_general && "Indica el estado de la colmena.",
     enfermedad_observada:
       v.signos_enfermedad && !v.enfermedad_observada.trim() && "Describe brevemente lo que observaste.",
+    tratamiento: v.signos_enfermedad && v.registrarTratamiento && validarTratamiento(v.tratamiento),
     alimentacion_suministrada:
       v.alimentacion_suministrada.trim().length > LARGO_MAXIMO_ALIMENTACION &&
       `Máximo ${LARGO_MAXIMO_ALIMENTACION} caracteres.`,
@@ -178,7 +185,11 @@ export default function FormularioInspeccion({
         tiras_medicamento: v.signos_enfermedad ? v.tiras_medicamento : null,
         observaciones: textoONulo(v.observaciones),
       };
-      if (esEdicion) return onGuardar(datos, 0, v.finalizar);
+      const nuevoTratamiento =
+        v.signos_enfermedad && v.registrarTratamiento
+          ? tratamientoParaEnviar(v.tratamiento, { motivo: v.enfermedad_observada, tiras: v.tiras_medicamento })
+          : null;
+      if (esEdicion) return onGuardar(datos, 0, v.finalizar, nuevoTratamiento);
 
       return onGuardar(
         {
@@ -189,7 +200,8 @@ export default function FormularioInspeccion({
           marcos: detalleMarcos(v),
         },
         contarTransferencias(v),
-        v.finalizar
+        v.finalizar,
+        nuevoTratamiento
       );
     });
     if (!guardado) mostrarPrimerError();
@@ -343,6 +355,17 @@ export default function FormularioInspeccion({
             opciones={OPCIONES_TIRAS}
             valor={valores.tiras_medicamento}
             onCambiar={(valor) => cambiar("tiras_medicamento", valor)}
+          />
+        )}
+
+        {valores.signos_enfermedad && (
+          <TratamientoEnInspeccion
+            registrar={valores.registrarTratamiento}
+            tratamiento={valores.tratamiento}
+            tiras={valores.tiras_medicamento}
+            error={errores.tratamiento}
+            onRegistrar={(valor) => cambiar("registrarTratamiento", valor)}
+            onCambiar={(tratamiento) => cambiar("tratamiento", tratamiento)}
           />
         )}
 

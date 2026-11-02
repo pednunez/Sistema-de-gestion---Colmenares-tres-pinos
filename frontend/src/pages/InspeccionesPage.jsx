@@ -51,12 +51,13 @@ export default function InspeccionesPage() {
 
   const guardarInspeccion = useGuardarInspeccion();
 
-  const guardar = async (valores, cantidadTransferencias = 0, finalizar = []) => {
+  const guardar = async (valores, cantidadTransferencias = 0, finalizar = [], nuevoTratamiento = null) => {
     const { codigo, tratamientosFallidos } = await guardarInspeccion({
       existente: formulario?.inspeccion,
       valores,
       cantidadTransferencias,
       finalizar,
+      nuevoTratamiento,
     });
     setFormulario(null);
     setPendientes(tratamientosFallidos.length > 0 ? { codigo, tratamientos: tratamientosFallidos } : null);

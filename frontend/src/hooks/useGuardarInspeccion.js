@@ -1,5 +1,6 @@
-// Guarda una inspección (nueva o editada) y, después, finaliza los tratamientos
-// marcados. Lo usan la pantalla Inspecciones y la revisión por grupo.
+// Guarda una inspección (nueva o editada) y, después, registra el tratamiento
+// aplicado (si se indicó) y finaliza los tratamientos marcados. Lo usan la
+// pantalla Inspecciones y la revisión por grupo.
 import { useCallback } from "react";
 import { useAuth } from "./useAuth";
 import { useAvisos } from "./useAvisos";
@@ -40,7 +41,8 @@ export function useGuardarInspeccion() {
   // Devuelve { codigo, tratamientosFallidos }. Si la inspección no se guarda, lanza
   // el error para que el formulario lo muestre y no se cierre.
   return useCallback(
-    async ({ existente, valores, cantidadTransferencias = 0, finalizar = [] }) => {
+    async ({ existente, valores, cantidadTransferencias = 0, finalizar = [], nuevoTratamiento = null }) => {
+      let inspeccionId = existente?.id ?? null;
       if (existente) {
         // Al editar, el backend no permite cambiar la colmena.
         const cambios = { ...valores };
@@ -50,13 +52,30 @@ export function useGuardarInspeccion() {
         // Las transferencias marcadas viajan en marcos[].transferido_a_colmena_id y
         // el backend las crea en la misma operación. usuario_id lo exige el esquema;
         // el backend lo reemplaza por el usuario de la sesión.
-        await inspeccionesService.crear({ ...valores, usuario_id: usuario.id });
+        const creada = await inspeccionesService.crear({ ...valores, usuario_id: usuario.id });
+        inspeccionId = creada?.id ?? null;
+      }
+      const colmenaId = existente ? existente.colmena_id : valores.colmena_id;
+
+      // Tratamiento aplicado durante la inspección: queda asociado a ella.
+      let tratamientoRegistrado = false;
+      if (nuevoTratamiento) {
+        try {
+          await tratamientosService.crear({ ...nuevoTratamiento, colmena_id: colmenaId, inspeccion_id: inspeccionId });
+          tratamientoRegistrado = true;
+        } catch (error) {
+          avisos.error(
+            `La inspección se guardó, pero el tratamiento no: ${error.message} Regístralo desde Tratamientos.`
+          );
+        }
       }
       const tratamientosFallidos = await finalizarTratamientos(finalizar);
       await recargar().catch(() => {});
 
-      const codigo = codigoColmena(existente ? existente.colmena_id : valores.colmena_id);
-      const finalizados = textoFinalizados(finalizar.length - tratamientosFallidos.length);
+      const codigo = codigoColmena(colmenaId);
+      const finalizados =
+        (tratamientoRegistrado ? " Se registró el tratamiento." : "") +
+        textoFinalizados(finalizar.length - tratamientosFallidos.length);
       if (existente) avisos.exito(`Inspección actualizada.${finalizados}`);
       else
         avisos.exito(

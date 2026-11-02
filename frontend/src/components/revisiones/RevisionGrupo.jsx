@@ -114,8 +114,13 @@ export default function RevisionGrupo({ sesionId, onCambio, onCerrar }) {
   const avance = total ? Math.round(((revisadas + omitidas) * 100) / total) : 0;
   const siguiente = sesion.colmenas.find((c) => c.colmena_id === sesion.siguiente_colmena_id);
 
-  const guardar = async (valores, cantidadTransferencias, finalizar) => {
-    const { codigo, tratamientosFallidos } = await guardarInspeccion({ valores, cantidadTransferencias, finalizar });
+  const guardar = async (valores, cantidadTransferencias, finalizar, nuevoTratamiento) => {
+    const { codigo, tratamientosFallidos } = await guardarInspeccion({
+      valores,
+      cantidadTransferencias,
+      finalizar,
+      nuevoTratamiento,
+    });
     setInspeccionando(null);
     setPendientes(tratamientosFallidos.length > 0 ? { codigo, tratamientos: tratamientosFallidos } : null);
     refrescar();
