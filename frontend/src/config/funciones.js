@@ -6,3 +6,8 @@
 // marcos al stock, el formulario avisa que hay que registrarlos también en Stock.
 // Cuando el backend esté listo, se activa para quitar el aviso.
 export const RETIRO_A_BODEGA = import.meta.env?.VITE_RETIRO_A_BODEGA === "true";
+
+// Grupos de colmenas y revisión por grupo (PB-06 y PB-18). Decisión del Product
+// Owner (02-11): no se usarán por ahora, así que no aparecen en el menú. El código
+// y el backend se conservan; se vuelven a mostrar con VITE_GRUPOS=true.
+export const gruposActivos = () => import.meta.env?.VITE_GRUPOS === "true";

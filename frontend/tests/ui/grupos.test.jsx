@@ -1,9 +1,14 @@
 // PB-06: grupos de colmenas por apiario.
-import { afterEach, expect, it } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
 import { ADMIN, APICULTOR, irA, montarApp, simularBackend } from "./apoyo";
 
-afterEach(cleanup);
+// El módulo está desactivado en el menú; estas pruebas lo activan.
+beforeEach(() => vi.stubEnv("VITE_GRUPOS", "true"));
+afterEach(() => {
+  cleanup();
+  vi.unstubAllEnvs();
+});
 
 const F = "2026-10-27T10:00:00";
 const grupo = (id, apiario_id, nombre, cantidad, extra = {}) => ({

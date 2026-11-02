@@ -11,6 +11,7 @@ import {
   ShieldCheck,
   Users,
 } from "lucide-react";
+import { gruposActivos } from "./funciones";
 
 const TODOS = ["ADMIN", "APICULTOR"];
 const SOLO_ADMIN = ["ADMIN"];
@@ -20,7 +21,7 @@ export const MENU = [
   { id: "dashboard", nombre: "Dashboard", icono: LayoutDashboard, roles: SOLO_ADMIN },
   { id: "apiarios", nombre: "Apiarios", icono: MapPinned, roles: SOLO_ADMIN },
   { id: "colmenas", nombre: "Colmenas", icono: Boxes, roles: TODOS },
-  { id: "grupos", nombre: "Grupos", icono: Layers, roles: TODOS },
+  { id: "grupos", nombre: "Grupos", icono: Layers, roles: TODOS, activo: gruposActivos },
   { id: "inspecciones", nombre: "Inspecciones", icono: ClipboardCheck, roles: TODOS },
   { id: "tratamientos", nombre: "Tratamientos", icono: Pill, roles: TODOS },
   { id: "transferencias", nombre: "Transferencias", icono: ArrowRightLeft, roles: TODOS },
@@ -31,7 +32,8 @@ export const MENU = [
 ];
 
 export function menuParaRol(rol) {
-  return MENU.filter((item) => item.roles.includes(rol));
+  // Un módulo desactivado no aparece en el menú ni se puede abrir.
+  return MENU.filter((item) => item.roles.includes(rol) && (item.activo?.() ?? true));
 }
 
 export function vistaInicial(rol) {
