@@ -20,6 +20,19 @@ const VACIO = {
   usuarios: [],
 };
 
+async function obtenerDatos(esAdmin) {
+  const [apiarios, colmenas, inspecciones, tratamientos, transferencias] = await Promise.all([
+    apiariosService.listar(),
+    colmenasService.listar(),
+    inspeccionesService.listar(),
+    tratamientosService.listar(),
+    transferenciasService.listar(),
+  ]);
+  // La lista de usuarios solo está disponible para el administrador.
+  const usuarios = esAdmin ? await usuariosService.listar().catch(() => []) : [];
+  return { apiarios, colmenas, inspecciones, tratamientos, transferencias, usuarios };
+}
+
 export function DatosProvider({ children }) {
   const { usuario, esAdmin } = useAuth();
   const [datos, setDatos] = useState(VACIO);
@@ -27,20 +40,12 @@ export function DatosProvider({ children }) {
   const [cargado, setCargado] = useState(false);
   const [error, setError] = useState("");
 
+  // Recarga pedida por el usuario: muestra que se está actualizando.
   const recargar = useCallback(async () => {
     setCargando(true);
     setError("");
     try {
-      const [apiarios, colmenas, inspecciones, tratamientos, transferencias] = await Promise.all([
-        apiariosService.listar(),
-        colmenasService.listar(),
-        inspeccionesService.listar(),
-        tratamientosService.listar(),
-        transferenciasService.listar(),
-      ]);
-      // La lista de usuarios solo está disponible para el administrador.
-      const usuarios = esAdmin ? await usuariosService.listar().catch(() => []) : [];
-      setDatos({ apiarios, colmenas, inspecciones, tratamientos, transferencias, usuarios });
+      setDatos(await obtenerDatos(esAdmin));
       setCargado(true);
     } catch (err) {
       setError(err.message);
@@ -49,9 +54,26 @@ export function DatosProvider({ children }) {
     }
   }, [esAdmin]);
 
+  // Carga inicial: el estado ya parte en «cargando», así que solo se actualiza
+  // cuando llega la respuesta.
   useEffect(() => {
-    recargar();
-  }, [recargar]);
+    let vigente = true;
+    obtenerDatos(esAdmin)
+      .then((nuevos) => {
+        if (!vigente) return;
+        setDatos(nuevos);
+        setCargado(true);
+        setCargando(false);
+      })
+      .catch((err) => {
+        if (!vigente) return;
+        setError(err.message);
+        setCargando(false);
+      });
+    return () => {
+      vigente = false;
+    };
+  }, [esAdmin]);
 
   const indices = useMemo(() => {
     const porId = (lista) => new Map(lista.map((item) => [item.id, item]));

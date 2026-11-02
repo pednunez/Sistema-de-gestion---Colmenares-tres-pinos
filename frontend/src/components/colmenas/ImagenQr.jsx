@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { Loader2, QrCode } from "lucide-react";
 import { useConsulta } from "../../hooks/useConsulta";
 import { colmenasService } from "../../services/colmenasService";
@@ -10,14 +10,9 @@ export default function ImagenQr({ colmena, className = "w-48", conDescarga = fa
     // Si cambia la etiqueta, se vuelve a pedir la imagen.
     [colmena.id, colmena.codigo_qr]
   );
-  const [url, setUrl] = useState(null);
-
-  useEffect(() => {
-    if (!blob) return undefined;
-    const nuevaUrl = URL.createObjectURL(blob);
-    setUrl(nuevaUrl);
-    return () => URL.revokeObjectURL(nuevaUrl);
-  }, [blob]);
+  // La URL local se deriva de la imagen y se libera cuando cambia o al cerrar.
+  const url = useMemo(() => (blob ? URL.createObjectURL(blob) : null), [blob]);
+  useEffect(() => () => url && URL.revokeObjectURL(url), [url]);
 
   if (cargando || (!url && !error)) {
     return (
