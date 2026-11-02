@@ -1,38 +1,45 @@
-import { ArrowRightLeft, ClipboardCheck, History, Pill, Plus } from "lucide-react";
+import { useState } from "react";
+import { Pill, Plus } from "lucide-react";
 import Modal from "../ui/Modal";
 import Boton from "../ui/Boton";
 import { InsigniaDe } from "../ui/Insignia";
-import { Cargando, ErrorCarga } from "../ui/Estados";
 import { Dato } from "../ui/Estructura";
 import ImagenQr from "./ImagenQr";
+import HistorialColmena from "./HistorialColmena";
+import DetalleInspeccion from "../inspecciones/DetalleInspeccion";
 import { useConsulta } from "../../hooks/useConsulta";
 import { useDatos } from "../../hooks/useDatos";
 import { useNavegacion } from "../../hooks/useNavegacion";
 import { historialService } from "../../services/historialService";
 import { ESTADO_COLMENA, ESTADO_GENERAL_TODOS } from "../../utils/etiquetas";
-import { formatearFecha, formatearFechaHora, humanizar } from "../../utils/formato";
+import { formatearFecha } from "../../utils/formato";
 import { ultimaInspeccionPorColmena } from "../../utils/alertas";
 
-function iconoEvento(tipo = "") {
-  const valor = tipo.toUpperCase();
-  if (valor.includes("INSPEC")) return ClipboardCheck;
-  if (valor.includes("TRAT")) return Pill;
-  if (valor.includes("TRANSF")) return ArrowRightLeft;
-  return History;
-}
-
-// Ficha de la colmena con su historial completo (RF-43, RF-44, RF-48).
+// Ficha de la colmena con su historial completo (RF-43, RF-44, RF-48; PB-12).
 export default function DetalleColmena({ colmenaId, onCerrar }) {
   const { indices, datos, nombreApiario } = useDatos();
   const { navegar } = useNavegacion();
   const colmena = indices.colmenas.get(colmenaId);
   const historial = useConsulta(() => historialService.deColmena(colmenaId), [colmenaId]);
+  // Inspección abierta desde el historial: se muestra en lugar de la ficha y al
+  // cerrarla se vuelve a la colmena.
+  const [inspeccionAbierta, setInspeccionAbierta] = useState(null);
 
   if (!colmena) {
     return (
       <Modal titulo="Colmena no disponible" onCerrar={onCerrar}>
         <p className="text-slate-600">Esta colmena fue dada de baja o ya no existe.</p>
       </Modal>
+    );
+  }
+
+  if (inspeccionAbierta) {
+    return (
+      <DetalleInspeccion
+        inspeccion={inspeccionAbierta}
+        puedeEditar={false}
+        onCerrar={() => setInspeccionAbierta(null)}
+      />
     );
   }
 
@@ -78,31 +85,7 @@ export default function DetalleColmena({ colmenaId, onCerrar }) {
         </div>
       </div>
 
-      <h3 className="mb-3 mt-8 font-semibold text-slate-900">Historial</h3>
-      {historial.cargando && <Cargando texto="Cargando historial..." />}
-      {historial.error && <ErrorCarga mensaje={historial.error} onReintentar={historial.recargar} />}
-      {historial.datos?.length === 0 && (
-        <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-500">
-          Esta colmena todavía no tiene actividad registrada.
-        </p>
-      )}
-      {historial.datos?.length > 0 && (
-        <ol className="relative ml-3 border-l border-slate-200">
-          {historial.datos.map((evento) => {
-            const Icono = iconoEvento(evento.tipo_evento);
-            return (
-              <li key={`${evento.tipo_evento}-${evento.evento_id}`} className="mb-5 ml-6">
-                <span className="absolute -left-3.5 flex h-7 w-7 items-center justify-center rounded-full bg-amber-100 text-amber-700 ring-4 ring-white">
-                  <Icono size={14} aria-hidden="true" />
-                </span>
-                <p className="text-sm font-semibold text-slate-900">{humanizar(evento.tipo_evento)}</p>
-                <p className="text-xs text-slate-500">{formatearFechaHora(evento.fecha)}</p>
-                {evento.detalle && <p className="mt-1 text-sm text-slate-600">{humanizar(evento.detalle)}</p>}
-              </li>
-            );
-          })}
-        </ol>
-      )}
+      <HistorialColmena colmenaId={colmena.id} consulta={historial} onVerInspeccion={setInspeccionAbierta} />
     </Modal>
   );
 }
