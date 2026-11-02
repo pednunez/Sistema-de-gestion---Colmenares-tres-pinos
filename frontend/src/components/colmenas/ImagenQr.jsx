@@ -5,7 +5,11 @@ import { colmenasService } from "../../services/colmenasService";
 
 // Descarga la imagen del QR con el token y la muestra como URL local.
 export default function ImagenQr({ colmena, className = "w-48", conDescarga = false }) {
-  const { datos: blob, cargando, error } = useConsulta(() => colmenasService.obtenerImagenQr(colmena.id), [colmena.id]);
+  const { datos: blob, cargando, error } = useConsulta(
+    () => colmenasService.obtenerImagenQr(colmena.id),
+    // Si cambia la etiqueta, se vuelve a pedir la imagen.
+    [colmena.id, colmena.codigo_qr]
+  );
   const [url, setUrl] = useState(null);
 
   useEffect(() => {

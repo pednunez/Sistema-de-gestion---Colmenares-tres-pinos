@@ -188,3 +188,14 @@ Regla definida por el Product Owner (28-10). Detalle completo en el documento "T
 - Rechazar con 422 (con `loc` del marco) retirar a bodega marcos con cría o `SIN_MARCO`, o enviar `retirar_a_bodega: true` junto con `transferido_a_colmena_id`. **Corrección al documento del 28-10:** los marcos de cera o miel también se pueden transferir a otra colmena.
 - `GET /colmenas/{id}/marcos`, `ubicacion_destino` y `marco_desplazado_numero` para no superar 10 marcos por piso (intercambio o retiro del marco desplazado según su contenido).
 - Materiales `MARCO_CERA_ESTAMPADA` y `MARCO_MIEL`, y el movimiento `EXTRACCION` (`MARCO_MIEL` → `MARCO_CERA_UNTADA`).
+
+## 9. Etiquetas QR que abren el frontend (PB-07)
+
+**Ya está en el frontend:**
+- "Escanear QR" en Colmenas y en Códigos QR: lee la etiqueta con la cámara (navegadores con `BarcodeDetector`, como Chrome y Edge) o deja pegar el código. Busca con `GET /colmenas/qr/{codigo_qr}` y abre la ficha de la colmena.
+- Si la etiqueta no está asociada (404), el administrador la asocia a una colmena con `PUT /colmenas/{id}/qr { "codigo_qr": "<uuid>" }`. El apicultor solo ve el aviso.
+- En la ficha de la colmena, el administrador puede "Cambiar etiqueta": asociar una etiqueta ya impresa o generar un código nuevo (`{ "codigo_qr": null }`). El 409 se muestra tal cual.
+- Abrir el sistema con `?qr=<uuid>` lleva directo a la ficha de la colmena (después de iniciar sesión, si hace falta).
+
+**Falta en el backend:**
+- Hoy la imagen de `GET /colmenas/{id}/qr` contiene la URL del **backend** (`/colmenas/qr/{codigo}`), que al escanearla con la cámara del celular muestra un JSON. Debería contener la URL del **frontend**: `{FRONTEND_URL}/?qr={codigo_qr}` (por ejemplo con una variable `FRONTEND_URL`, como `PASSWORD_RESET_FRONTEND_URL`). El frontend ya reconoce las dos formas.

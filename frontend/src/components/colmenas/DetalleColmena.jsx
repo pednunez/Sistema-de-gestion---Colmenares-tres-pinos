@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Pill, Plus } from "lucide-react";
+import { Pill, Plus, QrCode } from "lucide-react";
 import Modal from "../ui/Modal";
 import Boton from "../ui/Boton";
 import { InsigniaDe } from "../ui/Insignia";
@@ -7,6 +7,8 @@ import { Dato } from "../ui/Estructura";
 import ImagenQr from "./ImagenQr";
 import HistorialColmena from "./HistorialColmena";
 import DetalleInspeccion from "../inspecciones/DetalleInspeccion";
+import AsociarQr from "../qr/AsociarQr";
+import { useAuth } from "../../hooks/useAuth";
 import { useConsulta } from "../../hooks/useConsulta";
 import { useDatos } from "../../hooks/useDatos";
 import { useNavegacion } from "../../hooks/useNavegacion";
@@ -24,6 +26,8 @@ export default function DetalleColmena({ colmenaId, onCerrar }) {
   // Inspección abierta desde el historial: se muestra en lugar de la ficha y al
   // cerrarla se vuelve a la colmena.
   const [inspeccionAbierta, setInspeccionAbierta] = useState(null);
+  const [cambiandoQr, setCambiandoQr] = useState(false);
+  const { esAdmin } = useAuth();
 
   if (!colmena) {
     return (
@@ -42,6 +46,8 @@ export default function DetalleColmena({ colmenaId, onCerrar }) {
       />
     );
   }
+
+  if (cambiandoQr) return <AsociarQr colmena={colmena} onCerrar={() => setCambiandoQr(false)} />;
 
   const ultima = ultimaInspeccionPorColmena(datos.inspecciones).get(colmena.id);
 
@@ -82,6 +88,11 @@ export default function DetalleColmena({ colmenaId, onCerrar }) {
         </dl>
         <div className="justify-self-center">
           <ImagenQr colmena={colmena} className="w-40" conDescarga />
+          {esAdmin && (
+            <Boton variante="fantasma" tamano="sm" icono={QrCode} className="mt-1" onClick={() => setCambiandoQr(true)}>
+              Cambiar etiqueta
+            </Boton>
+          )}
         </div>
       </div>
 

@@ -1,11 +1,13 @@
 import { useMemo, useState } from "react";
-import { Printer, QrCode } from "lucide-react";
+import { Printer, QrCode, ScanLine } from "lucide-react";
 import Boton from "../components/ui/Boton";
 import { Seleccion } from "../components/ui/Campo";
 import { Cargando, EstadoVacio } from "../components/ui/Estados";
 import { Buscador, EncabezadoModulo, Panel } from "../components/ui/Estructura";
 import ImagenQr from "../components/colmenas/ImagenQr";
 import { useDatos } from "../hooks/useDatos";
+import { useNavegacion } from "../hooks/useNavegacion";
+import EscanearColmena from "../components/qr/EscanearColmena";
 
 // Selección e impresión de etiquetas QR para pegar en las cajas (RF-19).
 export default function QrPage() {
@@ -13,6 +15,8 @@ export default function QrPage() {
   const [filtroApiario, setFiltroApiario] = useState("");
   const [busqueda, setBusqueda] = useState("");
   const [seleccion, setSeleccion] = useState(() => new Set());
+  const [escaneando, setEscaneando] = useState(false);
+  const { navegar } = useNavegacion();
 
   const visibles = useMemo(() => {
     const termino = busqueda.trim().toLowerCase();
@@ -47,6 +51,9 @@ export default function QrPage() {
   return (
     <>
       <EncabezadoModulo descripcion="Elige las colmenas y genera sus etiquetas para imprimir y pegar en cada caja.">
+        <Boton variante="secundario" icono={ScanLine} onClick={() => setEscaneando(true)}>
+          Escanear QR
+        </Boton>
         <Boton icono={Printer} disabled={seleccionadas.length === 0} onClick={() => window.print()}>
           Imprimir {seleccionadas.length > 0 ? `${seleccionadas.length} etiquetas` : "etiquetas"}
         </Boton>
@@ -113,6 +120,13 @@ export default function QrPage() {
           )}
         </section>
       </div>
+
+      {escaneando && (
+        <EscanearColmena
+          onEncontrada={(colmena) => navegar("colmenas", { detalle: colmena.id })}
+          onCerrar={() => setEscaneando(false)}
+        />
+      )}
     </>
   );
 }

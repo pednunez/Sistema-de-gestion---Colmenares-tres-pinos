@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import BarraLateral from "./BarraLateral";
 import Cabecera from "./Cabecera";
 import { ErrorCarga } from "../ui/Estados";
@@ -8,6 +8,8 @@ import { useDatos } from "../../hooks/useDatos";
 import { useNavegacion } from "../../hooks/useNavegacion";
 import { useAvisos } from "../../hooks/useAvisos";
 import { menuParaRol } from "../../config/menu";
+import { colmenasService } from "../../services/colmenasService";
+import { codigoQrDeLaUrl } from "../../utils/qr";
 
 export default function AppLayout({ paginas, sinAcceso: SinAcceso }) {
   const { usuario, cerrarSesion } = useAuth();
@@ -27,6 +29,26 @@ export default function AppLayout({ paginas, sinAcceso: SinAcceso }) {
       avisos.error(`No se pudo cerrar la sesión. ${err.message}`);
     }
   };
+
+  // Al abrir el sistema desde una etiqueta (?qr=<código>), se va a la ficha de
+  // la colmena (PB-07). El código se quita de la dirección para no repetirlo.
+  const qrPendiente = useRef(codigoQrDeLaUrl());
+  useEffect(() => {
+    const codigo = qrPendiente.current;
+    if (!codigo) return;
+    qrPendiente.current = null;
+    window.history.replaceState(null, "", window.location.pathname);
+    colmenasService
+      .obtenerPorQr(codigo)
+      .then((colmena) => navegar("colmenas", { detalle: colmena.id }))
+      .catch((err) =>
+        avisos.error(
+          err.estado === 404 || err.estado === 422
+            ? "La etiqueta escaneada no está asociada a ninguna colmena activa."
+            : `No se pudo abrir la colmena del QR. ${err.message}`
+        )
+      );
+  }, [navegar, avisos]);
 
   const items = menuParaRol(usuario.rol);
   const itemActual = items.find((item) => item.id === vista);

@@ -213,6 +213,7 @@ export const api = {
   get: (ruta) => solicitar(ruta),
   post: (ruta, cuerpo) => solicitar(ruta, { metodo: "POST", cuerpo }),
   patch: (ruta, cuerpo) => solicitar(ruta, { metodo: "PATCH", cuerpo }),
+  put: (ruta, cuerpo) => solicitar(ruta, { metodo: "PUT", cuerpo }),
   delete: (ruta) => solicitar(ruta, { metodo: "DELETE" }),
   blob: (ruta) => solicitar(ruta, { tipoRespuesta: "blob" }),
   // Consulta que no deja registro si no hay conexión (estado del servidor).
