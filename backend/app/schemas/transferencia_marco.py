@@ -1,3 +1,8 @@
+"""Esquemas de transferencia de marcos — Colmenares Tres Pinos.
+
+S3-T06: aceptar piso de destino y posicion desplazada sin eliminar
+la compatibilidad con transferencias manuales e historicas.
+"""
 
 from datetime import datetime
 from typing import Literal
@@ -47,38 +52,35 @@ class TransferenciaMarcoBase(BaseModel):
 
     tipo_marco: TipoMarco | None = None
 
-    # Campos nuevos de la migración 004.
     # Opcionales para conservar transferencias manuales
-    # e históricas.
+    # e historicas anteriores a S3-T06.
     inspeccion_id: int | None = Field(default=None, gt=0)
 
+    # Posicion del marco que sale de la colmena origen.
     ubicacion: UbicacionMarco | None = None
+    numero_marco: int | None = Field(default=None, ge=1, le=10)
+    contenido: ContenidoMarco | None = None
 
-    numero_marco: int | None = Field(
+    # S3-T06: piso del destino y marco que debe salir cuando
+    # el piso receptor esta completo.
+    ubicacion_destino: UbicacionMarco | None = None
+    marco_desplazado_numero: int | None = Field(
         default=None,
         ge=1,
         le=10,
     )
 
-    contenido: ContenidoMarco | None = None
-
-    motivo: str | None = Field(
-        default=None,
-        max_length=255,
-    )
-
+    motivo: str | None = Field(default=None, max_length=255)
     observaciones: str | None = None
 
     @model_validator(mode="after")
     def validar_transferencia(self):
-
         if self.colmena_origen_id == self.colmena_destino_id:
             raise ValueError(
                 "La colmena de origen y destino deben ser diferentes"
             )
 
-        # Si se informa el detalle de un marco,
-        # deben estar presentes todos sus datos.
+        # El detalle de un marco individual siempre es completo.
         detalle = [
             self.ubicacion,
             self.numero_marco,
@@ -103,6 +105,29 @@ class TransferenciaMarcoBase(BaseModel):
                     "No se puede transferir una posición SIN_MARCO"
                 )
 
+        # Una transferencia detallada puede enviar ubicacion_destino.
+        # Para conservar contratos antiguos, no se exige si se omite.
+        if self.ubicacion_destino is not None:
+            if not all(valor is not None for valor in detalle):
+                raise ValueError(
+                    "La ubicacion_destino requiere identificar el marco "
+                    "de origen con ubicacion, numero_marco y contenido"
+                )
+
+        # Si se pretende desplazar un marco, debe estar identificado
+        # el piso receptor. El servicio comprobará que la posicion
+        # realmente esté ocupada y decidirá intercambio o bodega.
+        if self.marco_desplazado_numero is not None:
+            if self.ubicacion_destino is None:
+                raise ValueError(
+                    "marco_desplazado_numero requiere ubicacion_destino"
+                )
+
+            if self.cantidad_marcos != 1:
+                raise ValueError(
+                    "El desplazamiento requiere transferir un solo marco"
+                )
+
         return self
 
 
@@ -119,12 +144,8 @@ class TransferenciaMarcoCreate(TransferenciaMarcoBase):
 # ==========================================================
 
 class TransferenciaMarcoResponse(TransferenciaMarcoBase):
-
     id: int
-
     fecha_transferencia: datetime
     fecha_creacion: datetime
 
-    model_config = ConfigDict(
-        from_attributes=True
-    )
+    model_config = ConfigDict(from_attributes=True)

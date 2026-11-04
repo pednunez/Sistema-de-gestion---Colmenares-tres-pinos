@@ -1,3 +1,4 @@
+
 from datetime import datetime
 
 from sqlalchemy import (
@@ -23,12 +24,15 @@ from app.database import Base
 #
 # Registra los movimientos de marcos entre colmenas.
 #
-# Permite tanto:
+# Permite:
 # 1. Transferencias manuales independientes.
 # 2. Transferencias originadas durante una inspeccion.
+# 3. Identificar ubicaciones de origen y destino.
+# 4. Registrar marcos desplazados.
+# 5. Mantener la trazabilidad de los intercambios.
 #
-# Los campos asociados a una inspeccion son opcionales
-# para mantener compatibles los registros historicos.
+# Los campos opcionales mantienen compatibilidad
+# con las transferencias historicas.
 # ==========================================================
 
 
@@ -98,10 +102,6 @@ class TransferenciaMarco(Base):
     # ======================================================
     # INSPECCION DE ORIGEN (OPCIONAL)
     # ======================================================
-    #
-    # NULL: transferencia manual o historica.
-    # ID: transferencia realizada durante una inspeccion.
-    # ======================================================
 
     inspeccion_id: Mapped[int | None] = mapped_column(
         BigInteger,
@@ -141,26 +141,10 @@ class TransferenciaMarco(Base):
     )
 
     # ======================================================
-    # DETALLE DEL MARCO TRANSFERIDO
+    # UBICACION ORIGINAL DEL MARCO
     # ======================================================
     #
-    # Ubicacion:
-    #   CAMARA_CRIA / ALZA
-    #
-    # Numero:
-    #   1 a 10
-    #
-    # Contenido:
-    #   MIEL_Y_CRIA
-    #   SOLO_CRIA
-    #   SOLO_MIEL
-    #   CERA_ESTIRADA
-    #   CERA_ESTAMPADA
-    #   CERA_UNTADA
-    #   SIN_MARCO
-    #
-    # Son opcionales porque las transferencias manuales
-    # existentes no necesariamente tienen este detalle.
+    # CAMARA_CRIA / ALZA
     # ======================================================
 
     ubicacion: Mapped[str | None] = mapped_column(
@@ -168,10 +152,18 @@ class TransferenciaMarco(Base):
         nullable=True,
     )
 
+    # ======================================================
+    # NUMERO DEL MARCO EN ORIGEN
+    # ======================================================
+
     numero_marco: Mapped[int | None] = mapped_column(
         Integer,
         nullable=True,
     )
+
+    # ======================================================
+    # CONTENIDO DEL MARCO TRANSFERIDO
+    # ======================================================
 
     contenido: Mapped[str | None] = mapped_column(
         String(30),
@@ -179,7 +171,7 @@ class TransferenciaMarco(Base):
     )
 
     # ======================================================
-    # MOTIVO
+    # MOTIVO DE TRANSFERENCIA
     # ======================================================
 
     motivo: Mapped[str | None] = mapped_column(
@@ -204,4 +196,78 @@ class TransferenciaMarco(Base):
         DateTime(timezone=True),
         nullable=False,
         server_default=text("CURRENT_TIMESTAMP"),
+    )
+
+    # ======================================================
+    # S3-T06 - UBICACION DEL MARCO EN EL DESTINO
+    # ======================================================
+    #
+    # CAMARA_CRIA:
+    # Marco instalado en la camara de cria.
+    #
+    # ALZA:
+    # Marco instalado en el alza.
+    #
+    # None:
+    # Transferencia historica sin detalle de destino.
+    # ======================================================
+
+    ubicacion_destino: Mapped[str | None] = mapped_column(
+        String(20),
+        nullable=True,
+    )
+
+    # ======================================================
+    # S3-T06 - NUMERO DE POSICION EN DESTINO
+    # ======================================================
+    #
+    # Posicion fisica del 1 al 10.
+    # ======================================================
+
+    numero_destino: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    # ======================================================
+    # S3-T06 - MARCO DESPLAZADO
+    # ======================================================
+    #
+    # Identifica la posicion del marco que sale
+    # del piso cuando se encuentra completo.
+    #
+    # None: no hubo desplazamiento.
+    # ======================================================
+
+    marco_desplazado_numero: Mapped[int | None] = mapped_column(
+        Integer,
+        nullable=True,
+    )
+
+    # ======================================================
+    # S3-T06 - CONTENIDO DEL MARCO DESPLAZADO
+    # ======================================================
+
+    contenido_desplazado: Mapped[str | None] = mapped_column(
+        String(30),
+        nullable=True,
+    )
+
+    # ======================================================
+    # S3-T06 - ACCION DEL MARCO DESPLAZADO
+    # ======================================================
+    #
+    # INTERCAMBIO:
+    # El marco desplazado vuelve a la colmena origen.
+    #
+    # BODEGA:
+    # El marco desplazado se registra en inventario.
+    #
+    # None:
+    # No hubo desplazamiento.
+    # ======================================================
+
+    accion_desplazado: Mapped[str | None] = mapped_column(
+        String(20),
+        nullable=True,
     )

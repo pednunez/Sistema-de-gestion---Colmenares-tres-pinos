@@ -34,6 +34,7 @@ from app.services import (
 )
 
 from app.services import auditoria as auditoria_service
+from app.services import colmena_marcos as marcos_estado_service
 
 
 # ==========================================================
@@ -501,6 +502,56 @@ def crear_inspeccion(
         origen.fecha_actualizacion = ahora_utc()
 
     # ======================================================
+    # S3-T06 - SINCRONIZAR POSICIONES ANTES DE TRANSFERIR
+    # ======================================================
+    # Las inspecciones con movimientos antiguos sin piso destino
+    # conservan su comportamiento; sus posiciones no se inventan.
+    # No mezclar movimientos detallados y legados en una inspeccion.
+
+    duplicados_desplazado = [
+        (m.transferido_a_colmena_id, m.ubicacion_destino,
+         m.marco_desplazado_numero)
+        for m in transferibles
+        if m.marco_desplazado_numero is not None
+    ]
+    if len(duplicados_desplazado) != len(set(duplicados_desplazado)):
+        raise ValueError("No se puede desplazar dos veces el mismo marco")
+
+    pisos_informados = [
+        marco.ubicacion_destino is not None
+        for marco in transferibles
+    ]
+    if any(pisos_informados) and not all(pisos_informados):
+        raise ValueError(
+            "No mezcles transferencias con y sin ubicacion_destino "
+            "en una misma inspeccion"
+        )
+
+    if datos.marcos and (
+        not transferibles or all(pisos_informados)
+    ):
+        fotografia = marcos_estado_service.guardar_observacion_inspeccion(
+            db,
+            datos.colmena_id,
+            datos.marcos,
+            datos.tiene_alza,
+        )
+        if fotografia is not None:
+            cantidad_calculada = marcos_estado_service.contar_marcos(
+                fotografia
+            )
+            if origen.cantidad_marcos != cantidad_calculada:
+                # Cuando no se indico cantidad_marcos pero si se enviaron
+                # todas las posiciones, se toma el conteo real de ellas.
+                if datos.cantidad_marcos is None:
+                    origen.cantidad_marcos = cantidad_calculada
+                else:
+                    raise ValueError(
+                        "El estado de marcos no coincide con la "
+                        "cantidad despues de los retiros"
+                    )
+
+    # ======================================================
     # 7. REGISTRAR TRANSFERENCIAS ENTRE COLMENAS
     # ======================================================
 
@@ -520,6 +571,8 @@ def crear_inspeccion(
             ubicacion=marco.ubicacion,
             numero_marco=marco.numero,
             contenido=marco.contenido,
+            ubicacion_destino=marco.ubicacion_destino,
+            marco_desplazado_numero=marco.marco_desplazado_numero,
             motivo=(
                 "Transferencia registrada "
                 "durante la inspeccion"

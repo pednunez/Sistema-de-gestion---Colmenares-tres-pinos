@@ -130,6 +130,20 @@ class InspeccionMarcoSchema(BaseModel):
     )
 
     # ======================================================
+    # S3-T06 - UBICACION DE DESTINO
+    # ======================================================
+
+    ubicacion_destino: UbicacionMarco | None = None
+
+    # Posicion del marco desplazado en la colmena de destino.
+    # None si existe espacio libre.
+    marco_desplazado_numero: int | None = Field(
+        default=None,
+        ge=1,
+        le=10,
+    )
+
+    # ======================================================
     # S3-T05 - RETIRO A BODEGA
     # ======================================================
     #
@@ -189,6 +203,32 @@ class InspeccionMarcoSchema(BaseModel):
                     "a otra colmena"
                 )
 
+        # ======================================================
+        # S3-T06 - VALIDACION DE LA UBICACION DE DESTINO
+        # ======================================================
+        # Los campos adicionales solo corresponden a un marco
+        # que sera transferido a otra colmena.
+
+        if self.transferido_a_colmena_id is None:
+            if self.ubicacion_destino is not None:
+                raise ValueError(
+                    "ubicacion_destino requiere una colmena de destino"
+                )
+            if self.marco_desplazado_numero is not None:
+                raise ValueError(
+                    "marco_desplazado_numero requiere una colmena de destino"
+                )
+
+        if (
+            self.marco_desplazado_numero is not None
+            and self.ubicacion_destino is None
+        ):
+            raise ValueError(
+                "Debes indicar ubicacion_destino para desplazar un marco"
+            )
+
+        # Se mantiene ubicacion_destino opcional para no romper
+        # transferencias historicas o clientes anteriores.
         return self
 
 

@@ -98,3 +98,4 @@ from app.models.grupo import GrupoColmena, GrupoColmenaAsignacion
 # ==========================================================
 
 from app.models.revision import SesionRevision, SesionRevisionColmena
+from app.models.colmena_marco_estado import ColmenaMarcoEstado

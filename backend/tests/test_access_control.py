@@ -83,7 +83,10 @@ class AccessControlTests(unittest.TestCase):
                 import re
                 path = path.replace('{codigo_qr}', '00000000-0000-0000-0000-000000000001')
                 self.paths.append(re.sub(r'\{[^}]+\}', '1', path))
-        self.assertEqual(len(self.paths), 20)
+
+        self.assertEqual(len(self.paths), 21)
+        self.assertIn("/colmenas/1/marcos", self.paths)
+
 
     def token(self, expired=False):
         return jwt.encode({'sub': '1', 'rol': 'ADMIN', 'ver': 0,
@@ -117,7 +120,7 @@ class AccessControlTests(unittest.TestCase):
             self.db.user.rol = role
             for path in self.paths:
                 with self.subTest(role=role, path=path):
-                    # Los listados responden 200 con lista vacía; los detalles, 404.
+                    # Los listados responden 200 con lista vacÃ­a; los detalles, 404.
                     listado = path.endswith('/') or path in ('/colmenas/sin-revision', '/movil/catalogo')
                     expected = 200 if listado else 404
                     self.assertEqual(self.status(path, self.token()), expected)

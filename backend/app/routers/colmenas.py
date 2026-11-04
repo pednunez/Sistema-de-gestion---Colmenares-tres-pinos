@@ -10,7 +10,8 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response,
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
-
+from app.services import colmena as colmena_service
+from app.services import colmena_marcos as colmena_marcos_service
 from app.core.dependencies import requerir_admin
 from app.database import get_db
 from app.models.usuario import Usuario
@@ -26,7 +27,7 @@ from app.schemas.colmena import (
 
 from app.schemas.auditoria import AuditoriaCreate
 
-from app.services import colmena as colmena_service
+
 from app.services import auditoria as auditoria_service
 
 
@@ -330,6 +331,29 @@ def generar_qr_colmena(
             )
         }
     )
+
+
+# ==========================================================
+# S3-T06 - OBTENER MARCOS DE UNA COLMENA
+# ==========================================================
+
+@router.get("/{colmena_id}/marcos")
+def obtener_marcos_colmena(
+    colmena_id: int,
+    db: Session = Depends(get_db),
+):
+    resultado = colmena_marcos_service.obtener_marcos_colmena(
+        db,
+        colmena_id,
+    )
+
+    if resultado is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Colmena no encontrada",
+        )
+
+    return resultado
 
 
 # ==========================================================

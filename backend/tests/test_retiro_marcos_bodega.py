@@ -28,6 +28,8 @@ from app.models.usuario import Usuario
 from app.models.apiario import Apiario
 from app.models.colmena import Colmena
 from app.models.inspeccion import Inspeccion
+from app.models.colmena_marco_estado import ColmenaMarcoEstado
+from app.models.inspeccion import Inspeccion
 from app.models.inspeccion_marco import InspeccionMarco
 from app.models.inventario_stock import InventarioStock
 from app.models.inventario_movimiento import InventarioMovimiento
@@ -112,6 +114,7 @@ class RetiroMarcosBodegaTests(unittest.TestCase):
             Usuario,
             Apiario,
             Colmena,
+            ColmenaMarcoEstado,
             Inspeccion,
             InspeccionMarco,
             InventarioStock,
