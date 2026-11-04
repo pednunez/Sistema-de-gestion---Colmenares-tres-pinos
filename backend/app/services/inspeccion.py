@@ -1,3 +1,4 @@
+
 from datetime import datetime, timezone
 
 from sqlalchemy import select, inspect as sa_inspect
@@ -13,12 +14,51 @@ from app.schemas.inspeccion import (
     InspeccionUpdate,
     validar_posiciones_marcos,
 )
-from app.schemas.transferencia_marco import TransferenciaMarcoCreate
+
+from app.schemas.transferencia_marco import (
+    TransferenciaMarcoCreate,
+)
+
+from app.schemas.inventario import (
+    InventarioMovimientoCreate,
+)
+
 from app.schemas.auditoria import AuditoriaCreate
 
-from app.services import transferencia_marco as transferencia_service
+from app.services import (
+    transferencia_marco as transferencia_service,
+)
+
+from app.services import (
+    inventario_operaciones as inventario_service,
+)
+
 from app.services import auditoria as auditoria_service
 
+
+# ==========================================================
+# COLMENARES TRES PINOS
+# SERVICIO DE INSPECCIONES
+#
+# S3-T05 - RETIRO DE MARCOS A BODEGA
+# ==========================================================
+
+
+# ==========================================================
+# MATERIALES DE BODEGA POR CONTENIDO
+# ==========================================================
+
+MATERIAL_BODEGA_POR_CONTENIDO = {
+    "CERA_ESTIRADA": "MARCO_CERA_ESTIRADA",
+    "CERA_UNTADA": "MARCO_CERA_UNTADA",
+    "CERA_ESTAMPADA": "MARCO_CERA_ESTAMPADA",
+    "SOLO_MIEL": "MARCO_MIEL",
+}
+
+
+# ==========================================================
+# TIPOS DE MARCO PARA TRANSFERENCIAS
+# ==========================================================
 
 TIPO_POR_CONTENIDO = {
     "MIEL_Y_CRIA": "CRIA",
@@ -31,7 +71,7 @@ TIPO_POR_CONTENIDO = {
 
 
 # ==========================================================
-# CONSULTAS
+# CONSULTAR INSPECCIONES
 # ==========================================================
 
 def listar_inspecciones(db: Session):
@@ -45,7 +85,10 @@ def listar_inspecciones(db: Session):
     ).all()
 
 
-def obtener_inspeccion(db: Session, inspeccion_id: int):
+def obtener_inspeccion(
+    db: Session,
+    inspeccion_id: int,
+):
     return db.scalar(
         select(Inspeccion).where(
             Inspeccion.id == inspeccion_id,
@@ -54,7 +97,10 @@ def obtener_inspeccion(db: Session, inspeccion_id: int):
     )
 
 
-def obtener_colmena_activa(db: Session, colmena_id: int):
+def obtener_colmena_activa(
+    db: Session,
+    colmena_id: int,
+):
     return db.scalar(
         select(Colmena).where(
             Colmena.id == colmena_id,
@@ -63,7 +109,10 @@ def obtener_colmena_activa(db: Session, colmena_id: int):
     )
 
 
-def obtener_usuario_activo(db: Session, usuario_id: int):
+def obtener_usuario_activo(
+    db: Session,
+    usuario_id: int,
+):
     return db.scalar(
         select(Usuario).where(
             Usuario.id == usuario_id,
@@ -80,7 +129,11 @@ def ahora_utc():
     return datetime.now(timezone.utc)
 
 
-def guardar_cambios(db: Session, *, commit: bool):
+def guardar_cambios(
+    db: Session,
+    *,
+    commit: bool,
+):
     if not commit:
         db.flush()
         return
@@ -92,23 +145,34 @@ def guardar_cambios(db: Session, *, commit: bool):
         raise
 
 
+# ==========================================================
+# PROTEGER INSPECCIONES HISTORICAS
+# ==========================================================
+#
+# No permitir generar movimientos nuevos
+# editando una inspeccion antigua.
+# ==========================================================
+
 def comprobar_transferencias_pendientes(marcos):
-    """
-    Se conserva esta protección para PATCH.
-    No permitimos crear nuevos movimientos mediante
-    la edición de inspecciones históricas.
-    """
+
     if any(
         marco.transferido_a_colmena_id is not None
+        or marco.retirar_a_bodega
         for marco in marcos
     ):
         raise ValueError(
             "No se pueden agregar transferencias "
-            "editando una inspección histórica."
+            "ni retiros a bodega editando "
+            "una inspeccion historica."
         )
 
 
+# ==========================================================
+# CONSTRUIR OBJETOS DE MARCOS
+# ==========================================================
+
 def crear_objetos_marcos(marcos):
+
     return [
         InspeccionMarco(
             ubicacion=marco.ubicacion,
@@ -117,16 +181,22 @@ def crear_objetos_marcos(marcos):
             transferido_a_colmena_id=(
                 marco.transferido_a_colmena_id
             ),
+            retirar_a_bodega=marco.retirar_a_bodega,
         )
         for marco in marcos
     ]
 
+
+# ==========================================================
+# VALIDAR DETALLE DE MARCOS
+# ==========================================================
 
 def validar_detalle_marcos(
     marcos,
     tiene_alza,
     cantidad_marcos,
 ):
+
     if not marcos:
         return
 
@@ -142,17 +212,22 @@ def validar_detalle_marcos(
     )
 
 
+# ==========================================================
+# PREPARAR TRANSFERENCIA PARA AUDITORIA
+# ==========================================================
+
 def transferencia_a_dict(transferencia):
-    """
-    Prepara los campos de una transferencia
-    para guardar una fotografía en auditoría.
-    """
+
     resultado = {}
 
     for columna in sa_inspect(
         transferencia
     ).mapper.column_attrs:
-        valor = getattr(transferencia, columna.key)
+
+        valor = getattr(
+            transferencia,
+            columna.key,
+        )
 
         if isinstance(valor, datetime):
             valor = valor.isoformat()
@@ -163,15 +238,42 @@ def transferencia_a_dict(transferencia):
 
 
 # ==========================================================
-# CREAR INSPECCIÓN Y TRANSFERENCIAS
+# SINCRONIZACION MOVIL
+# ==========================================================
+#
+# Evita duplicar inspecciones cuando el telefono
+# reintenta el envio con el mismo UUID.
 # ==========================================================
 
-def obtener_por_id_cliente(db: Session, id_cliente) -> Inspeccion | None:
-    """Inspeccion ya sincronizada con ese id del telefono."""
+def obtener_por_id_cliente(
+    db: Session,
+    id_cliente,
+) -> Inspeccion | None:
+
     return db.scalar(
-        select(Inspeccion).where(Inspeccion.id_cliente == id_cliente)
+        select(Inspeccion).where(
+            Inspeccion.id_cliente == id_cliente
+        )
     )
 
+
+# ==========================================================
+# CREAR INSPECCION
+# ==========================================================
+#
+# Operaciones:
+#
+# 1. Validar marcos.
+# 2. Identificar transferencias y retiros.
+# 3. Bloquear colmenas involucradas.
+# 4. Crear inspeccion y detalle historico.
+# 5. Registrar retiros a bodega.
+# 6. Registrar transferencias.
+# 7. Confirmar una unica transaccion.
+#
+# Cuando commit=False, el router confirma
+# junto con la auditoria de la inspeccion.
+# ==========================================================
 
 def crear_inspeccion(
     db: Session,
@@ -179,26 +281,41 @@ def crear_inspeccion(
     *,
     commit: bool = True,
 ):
-    # 1. Validar detalle.
+
+    # ======================================================
+    # 1. VALIDAR DETALLE
+    # ======================================================
+
     validar_detalle_marcos(
         datos.marcos,
         datos.tiene_alza,
         datos.cantidad_marcos,
     )
 
+    # Marcos enviados a otra colmena.
     transferibles = [
         marco
         for marco in datos.marcos
         if marco.transferido_a_colmena_id is not None
     ]
 
-    # 2. Para transferir necesitamos una cantidad
-    #    observada y consistente con el detalle.
-    if transferibles:
+    # Marcos retirados a bodega central.
+    retirables = [
+        marco
+        for marco in datos.marcos
+        if marco.retirar_a_bodega
+    ]
+
+    # ======================================================
+    # 2. VALIDAR CANTIDADES
+    # ======================================================
+
+    if transferibles or retirables:
+
         if datos.cantidad_marcos is None:
             raise ValueError(
                 "Debes registrar cantidad_marcos "
-                "para transferir marcos."
+                "para transferir o retirar marcos."
             )
 
         cantidad_real = sum(
@@ -212,12 +329,19 @@ def crear_inspeccion(
                 "con el detalle registrado."
             )
 
-        if len(transferibles) > cantidad_real:
+        if (
+            len(transferibles) + len(retirables)
+            > cantidad_real
+        ):
             raise ValueError(
-                "No hay suficientes marcos para transferir."
+                "Los movimientos superan "
+                "los marcos disponibles."
             )
 
-    # 3. Validar que origen y destino sean diferentes.
+    # ======================================================
+    # 3. VALIDAR COLMENAS DE DESTINO
+    # ======================================================
+
     destinos = {
         marco.transferido_a_colmena_id
         for marco in transferibles
@@ -225,11 +349,11 @@ def crear_inspeccion(
 
     if datos.colmena_id in destinos:
         raise ValueError(
-            "No se puede transferir a la misma colmena."
+            "No se puede transferir "
+            "a la misma colmena."
         )
 
-    # 4. Bloquear todas las colmenas involucradas
-    #    en orden estable para reducir interbloqueos.
+    # Bloquear colmenas en orden estable.
     ids_colmenas = sorted({
         datos.colmena_id,
         *destinos,
@@ -255,17 +379,21 @@ def crear_inspeccion(
     if origen is None:
         raise ValueError(
             "La colmena inspeccionada no existe "
-            "o está inactiva."
+            "o esta inactiva."
         )
 
     for destino_id in destinos:
+
         if destino_id not in mapa:
             raise ValueError(
                 f"La colmena destino {destino_id} "
-                "no existe o está inactiva."
+                "no existe o esta inactiva."
             )
 
-    # 5. Construir la inspección.
+    # ======================================================
+    # 4. CREAR INSPECCION
+    # ======================================================
+
     inspeccion = Inspeccion(
         colmena_id=datos.colmena_id,
         usuario_id=datos.usuario_id,
@@ -288,42 +416,96 @@ def crear_inspeccion(
         id_cliente=datos.id_cliente,
     )
 
-    # ======================================================
-    # FECHA DE INSPECCIÓN
-    # ======================================================
-    #
-    # Si el usuario indica una fecha válida,
-    # se utiliza esa fecha.
-    #
-    # Si no indica ninguna fecha, PostgreSQL
-    # asignará automáticamente la fecha actual.
-    #
-    # La validación para rechazar fechas futuras
-    # se encuentra en InspeccionCreate.
-    # ======================================================
-
     if datos.fecha_inspeccion is not None:
-        inspeccion.fecha_inspeccion = datos.fecha_inspeccion
+        inspeccion.fecha_inspeccion = (
+            datos.fecha_inspeccion
+        )
 
-    # 6. Registrar todas las posiciones observadas.
+    # Guardar posiciones observadas.
     inspeccion.marcos = crear_objetos_marcos(
         datos.marcos
     )
 
     db.add(inspeccion)
 
-    # Obtener el ID de inspección sin hacer COMMIT.
+    # Obtener ID sin confirmar transaccion.
     db.flush()
 
-    # 7. Actualizar inventario observado.
-    #    La inspección conserva la cantidad histórica;
-    #    el origen será descontado posteriormente.
+    # ======================================================
+    # 5. ACTUALIZAR CANTIDAD OBSERVADA
+    # ======================================================
+    #
+    # Se registra primero el conteo observado.
+    # Posteriormente se descuentan los movimientos.
+    # ======================================================
+
     if datos.cantidad_marcos is not None:
-        origen.cantidad_marcos = datos.cantidad_marcos
+
+        origen.cantidad_marcos = (
+            datos.cantidad_marcos
+        )
+
         origen.fecha_actualizacion = ahora_utc()
 
-    # 8. Registrar cada transferencia.
+    # ======================================================
+    # 6. S3-T05 - RETIRAR MARCOS A BODEGA
+    # ======================================================
+
+    if retirables:
+
+        # El conteo corresponde a la inspeccion
+        # antes de efectuar los retiros.
+        if origen.cantidad_marcos < len(retirables):
+            raise ValueError(
+                "El retiro supera "
+                "la cantidad de marcos disponibles."
+            )
+
+        for marco in retirables:
+
+            material = MATERIAL_BODEGA_POR_CONTENIDO[
+                marco.contenido
+            ]
+
+            # Se reutiliza el servicio existente
+            # de ingreso al inventario central.
+            #
+            # commit=False: no confirmar aun.
+            # La auditoria se registra en el mismo
+            # servicio de inventario.
+            inventario_service.registrar_movimiento_bodega(
+                db=db,
+                datos=InventarioMovimientoCreate(
+                    material=material,
+                    tipo_movimiento="INGRESO",
+                    cantidad=1,
+                    estado="BUENO",
+                    origen_ubicacion=None,
+                    colmena_origen_id=None,
+                    destino_ubicacion="BODEGA",
+                    colmena_destino_id=None,
+                    observaciones=(
+                        f"Retiro desde colmena "
+                        f"{datos.colmena_id}; "
+                        f"inspeccion {inspeccion.id}; "
+                        f"marco {marco.numero} "
+                        f"en {marco.ubicacion}"
+                    ),
+                ),
+                usuario_id=datos.usuario_id,
+                commit=False,
+            )
+
+        # Descontar del conteo actual de la colmena.
+        origen.cantidad_marcos -= len(retirables)
+        origen.fecha_actualizacion = ahora_utc()
+
+    # ======================================================
+    # 7. REGISTRAR TRANSFERENCIAS ENTRE COLMENAS
+    # ======================================================
+
     for marco in transferibles:
+
         transferencia_datos = TransferenciaMarcoCreate(
             colmena_origen_id=datos.colmena_id,
             colmena_destino_id=(
@@ -340,7 +522,7 @@ def crear_inspeccion(
             contenido=marco.contenido,
             motivo=(
                 "Transferencia registrada "
-                "durante la inspección"
+                "durante la inspeccion"
             ),
             observaciones=(
                 f"Marco {marco.numero} "
@@ -356,7 +538,7 @@ def crear_inspeccion(
             )
         )
 
-        # 9. Registrar auditoría sin COMMIT.
+        # Auditoria de transferencia.
         auditoria_service.registrar_auditoria(
             db,
             AuditoriaCreate(
@@ -372,9 +554,19 @@ def crear_inspeccion(
             commit=False,
         )
 
-    # 10. El router hará el COMMIT definitivo
-    #     cuando utilice commit=False.
-    guardar_cambios(db, commit=commit)
+    # ======================================================
+    # 8. CONFIRMAR CAMBIOS
+    # ======================================================
+    #
+    # Cuando el router usa commit=False:
+    # inspeccion, retiros, transferencias y auditorias
+    # permanecen en la misma transaccion.
+    # ======================================================
+
+    guardar_cambios(
+        db,
+        commit=commit,
+    )
 
     if commit:
         db.refresh(inspeccion)
@@ -383,7 +575,11 @@ def crear_inspeccion(
 
 
 # ==========================================================
-# ACTUALIZAR INSPECCIÓN
+# ACTUALIZAR INSPECCION
+# ==========================================================
+#
+# PATCH solamente modifica datos historicos.
+# No genera nuevas transferencias ni ingresos a bodega.
 # ==========================================================
 
 def actualizar_inspeccion(
@@ -393,9 +589,12 @@ def actualizar_inspeccion(
     *,
     commit: bool = True,
 ):
-    cambios = datos.model_dump(exclude_unset=True)
 
-    # No permitir cambiar relaciones históricas.
+    cambios = datos.model_dump(
+        exclude_unset=True
+    )
+
+    # Proteger relaciones historicas.
     cambios.pop("colmena_id", None)
     cambios.pop("usuario_id", None)
 
@@ -405,27 +604,31 @@ def actualizar_inspeccion(
     nuevos_marcos = None
 
     if marcos_enviados:
+
         if datos.marcos is None:
             raise ValueError(
-                "Para modificar marcos envía una lista. "
+                "Para modificar marcos envia una lista. "
                 "Utiliza [] para eliminar el detalle."
             )
 
         nuevos_marcos = datos.marcos
 
-        # Prohibir nuevos movimientos desde PATCH.
+        # Prohibir movimientos nuevos por PATCH.
         comprobar_transferencias_pendientes(
             nuevos_marcos
         )
 
-        # Proteger movimientos históricos existentes.
+        # No permitir reemplazar posiciones con
+        # movimientos historicos contabilizados.
         if any(
             marco.transferido_a_colmena_id is not None
+            or marco.retirar_a_bodega
             for marco in inspeccion.marcos
         ):
             raise ValueError(
-                "No puedes reemplazar marcos de una "
-                "inspección que tiene transferencias."
+                "No puedes reemplazar marcos "
+                "de una inspeccion con transferencias "
+                "o retiros a bodega."
             )
 
         tiene_alza_final = cambios.get(
@@ -434,6 +637,7 @@ def actualizar_inspeccion(
         )
 
         if nuevos_marcos:
+
             cantidad_calculada = sum(
                 marco.contenido != "SIN_MARCO"
                 for marco in nuevos_marcos
@@ -452,13 +656,20 @@ def actualizar_inspeccion(
 
             cambios["cantidad_marcos"] = cantidad_final
 
-    # Actualizar únicamente los campos enviados.
+    # Aplicar los campos recibidos.
     for campo, valor in cambios.items():
-        setattr(inspeccion, campo, valor)
+        setattr(
+            inspeccion,
+            campo,
+            valor,
+        )
 
-    # Sustituir detalle cuando se haya solicitado.
+    # Reemplazar el detalle si corresponde.
     if nuevos_marcos is not None:
-        anteriores = list(inspeccion.marcos)
+
+        anteriores = list(
+            inspeccion.marcos
+        )
 
         for marco in anteriores:
             db.delete(marco)
@@ -471,9 +682,11 @@ def actualizar_inspeccion(
 
     inspeccion.fecha_actualizacion = ahora_utc()
 
-    # No cambiar la cantidad actual de la colmena
-    # al editar una inspección histórica.
-    guardar_cambios(db, commit=commit)
+    # No alterar inventario al editar registros antiguos.
+    guardar_cambios(
+        db,
+        commit=commit,
+    )
 
     if commit:
         db.refresh(inspeccion)
@@ -482,7 +695,11 @@ def actualizar_inspeccion(
 
 
 # ==========================================================
-# ANULAR INSPECCIÓN
+# ANULAR INSPECCION
+# ==========================================================
+#
+# Conserva los registros historicos.
+# No revierte automaticamente movimientos de inventario.
 # ==========================================================
 
 def eliminar_inspeccion(
@@ -491,15 +708,17 @@ def eliminar_inspeccion(
     *,
     commit: bool = True,
 ):
+
     ahora = ahora_utc()
 
     inspeccion.activo = False
     inspeccion.fecha_eliminacion = ahora
     inspeccion.fecha_actualizacion = ahora
 
-    # La baja lógica conserva marcos y transferencias.
-    # No revierte automáticamente inventarios antiguos.
-    guardar_cambios(db, commit=commit)
+    guardar_cambios(
+        db,
+        commit=commit,
+    )
 
     if commit:
         db.refresh(inspeccion)

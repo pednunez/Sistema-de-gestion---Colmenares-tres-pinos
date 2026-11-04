@@ -1,42 +1,35 @@
+from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     CheckConstraint,
     ForeignKey,
     Integer,
     String,
     UniqueConstraint,
-    Identity
+    Identity,
+    text,
 )
 
 from sqlalchemy.orm import (
     Mapped,
     mapped_column,
-    relationship
+    relationship,
 )
 
 from app.database import Base
 
+if TYPE_CHECKING:
+    from app.models.inspeccion import Inspeccion
+
 
 # ==========================================================
-# MODELO: MARCOS REGISTRADOS EN UNA INSPECCIÓN
+# SISTEMA DE GESTION - COLMENARES TRES PINOS
+# MODELO DE MARCOS DE INSPECCION
+# S3-T05 - RETIRO DE MARCOS A BODEGA
 # ==========================================================
-#
-# Guarda una posición individual de una caja.
-#
-# Cada inspección puede registrar:
-#
-# CAMARA_CRIA:
-# Posiciones 1 al 10.
-#
-# ALZA:
-# Posiciones 1 al 10.
-#
-# Una posición SIN_MARCO indica que no había
-# marco físicamente presente en ese espacio.
-#
-# No debe contarse en cantidad_marcos.
-# ==========================================================
+
 
 class InspeccionMarco(Base):
 
@@ -48,32 +41,27 @@ class InspeccionMarco(Base):
 
     __table_args__ = (
 
-        # No puede repetirse la misma posición
-        # dentro de la misma caja e inspección.
-
+        # No repetir posiciones en una misma inspeccion.
         UniqueConstraint(
             "inspeccion_id",
             "ubicacion",
             "numero",
-            name="uq_inspeccion_marco_posicion"
+            name="uq_inspeccion_marco_posicion",
         ),
 
-        # Posiciones permitidas.
-
+        # Cada caja admite 10 posiciones.
         CheckConstraint(
             "numero BETWEEN 1 AND 10",
-            name="ck_inspeccion_marco_numero"
+            name="ck_inspeccion_marco_numero",
         ),
 
-        # Ubicaciones válidas.
-
+        # Ubicaciones permitidas.
         CheckConstraint(
             "ubicacion IN ('CAMARA_CRIA', 'ALZA')",
-            name="ck_inspeccion_marco_ubicacion"
+            name="ck_inspeccion_marco_ubicacion",
         ),
 
         # Contenidos permitidos.
-
         CheckConstraint(
             "contenido IN ("
             "'MIEL_Y_CRIA', "
@@ -84,111 +72,111 @@ class InspeccionMarco(Base):
             "'CERA_UNTADA', "
             "'SIN_MARCO'"
             ")",
-            name="ck_inspeccion_marco_contenido"
+            name="ck_inspeccion_marco_contenido",
+        ),
+
+        # S3-T05: los marcos con cría y las posiciones
+        # vacías no pueden retirarse a bodega.
+        # Tampoco pueden tener dos destinos.
+        CheckConstraint(
+            "NOT retirar_a_bodega OR ("
+            "contenido IN ("
+            "'SOLO_MIEL', "
+            "'CERA_ESTIRADA', "
+            "'CERA_ESTAMPADA', "
+            "'CERA_UNTADA'"
+            ") AND transferido_a_colmena_id IS NULL"
+            ")",
+            name="ck_inspeccion_marco_retiro_bodega",
         ),
     )
 
     # ======================================================
     # IDENTIFICADOR
     # ======================================================
-    #
-    # PostgreSQL genera automáticamente los ID.
-    # ======================================================
 
     id: Mapped[int] = mapped_column(
         BigInteger,
         Identity(),
-        primary_key=True
+        primary_key=True,
     )
 
     # ======================================================
-    # INSPECCIÓN PRINCIPAL
+    # INSPECCION PRINCIPAL
     # ======================================================
 
     inspeccion_id: Mapped[int] = mapped_column(
         BigInteger,
         ForeignKey("inspecciones.id"),
         nullable=False,
-        index=True
+        index=True,
     )
 
     # ======================================================
-    # UBICACIÓN DEL MARCO
-    # ======================================================
-    #
-    # CAMARA_CRIA
-    # ALZA
+    # UBICACION DEL MARCO
     # ======================================================
 
     ubicacion: Mapped[str] = mapped_column(
         String(20),
-        nullable=False
+        nullable=False,
     )
 
     # ======================================================
-    # NÚMERO DE POSICIÓN
-    # ======================================================
-    #
-    # Valores entre 1 y 10.
+    # NUMERO DE POSICION
     # ======================================================
 
     numero: Mapped[int] = mapped_column(
         Integer,
-        nullable=False
+        nullable=False,
     )
 
     # ======================================================
-    # CONTENIDO DEL MARCO
-    # ======================================================
-    #
-    # MIEL_Y_CRIA
-    # SOLO_CRIA
-    # SOLO_MIEL
-    # CERA_ESTIRADA
-    # CERA_ESTAMPADA
-    # CERA_UNTADA
-    # SIN_MARCO
+    # CONTENIDO OBSERVADO
     # ======================================================
 
     contenido: Mapped[str] = mapped_column(
         String(30),
-        nullable=False
+        nullable=False,
     )
 
     # ======================================================
-    # COLMENA DESTINO DE UNA TRANSFERENCIA
-    # ======================================================
-    #
-    # Si el marco se transfirió:
-    # Guarda el ID de la colmena destino.
-    #
-    # Si no se transfirió:
-    # Permanece NULL.
-    #
-    # Importante:
-    # El registro de una transferencia se incorporará
-    # posteriormente en el servicio de inspecciones.
+    # TRANSFERENCIA HACIA OTRA COLMENA
     # ======================================================
 
     transferido_a_colmena_id: Mapped[int | None] = (
         mapped_column(
             BigInteger,
             ForeignKey("colmenas.id"),
-            nullable=True
+            nullable=True,
         )
     )
 
     # ======================================================
-    # RELACIÓN INVERSA CON LA INSPECCIÓN
+    # S3-T05 - RETIRO A BODEGA
     # ======================================================
     #
-    # Cada marco pertenece a una inspección.
+    # False:
+    # El marco no fue retirado a bodega.
     #
-    # back_populates="marcos":
-    # Conecta con la relación del modelo Inspeccion.
+    # True:
+    # El marco fue retirado durante la inspeccion.
+    #
+    # Se conserva el valor historico para mostrar
+    # el movimiento en el detalle de inspeccion.
+    # ======================================================
+
+    retirar_a_bodega: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=text("false"),
+    )
+
+    # ======================================================
+    # RELACION CON LA INSPECCION
     # ======================================================
 
     inspeccion: Mapped["Inspeccion"] = relationship(
         "Inspeccion",
-        back_populates="marcos"
+        back_populates="marcos",
     )

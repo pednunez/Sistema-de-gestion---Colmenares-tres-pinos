@@ -95,6 +95,8 @@ class InventarioMovimiento(Base):
             "'MARCO_VACIO', "
             "'MARCO_CERA_ESTIRADA', "
             "'MARCO_CERA_UNTADA', "
+            "'MARCO_CERA_ESTAMPADA', "
+            "'MARCO_MIEL', "
             "'ENTRETAPA', "
             "'PISO'"
             ")",
