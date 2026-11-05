@@ -34,19 +34,11 @@ import {
 
 // ==========================================
 // COLMENARES TRES PINOS
-// CONTROLADOR DE SINCRONIZACIÓN
+// CONTROLADOR DE SINCRONIZACIÃ“N
 // ==========================================
 
-// IMPORTANTE:
-// Mantener en false hasta probar
-// la integración real con José.
-//
-// Mientras esté en false:
-// - Se revisan los requisitos.
-// - Se cuentan los registros pendientes.
-// - NO se envían datos a FastAPI.
-
-const HABILITAR_ENVIOS_REALES = false;
+// Envio habilitado exclusivamente por configuracion.
+const HABILITAR_ENVIOS_REALES = process.env.EXPO_PUBLIC_ENABLE_SYNC === 'true';
 
 export type EstadoControlador =
   | 'SIN_INTERNET'
@@ -96,7 +88,7 @@ export async function ejecutarControlador():
     return {
       estado: 'EN_PROCESO',
       mensaje:
-        'Ya se está comprobando la sincronización.',
+        'Ya se estÃ¡ comprobando la sincronizaciÃ³n.',
     };
   }
 
@@ -110,18 +102,18 @@ export async function ejecutarControlador():
       return {
         estado: 'SIN_INTERNET',
         mensaje:
-          'Sin conexión. Los datos permanecen en SQLite.',
+          'Sin conexiÃ³n. Los datos permanecen en SQLite.',
       };
     }
 
-    // 2. Obtener sesión.
+    // 2. Obtener sesiÃ³n.
     const sesion = await leerSesionGuardada();
 
     if (!sesion) {
       return {
         estado: 'SIN_SESION',
         mensaje:
-          'No hay una sesión iniciada. No se enviarán registros.',
+          'No hay una sesiÃ³n iniciada. No se enviarÃ¡n registros.',
       };
     }
 
@@ -130,11 +122,11 @@ export async function ejecutarControlador():
       return {
         estado: 'SESION_VENCIDA',
         mensaje:
-          'El token venció. Las inspecciones pendientes se conservan.',
+          'El token venciÃ³. Las inspecciones pendientes se conservan.',
       };
     }
 
-    // 4. Verificar catálogo del usuario.
+    // 4. Verificar catÃ¡logo del usuario.
     const catalogo = await leerCatalogoLocal(
       sesion.usuario.id
     );
@@ -143,7 +135,7 @@ export async function ejecutarControlador():
       return {
         estado: 'SIN_CATALOGO',
         mensaje:
-          'No existe un catálogo oficial descargado para este usuario.',
+          'No existe un catÃ¡logo oficial descargado para este usuario.',
       };
     }
 
@@ -162,7 +154,7 @@ export async function ejecutarControlador():
         return {
           estado: 'SERVIDOR_NO_DISPONIBLE',
           mensaje:
-            'El servidor no respondió correctamente.',
+            'El servidor no respondiÃ³ correctamente.',
         };
       }
     } catch {
@@ -194,26 +186,26 @@ export async function ejecutarControlador():
       };
     }
 
-    // 7. Protección para desarrollo.
-    // No se envía nada mientras no
-    // habilitemos explícitamente la función.
+    // 7. ProtecciÃ³n para desarrollo.
+    // No se envÃ­a nada mientras no
+    // habilitemos explÃ­citamente la funciÃ³n.
     if (!HABILITAR_ENVIOS_REALES) {
       return {
         estado: 'MODO_DIAGNOSTICO',
         mensaje:
-          'Hay inspecciones listas para revisar. Los envíos reales están desactivados.',
+          'Hay inspecciones listas para revisar. Los envÃ­os reales estÃ¡n desactivados.',
         pendientes: pendientes.length,
       };
     }
 
-    // 8. Sincronización real.
+    // 8. SincronizaciÃ³n real.
     const resultado =
       await sincronizarInspeccionesPendientes();
 
     return {
       estado: 'SINCRONIZADO',
       mensaje:
-        'Terminó el intento de sincronización.',
+        'TerminÃ³ el intento de sincronizaciÃ³n.',
       pendientes: pendientes.length,
       sincronizadas:
         resultado.sincronizadas,
@@ -236,7 +228,7 @@ export async function ejecutarControlador():
 }
 
 // ==========================================
-// ESCUCHAR CAMBIOS AUTOMÁTICOS
+// ESCUCHAR CAMBIOS AUTOMÃTICOS
 // ==========================================
 
 export function useControladorSincronizacion():
@@ -285,21 +277,21 @@ export function useControladorSincronizacion():
             teniaInternet = true;
 
             void revisar(
-              'Conexión disponible'
+              'ConexiÃ³n disponible'
             );
           }
         }
       );
 
     // Volver a comprobar cuando
-    // el usuario abre la aplicación.
+    // el usuario abre la aplicaciÃ³n.
     const suscripcionApp =
       AppState.addEventListener(
         'change',
         estado => {
           if (estado === 'active') {
             void revisar(
-              'Aplicación activa'
+              'AplicaciÃ³n activa'
             );
           }
         }

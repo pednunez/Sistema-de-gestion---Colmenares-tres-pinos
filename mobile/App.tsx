@@ -19,7 +19,7 @@ import {
 } from 'expo-camera';
 
 // ==========================================
-// PANTALLAS DE LA APLICACIÓN
+// PANTALLAS DE LA APLICACIÃ“N
 // ==========================================
 
 import FormularioInspeccion from './FormularioInspeccion';
@@ -30,7 +30,7 @@ import TratamientosLocales from './TratamientosLocales';
 import RevisionesGrupos from './RevisionesGrupos';
 
 // ==========================================
-// AUTENTICACIÓN Y CATÁLOGO
+// AUTENTICACIÃ“N Y CATÃLOGO
 // ==========================================
 
 import {
@@ -77,13 +77,18 @@ const PATRON_QR = new RegExp(
   'i'
 );
 
+const PATRON_QR_WEB = new RegExp(
+  `[?&]qr=(${UUID})(?:&|#|$)`,
+  'i'
+);
 function obtenerUUIDDesdeQR(
   valor: string
 ): string | null {
   const texto = valor.trim();
 
   const coincidencia =
-    texto.match(PATRON_QR);
+    texto.match(PATRON_QR) ??
+    texto.match(PATRON_QR_WEB);
 
   if (!coincidencia) {
     return null;
@@ -93,13 +98,13 @@ function obtenerUUIDDesdeQR(
 }
 
 // ==========================================
-// APLICACIÓN PRINCIPAL
+// APLICACIÃ“N PRINCIPAL
 // ==========================================
 
 export default function App() {
 
   // ========================================
-  // NAVEGACIÓN
+  // NAVEGACIÃ“N
   // ========================================
 
   const [pantalla, setPantalla] =
@@ -127,7 +132,7 @@ export default function App() {
   );
 
   // ========================================
-  // CÁMARA
+  // CÃMARA
   // ========================================
 
   const [
@@ -158,7 +163,7 @@ export default function App() {
   };
 
   // ========================================
-  // ABRIR ESCÁNER QR
+  // ABRIR ESCÃNER QR
   // ========================================
 
   const abrirEscaner = async () => {
@@ -171,7 +176,7 @@ export default function App() {
       if (!resultado.granted) {
         Alert.alert(
           'Permiso necesario',
-          'Debes permitir el acceso a la cámara para escanear las colmenas.'
+          'Debes permitir el acceso a la cÃ¡mara para escanear las colmenas.'
         );
 
         return;
@@ -226,7 +231,7 @@ export default function App() {
     data: string;
   }) => {
 
-    // Impedir escaneos simultáneos.
+    // Impedir escaneos simultÃ¡neos.
     if (bloqueoEscaneo.current) {
       return;
     }
@@ -240,7 +245,7 @@ export default function App() {
 
     if (!uuid) {
       mostrarErrorEscaneo(
-        'Código QR inválido',
+        'CÃ³digo QR invÃ¡lido',
         'El QR no tiene el formato oficial de una colmena.'
       );
 
@@ -258,15 +263,15 @@ export default function App() {
 
       if (!sesion) {
         mostrarErrorEscaneo(
-          'Sesión no disponible',
-          'El QR fue leído correctamente, pero debes iniciar sesión para consultar el catálogo oficial de colmenas.'
+          'SesiÃ³n no disponible',
+          'El QR fue leÃ­do correctamente, pero debes iniciar sesiÃ³n para consultar el catÃ¡logo oficial de colmenas.'
         );
 
         return;
       }
 
       // ====================================
-      // CONSULTAR CATÁLOGO SQLITE
+      // CONSULTAR CATÃLOGO SQLITE
       // ====================================
 
       const catalogo =
@@ -276,8 +281,8 @@ export default function App() {
 
       if (!catalogo) {
         mostrarErrorEscaneo(
-          'Catálogo no disponible',
-          'No hay un catálogo oficial descargado para este usuario. Debes iniciar sesión con conexión a FastAPI para obtenerlo.'
+          'CatÃ¡logo no disponible',
+          'No hay un catÃ¡logo oficial descargado para este usuario. Debes iniciar sesiÃ³n con conexiÃ³n a FastAPI para obtenerlo.'
         );
 
         return;
@@ -298,7 +303,7 @@ export default function App() {
       if (!colmena) {
         mostrarErrorEscaneo(
           'Colmena no registrada',
-          'El QR tiene un formato válido, pero no pertenece a ninguna colmena del catálogo oficial disponible.'
+          'El QR tiene un formato vÃ¡lido, pero no pertenece a ninguna colmena del catÃ¡logo oficial disponible.'
         );
 
         return;
@@ -344,13 +349,13 @@ export default function App() {
 
       mostrarErrorEscaneo(
         'Error de consulta',
-        'No se pudo consultar el catálogo local. Los datos no se han modificado.'
+        'No se pudo consultar el catÃ¡logo local. Los datos no se han modificado.'
       );
     }
   };
 
   // ========================================
-  // MENÚ PRINCIPAL
+  // MENÃš PRINCIPAL
   // ========================================
 
   if (pantalla === 'inicio') {
@@ -458,7 +463,7 @@ export default function App() {
   }
 
   // ========================================
-  // FORMULARIO DE INSPECCIÓN
+  // FORMULARIO DE INSPECCIÃ“N
   // ========================================
 
   if (
@@ -478,7 +483,7 @@ export default function App() {
   }
 
   // ========================================
-  // ESCÁNER QR
+  // ESCÃNER QR
   // ========================================
 
   if (
@@ -506,7 +511,7 @@ export default function App() {
 
           onMountError={error => {
             Alert.alert(
-              'Error de cámara',
+              'Error de cÃ¡mara',
               error.message
             );
           }}
@@ -529,13 +534,13 @@ export default function App() {
           <Text
             style={styles.cameraTitle}
           >
-            Escanear código QR
+            Escanear cÃ³digo QR
           </Text>
 
           <Text
             style={styles.cameraSubtitle}
           >
-            Apunta la cámara al QR
+            Apunta la cÃ¡mara al QR
             oficial de una colmena.
           </Text>
 
@@ -543,7 +548,7 @@ export default function App() {
             <Text
               style={styles.cameraSubtitle}
             >
-              Iniciando cámara...
+              Iniciando cÃ¡mara...
             </Text>
           )}
 
@@ -565,7 +570,7 @@ export default function App() {
   }
 
   // ========================================
-  // INFORMACIÓN DE LA COLMENA
+  // INFORMACIÃ“N DE LA COLMENA
   // ========================================
 
   return (
@@ -576,11 +581,11 @@ export default function App() {
       />
 
       <Text style={styles.icon}>
-        🐝
+        ðŸ
       </Text>
 
       <Text style={styles.title}>
-        Información de la colmena
+        InformaciÃ³n de la colmena
       </Text>
 
       <View style={styles.card}>
@@ -603,7 +608,7 @@ export default function App() {
         >
           Apiario: {
             apiarioSeleccionado?.nombre ??
-            'Sin información'
+            'Sin informaciÃ³n'
           }
         </Text>
 
@@ -612,7 +617,7 @@ export default function App() {
         >
           Estado: {
             colmenaSeleccionada?.estado ??
-            'Sin información'
+            'Sin informaciÃ³n'
           }
         </Text>
 
@@ -621,7 +626,7 @@ export default function App() {
         >
           Marcos registrados: {
             colmenaSeleccionada
-              ?.cantidad_marcos ?? 'Sin información'
+              ?.cantidad_marcos ?? 'Sin informaciÃ³n'
           }
         </Text>
 
@@ -638,9 +643,9 @@ export default function App() {
         <Text
           style={styles.infoText}
         >
-          Información obtenida
-          del catálogo oficial
-          almacenado en el teléfono.
+          InformaciÃ³n obtenida
+          del catÃ¡logo oficial
+          almacenado en el telÃ©fono.
         </Text>
 
       </View>
@@ -656,7 +661,7 @@ export default function App() {
             ) {
               Alert.alert(
                 'Colmena no disponible',
-                'Debes escanear una colmena oficial antes de registrar una inspección.'
+                'Debes escanear una colmena oficial antes de registrar una inspecciÃ³n.'
               );
 
               return;
@@ -670,7 +675,7 @@ export default function App() {
           <Text
             style={styles.buttonText}
           >
-            Iniciar inspección
+            Iniciar inspecciÃ³n
           </Text>
         </Pressable>
 
