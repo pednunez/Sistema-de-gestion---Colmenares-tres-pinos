@@ -55,6 +55,7 @@ TipoMovimientoStock = Literal[
     "ENVIO_REPARACION",
     "REPARACION",
     "DESCARTE",
+    "EXTRACCION",
 ]
 
 
@@ -127,6 +128,9 @@ class StockMovimientoCreate(BaseModel):
             raise ValueError(
                 "Solo la merma requiere estado de origen"
             )
+
+        if self.tipo == "EXTRACCION" and self.material != "MARCO_MIEL":
+            raise ValueError("EXTRACCION solo permite MARCO_MIEL")
 
         if self.tipo == "ENVIO":
             # Un ENVIO puede ser una salida genérica de bodega.

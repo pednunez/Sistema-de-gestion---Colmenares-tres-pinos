@@ -822,5 +822,42 @@ class StockTests(unittest.TestCase):
         )
 
 
+    # S3-T07: conversion atomica de marcos con miel a cera untada.
+    def test_extraccion_miel_conversion_e_historial(self):
+        self.ok("INGRESO", 5, "MARCO_MIEL")
+        self.ok("INGRESO", 2, "MARCO_CERA_UNTADA")
+
+        r = self.ok("EXTRACCION", 3, "MARCO_MIEL")
+        self.assertEqual((r["tipo"], r["material"], r["cantidad"]),
+                         ("EXTRACCION", "MARCO_MIEL", 3))
+        self.assertEqual(self.row("MARCO_MIEL")["disponible"], 2)
+        self.assertEqual(self.row("MARCO_CERA_UNTADA")["disponible"], 5)
+
+        status_code, history = self.call("GET", "/stock/movimientos/?tipo=EXTRACCION")
+        self.assertEqual(status_code, 200)
+        self.assertEqual(len(history), 1)
+        self.assertEqual(history[0]["tipo"], "EXTRACCION")
+        self.assertEqual(history[0]["material"], "MARCO_MIEL")
+        self.assertEqual(history[0]["cantidad"], 3)
+        self.assertTrue(self.audit.called)
+
+    def test_extraccion_rechaza_stock_insuficiente_sin_mutar(self):
+        self.ok("INGRESO", 1, "MARCO_MIEL")
+        status_code, body = self.move("EXTRACCION", 2, "MARCO_MIEL")
+        self.assertEqual(status_code, 409, body)
+        self.assertEqual(self.row("MARCO_MIEL")["disponible"], 1)
+        self.assertEqual(self.row("MARCO_CERA_UNTADA")["disponible"], 0)
+        self.assertEqual(self.call("GET", "/stock/movimientos/?tipo=EXTRACCION")[1], [])
+
+    def test_extraccion_solo_marco_miel(self):
+        status_code, body = self.move("EXTRACCION", 1, "ALZA")
+        self.assertEqual(status_code, 422, body)
+
+    def test_extraccion_requiere_admin(self):
+        self.set_role("APICULTOR")
+        status_code, body = self.move("EXTRACCION", 1, "MARCO_MIEL")
+        self.assertEqual(status_code, 403, body)
+
+
 if __name__ == "__main__":
     unittest.main()

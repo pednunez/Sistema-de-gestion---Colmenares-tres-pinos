@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 from io import BytesIO
+from urllib.parse import urlencode, urlsplit
 from uuid import UUID, uuid4
 
 import qrcode
@@ -13,7 +14,7 @@ from sqlalchemy.exc import IntegrityError
 from app.services import colmena as colmena_service
 from app.services import colmena_marcos as colmena_marcos_service
 from app.core.dependencies import requerir_admin
-from app.database import get_db
+from app.database import get_db, settings
 from app.models.usuario import Usuario
 
 from app.schemas.colmena import (
@@ -262,6 +263,18 @@ def asociar_qr_colmena(
     return colmena_actualizada
 
 
+def construir_url_publica_qr(codigo_qr: str) -> str:
+    """Construye una URL web que se abre desde la camara del celular."""
+    frontend_url = (settings.FRONTEND_URL or "").strip().rstrip("/")
+    url = urlsplit(frontend_url)
+    if not frontend_url or url.scheme not in ("http", "https") or not url.netloc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Configurar FRONTEND_URL para generar codigos QR de la web",
+        )
+    return f"{frontend_url}/?{urlencode({'qr': str(codigo_qr)})}"
+
+
 # ==========================================================
 # GENERAR IMAGEN QR DE UNA COLMENA
 # ==========================================================
@@ -292,13 +305,8 @@ def generar_qr_colmena(
             detail="La colmena no posee un código QR"
         )
 
-    # URL que abrirá el QR al ser escaneado
-    url_colmena = str(
-        request.url_for(
-            "consultar_colmena_por_qr",
-            codigo_qr=str(colmena.codigo_qr)
-        )
-    )
+    # El QR fisico abre el frontend, no la respuesta JSON del backend.
+    url_colmena = construir_url_publica_qr(str(colmena.codigo_qr))
 
     # Generar QR
     qr = qrcode.QRCode(

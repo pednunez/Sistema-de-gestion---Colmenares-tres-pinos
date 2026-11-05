@@ -1089,6 +1089,129 @@ def mover_material_danado(
 
 
 # ==========================================================
+# S3-T07 - EXTRAER MIEL: MARCO_MIEL -> MARCO_CERA_UNTADA
+# ==========================================================
+# Una transaccion y un unico movimiento con auditoria.
+# No crea/excluye marcos de colmenas; opera solo en BODEGA.
+# ==========================================================
+
+def registrar_extraccion_miel(
+    db: Session,
+    datos: StockMovimientoCreate,
+    usuario_id: int,
+    *,
+    commit: bool = True,
+) -> StockMovimientoResponse:
+    if datos.material != "MARCO_MIEL":
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="EXTRACCION solo permite MARCO_MIEL",
+        )
+
+    try:
+        bloquear_inventario(db)
+        ahora = datetime.now(timezone.utc)
+        fuentes = db.scalars(
+            select(InventarioStock)
+            .where(
+                InventarioStock.material == "MARCO_MIEL",
+                InventarioStock.ubicacion == "BODEGA",
+                InventarioStock.colmena_id.is_(None),
+                InventarioStock.estado.in_(ESTADOS_DISPONIBLES),
+            )
+            .order_by(InventarioStock.estado)
+            .with_for_update()
+        ).all()
+        disponible_miel = sum(fila.cantidad for fila in fuentes)
+
+        if disponible_miel < datos.cantidad:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    "Stock insuficiente de MARCO_MIEL para extraccion. "
+                    f"Disponible: {disponible_miel}. "
+                    f"Solicitado: {datos.cantidad}."
+                ),
+            )
+
+        # La cera recuperada vuelve disponible en estado BUENO.
+        destino = stock_bodega(db, "MARCO_CERA_UNTADA", "BUENO")
+        cera_anterior = destino.cantidad if destino is not None else 0
+
+        fuentes_utilizadas = descontar_existencias(fuentes, datos.cantidad, ahora)
+
+        if destino is None:
+            destino = InventarioStock(
+                material="MARCO_CERA_UNTADA",
+                ubicacion="BODEGA",
+                colmena_id=None,
+                estado="BUENO",
+                cantidad=datos.cantidad,
+            )
+            db.add(destino)
+        else:
+            destino.cantidad += datos.cantidad
+            destino.fecha_actualizacion = ahora
+
+        # El tipo interno EXTRACCION permite consultar historial sin
+        # confundirlo con otros TRASLADOS o RETIROS historicos.
+        movimiento = InventarioMovimiento(
+            material="MARCO_MIEL",
+            tipo_movimiento="EXTRACCION",
+            cantidad=datos.cantidad,
+            origen_ubicacion="BODEGA",
+            colmena_origen_id=None,
+            origen_estado=(
+                next(iter(fuentes_utilizadas))
+                if len(fuentes_utilizadas) == 1 else None
+            ),
+            destino_ubicacion="BODEGA",
+            colmena_destino_id=None,
+            destino_estado="BUENO",
+            usuario_id=usuario_id,
+            observaciones=datos.observaciones,
+        )
+        db.add(movimiento)
+        db.flush()
+
+        auditoria_service.registrar_auditoria(
+            db,
+            AuditoriaCreate(
+                usuario_id=usuario_id,
+                entidad="INVENTARIO_MOVIMIENTO",
+                entidad_id=movimiento.id,
+                accion="CREAR",
+                datos_anteriores={
+                    "tipo": "EXTRACCION",
+                    "material_origen": "MARCO_MIEL",
+                    "disponible_miel": disponible_miel,
+                    "material_destino": "MARCO_CERA_UNTADA",
+                    "disponible_cera": cera_anterior,
+                },
+                datos_nuevos={
+                    "tipo": "EXTRACCION",
+                    "material_origen": "MARCO_MIEL",
+                    "material_destino": "MARCO_CERA_UNTADA",
+                    "cantidad": datos.cantidad,
+                    "fuentes_descontadas": fuentes_utilizadas,
+                    "disponible_miel": disponible_miel - datos.cantidad,
+                    "disponible_cera": cera_anterior + datos.cantidad,
+                    "movimiento_id": movimiento.id,
+                },
+            ),
+            commit=False,
+        )
+        if commit:
+            db.commit()
+            db.refresh(movimiento)
+        return respuesta_movimiento(movimiento, "EXTRACCION")
+
+    except Exception:
+        db.rollback()
+        raise
+
+
+# ==========================================================
 # 5. REGISTRAR MOVIMIENTO DE STOCK
 # ==========================================================
 #
@@ -1152,6 +1275,15 @@ def registrar_movimiento_stock(
         )
 
     # ======================================================
+    # EXTRACCION DE MIEL
+    # ======================================================
+
+    if datos.tipo == "EXTRACCION":
+        return registrar_extraccion_miel(
+            db=db, datos=datos, usuario_id=usuario_id, commit=commit,
+        )
+
+    # ======================================================
     # DANO
     # ======================================================
 
@@ -1208,6 +1340,7 @@ TRADUCCION_TIPOS = {
     "INICIAR_REPARACION": "ENVIO_REPARACION",
     "REPARAR": "REPARACION",
     "BAJA": "DESCARTE",
+    "EXTRACCION": "EXTRACCION",
 }
 
 
@@ -1256,6 +1389,12 @@ def listar_movimientos_stock(
     # ======================================================
 
     condiciones = {
+        "EXTRACCION": and_(
+            InventarioMovimiento.tipo_movimiento == "EXTRACCION",
+            InventarioMovimiento.material == "MARCO_MIEL",
+            InventarioMovimiento.origen_ubicacion == "BODEGA",
+            InventarioMovimiento.destino_ubicacion == "BODEGA",
+        ),
         "INGRESO": and_(
             InventarioMovimiento.tipo_movimiento == "INGRESO",
             InventarioMovimiento.origen_ubicacion.is_(None),
