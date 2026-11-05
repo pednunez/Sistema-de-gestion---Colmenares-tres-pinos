@@ -1,13 +1,14 @@
-
-/**
- * COLMENARES TRES PINOS
- * Configuración de conexión con FastAPI.
- *
- * Esta dirección corresponde al backend local
- * utilizado durante el desarrollo.
+﻿/**
+ * Colmenares Tres Pinos
+ * Configuracion de conexion con FastAPI.
  */
 
-export const API_BASE_URL = 'http://192.168.1.34:8001';
+const url = process.env.EXPO_PUBLIC_API_URL?.trim();
 
-// Tiempo máximo de espera por petición.
+if (!url) {
+  throw new Error('Falta configurar EXPO_PUBLIC_API_URL');
+}
+
+export const API_BASE_URL = url.replace(/\/+$/, '');
+
 export const API_TIMEOUT_MS = 12000;
