@@ -15,9 +15,11 @@ import RestablecerPasswordPage from "./pages/RestablecerPasswordPage";
 import DashboardPage from "./pages/DashboardPage";
 import ApiariosPage from "./pages/ApiariosPage";
 import ColmenasPage from "./pages/ColmenasPage";
+import GruposPage from "./pages/GruposPage";
 import InspeccionesPage from "./pages/InspeccionesPage";
 import TratamientosPage from "./pages/TratamientosPage";
 import TransferenciasPage from "./pages/TransferenciasPage";
+import StockPage from "./pages/StockPage";
 import QrPage from "./pages/QrPage";
 import AuditoriaPage from "./pages/AuditoriaPage";
 import UsuariosPage from "./pages/UsuariosPage";
@@ -27,9 +29,11 @@ const PAGINAS = {
   dashboard: DashboardPage,
   apiarios: ApiariosPage,
   colmenas: ColmenasPage,
+  grupos: GruposPage,
   inspecciones: InspeccionesPage,
   tratamientos: TratamientosPage,
   transferencias: TransferenciasPage,
+  stock: StockPage,
   qr: QrPage,
   auditoria: AuditoriaPage,
   usuarios: UsuariosPage,

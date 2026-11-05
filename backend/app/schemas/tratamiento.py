@@ -1,5 +1,6 @@
 from datetime import date, datetime
 from typing import Literal
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -65,7 +66,9 @@ class TratamientoBase(BaseModel):
 
 
 class TratamientoCreate(TratamientoBase):
-    pass
+
+    # UUID generado en el telefono para sincronizar sin duplicar.
+    id_cliente: UUID | None = None
 
 
 class TratamientoUpdate(BaseModel):
@@ -96,6 +99,9 @@ class TratamientoUpdate(BaseModel):
 
 class TratamientoResponse(TratamientoBase):
     id: int
+
+    # UUID generado en el telefono para sincronizar sin duplicar.
+    id_cliente: UUID | None = None
 
     fecha_creacion: datetime
     fecha_actualizacion: datetime

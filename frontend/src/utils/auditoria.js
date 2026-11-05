@@ -1,7 +1,7 @@
 import { formatearFechaHora, humanizar } from "./formato";
-import { ESTADO_COLMENA, ESTADO_GENERAL, ESTADO_TRATAMIENTO, NIVEL, ROL, TIPO_MARCO } from "./etiquetas";
+import { ESTADO_COLMENA, ESTADO_GENERAL_TODOS, ESTADO_TRATAMIENTO, NIVEL, ROL, TIPO_MARCO } from "./etiquetas";
 
-const VALORES_CONOCIDOS = { ...NIVEL, ...TIPO_MARCO, ...ROL, ...ESTADO_GENERAL, ...ESTADO_TRATAMIENTO, ...ESTADO_COLMENA };
+const VALORES_CONOCIDOS = { ...NIVEL, ...TIPO_MARCO, ...ROL, ...ESTADO_GENERAL_TODOS, ...ESTADO_TRATAMIENTO, ...ESTADO_COLMENA };
 
 const NOMBRES_CAMPO = {
   nombre: "Nombre",

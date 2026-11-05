@@ -13,11 +13,13 @@ it("el administrador recorre todas las pantallas sin errores", async () => {
   simularBackend({ usuario: ADMIN, datos });
   await montarApp();
   await screen.findByText("Colmenas que requieren atención");
-  for (const seccion of ["Apiarios", "Colmenas", "Inspecciones", "Tratamientos", "Transferencias", "Códigos QR", "Auditoría", "Usuarios"]) {
+  for (const seccion of ["Apiarios", "Colmenas", "Inspecciones", "Tratamientos", "Transferencias", "Stock", "Códigos QR", "Auditoría", "Usuarios"]) {
     await irA(seccion);
     await waitFor(() => expect(screen.getAllByRole("heading", { level: 1 })[0].textContent).toBe(seccion));
   }
   expect(screen.queryByText("Esta pantalla tuvo un problema")).toBeNull();
+  // Grupos está desactivado por decisión del Product Owner (02-11).
+  expect(within((await screen.findAllByRole("navigation"))[0]).queryByText("Grupos")).toBeNull();
 });
 
 it("el apicultor no ve las secciones de administración (RF-09)", async () => {

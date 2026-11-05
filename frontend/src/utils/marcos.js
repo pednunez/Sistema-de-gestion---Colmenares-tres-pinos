@@ -1,10 +1,49 @@
 // Registro unitario de marcos durante una inspección: una caja (cámara de cría
 // o alza) tiene 10 posiciones y cada una guarda su contenido y, si corresponde,
-// la colmena a la que se transfiere ese marco.
-import { CONTENIDO_MARCO, UBICACION_MARCO, texto } from "./etiquetas";
+// la colmena a la que se transfiere ese marco o si se retira a bodega.
 
 export const MARCOS_POR_CAJA = 10;
 export const SIN_MARCO = "SIN_MARCO";
+
+// Regla del Product Owner (28-10): cualquier marco se puede transferir a otra
+// colmena. Además, los de cera o miel se pueden mandar a bodega, donde entran al
+// stock tal como están. Los marcos con cría no van a bodega.
+export const CONTENIDOS_RETIRABLES = ["CERA_ESTIRADA", "CERA_UNTADA", "CERA_ESTAMPADA", "SOLO_MIEL"];
+// Valor del destino que significa «a bodega (Stock)» en vez de una colmena.
+export const DESTINO_BODEGA = "BODEGA";
+
+export function puedeTransferirse(marco) {
+  return tieneMarco(marco);
+}
+
+export function puedeRetirarse(marco) {
+  return CONTENIDOS_RETIRABLES.includes(marco.contenido);
+}
+
+export function vaAColmena(marco) {
+  return puedeTransferirse(marco) && marco.transferir && Boolean(marco.destino) && marco.destino !== DESTINO_BODEGA;
+}
+
+export function vaABodega(marco) {
+  return puedeRetirarse(marco) && marco.transferir && marco.destino === DESTINO_BODEGA;
+}
+
+// Quita la transferencia o el destino que el nuevo contenido ya no permite.
+export function ajustarAccion(marco) {
+  const ajustado = { ...marco };
+  if (!puedeTransferirse(ajustado)) {
+    ajustado.transferir = false;
+    ajustado.destino = "";
+  } else if (ajustado.destino === DESTINO_BODEGA && !puedeRetirarse(ajustado)) {
+    ajustado.destino = "";
+  }
+  return ajustado;
+}
+
+// Al cambiar de apiario, las colmenas de destino elegidas ya no corresponden.
+export function quitarDestinosColmena(caja) {
+  return caja.map((marco) => (marco.destino && marco.destino !== DESTINO_BODEGA ? { ...marco, destino: "" } : marco));
+}
 
 export function crearCaja() {
   return Array.from({ length: MARCOS_POR_CAJA }, (_, indice) => ({
@@ -31,19 +70,14 @@ export function contarMarcos(caja) {
   return caja.filter(tieneMarco).length;
 }
 
+// Marcos que salen hacia otra colmena (incluye los que aún no tienen destino).
 export function marcosATransferir(caja) {
-  return caja.filter((marco) => tieneMarco(marco) && marco.transferir);
+  return caja.filter((marco) => puedeTransferirse(marco) && marco.transferir && marco.destino !== DESTINO_BODEGA);
 }
 
-// El backend clasifica las transferencias con un tipo de marco más general.
-const TIPO_POR_CONTENIDO = {
-  MIEL_Y_CRIA: "CRIA",
-  SOLO_CRIA: "CRIA",
-  SOLO_MIEL: "MIEL",
-  CERA_ESTIRADA: "VACIO",
-  CERA_ESTAMPADA: "VACIO",
-  CERA_UNTADA: "VACIO",
-};
+export function marcosARetirar(caja) {
+  return caja.filter(vaABodega);
+}
 
 function cajasRegistradas({ camara, tieneAlza, alza }) {
   const cajas = [{ ubicacion: "CAMARA_CRIA", marcos: camara }];
@@ -59,36 +93,33 @@ export function totalMarcos(registro) {
   return cajas.reduce((total, caja) => total + contarMarcos(caja.marcos), 0);
 }
 
-// Detalle por marco que acompaña a la inspección.
+// Detalle por marco que acompaña a la inspección. `retirar_a_bodega` se envía
+// siempre: el backend actual lo ignora y, cuando lo acepte, suma el marco al stock.
 export function detalleMarcos(registro) {
   return cajasRegistradas(registro).flatMap((caja) =>
     caja.marcos.map((marco) => ({
       ubicacion: caja.ubicacion,
       numero: marco.numero,
       contenido: marco.contenido,
-      transferido_a_colmena_id: tieneMarco(marco) && marco.transferir ? Number(marco.destino) : null,
+      transferido_a_colmena_id: vaAColmena(marco) ? Number(marco.destino) : null,
+      retirar_a_bodega: vaABodega(marco),
+      // Límite de 10 marcos por piso: piso de la colmena que recibe y, si está
+      // llena, qué marco sale de ella. El backend actual ignora estos campos.
+      ...(vaAColmena(marco)
+        ? {
+            ubicacion_destino: marco.pisoDestino === "ALZA" ? "ALZA" : "CAMARA_CRIA",
+            marco_desplazado_numero: marco.desplazado ? Number(marco.desplazado) : null,
+          }
+        : {}),
     }))
   );
 }
 
-// Una transferencia por cada marco marcado para salir de la colmena inspeccionada.
-export function planDeTransferencias(registro, colmenaOrigenId) {
-  return cajasRegistradas(registro).flatMap((caja) =>
-    marcosATransferir(caja.marcos).map((marco) => ({
-      colmena_origen_id: Number(colmenaOrigenId),
-      colmena_destino_id: Number(marco.destino),
-      cantidad_marcos: 1,
-      tipo_marco: TIPO_POR_CONTENIDO[marco.contenido] ?? "OTRO",
-      motivo: "Transferencia registrada durante la inspección",
-      observaciones: `Marco ${marco.numero} de ${texto(UBICACION_MARCO, caja.ubicacion).toLowerCase()}: ${texto(
-        CONTENIDO_MARCO,
-        marco.contenido
-      ).toLowerCase()}.`,
-      ubicacion: caja.ubicacion,
-      numero_marco: marco.numero,
-      contenido: marco.contenido,
-    }))
-  );
+// Cantidad de marcos marcados para salir de la colmena inspeccionada. El backend
+// crea esas transferencias al guardar la inspección, a partir de
+// marcos[].transferido_a_colmena_id, en la misma operación.
+export function contarTransferencias(registro) {
+  return cajasRegistradas(registro).reduce((total, caja) => total + marcosATransferir(caja.marcos).length, 0);
 }
 
 // Devuelve el mensaje de error de una caja, o "" si está bien.
@@ -101,7 +132,7 @@ export function validarCaja(caja, nombre, colmenaId, { obligatoria = false } = {
     return `Falta registrar ${faltan.length === 1 ? "el marco" : "los marcos"} ${faltan.join(", ")} ${nombre}. Si no hay marco en esa posición, elige «Sin marco».`;
   }
   for (const marco of marcosATransferir(caja)) {
-    if (!marco.destino) return `Elige la colmena de destino del marco ${marco.numero} ${nombre}.`;
+    if (!marco.destino) return `Elige el destino del marco ${marco.numero} ${nombre}.`;
     if (String(marco.destino) === String(colmenaId)) {
       return `El marco ${marco.numero} ${nombre} no se puede transferir a la misma colmena.`;
     }

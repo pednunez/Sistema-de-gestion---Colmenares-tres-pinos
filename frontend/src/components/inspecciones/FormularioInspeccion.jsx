@@ -1,21 +1,28 @@
-import { useId } from "react";
+import { useId, useMemo, useRef } from "react";
 import Modal from "../ui/Modal";
 import Boton from "../ui/Boton";
-import Alerta from "../ui/Alerta";
 import { AreaTexto, Entrada, Segmentado } from "../ui/Campo";
-import SelectorColmena from "../colmenas/SelectorColmena";
+import SelectorApiarioColmena from "../colmenas/SelectorApiarioColmena";
 import RegistroMarcos from "./RegistroMarcos";
+import TratamientosEnCurso from "./TratamientosEnCurso";
+import TratamientoEnInspeccion from "./TratamientoEnInspeccion";
+import { TRATAMIENTO_VACIO, tratamientoParaEnviar, validarTratamiento } from "../../utils/tratamientoInspeccion";
 import { useFormulario } from "../../hooks/useFormulario";
 import { useDatos } from "../../hooks/useDatos";
-import { ESTADO_GENERAL, NIVEL, NIVEL_MIEL, opciones } from "../../utils/etiquetas";
+import { ESTADO_GENERAL, ESTADO_GENERAL_ANTERIOR, NIVEL, NIVEL_MIEL, opciones, texto } from "../../utils/etiquetas";
 import { textoONulo } from "../../utils/validacion";
+import { RETIRO_A_BODEGA } from "../../config/funciones";
+import { useMarcosDestinos } from "../../hooks/useMarcosDestinos";
+import { PISO_ALZA, PISO_CAMARA, planDeDestinos, validarCapacidad } from "../../utils/capacidad";
 import {
   crearCaja,
+  quitarDestinosColmena,
   detalleMarcos,
   marcosATransferir,
-  planDeTransferencias,
+  contarTransferencias,
   totalMarcos,
   validarCaja,
+  vaAColmena,
 } from "../../utils/marcos";
 
 const OPCIONES_SI_NO = [
@@ -34,6 +41,18 @@ const OPCIONES_TIRAS = [
   { valor: null, texto: "No se aplicaron" },
 ];
 
+// Nombre de cada campo para el resumen de errores al pie del formulario.
+const NOMBRES_CAMPO = {
+  apiario_id: "Apiario",
+  colmena_id: "Colmena",
+  estado_general: "Estado de la colmena",
+  enfermedad_observada: "Qué se observó",
+  tratamiento: "Tratamiento",
+  alimentacion_suministrada: "Alimentación suministrada",
+  camara: "Cámara de cría",
+  alza: "Alza",
+};
+
 const LARGO_MAXIMO_MIEL = 50;
 const LARGO_MAXIMO_ALIMENTACION = 500;
 
@@ -46,15 +65,30 @@ function opcionesMiel(valorActual) {
 }
 
 // Al registrar una inspección se revisan los marcos uno por uno. Las transferencias
-// marcadas en esa revisión se guardan junto con la inspección.
-export default function FormularioInspeccion({ inspeccion, colmenaInicial, onGuardar, onCerrar }) {
+// marcadas en esa revisión las crea el backend al guardar la inspección.
+// Con "sesionRevisionId" la inspección se registra dentro de una revisión por grupo:
+// la colmena viene fija y el backend la marca como revisada en esa sesión.
+export default function FormularioInspeccion({
+  inspeccion,
+  colmenaInicial,
+  sesionRevisionId,
+  contexto,
+  onGuardar,
+  onCerrar,
+}) {
   const esEdicion = Boolean(inspeccion?.id);
   const idFormulario = useId();
-  const { codigoColmena } = useDatos();
+  const { datos, indices, codigoColmena } = useDatos();
+  const refFormulario = useRef(null);
+  const colmenaPrevia = indices.colmenas.get(Number(inspeccion?.colmena_id ?? colmenaInicial));
 
   const formulario = useFormulario({
+    apiario_id: String(colmenaPrevia?.apiario_id ?? ""),
     colmena_id: String(inspeccion?.colmena_id ?? colmenaInicial ?? ""),
-    estado_general: inspeccion?.estado_general ?? null,
+    // Tratamientos en curso que se finalizan al guardar la inspección.
+    finalizar: [],
+    // Una inspección con la escala anterior obliga a elegir el estado nuevo al editarla.
+    estado_general: inspeccion?.estado_general in ESTADO_GENERAL ? inspeccion.estado_general : null,
     reina_observada: inspeccion?.reina_observada ?? null,
     presencia_cria: inspeccion?.presencia_cria ?? null,
     nivel_poblacion: inspeccion?.nivel_poblacion ?? null,
@@ -65,6 +99,9 @@ export default function FormularioInspeccion({ inspeccion, colmenaInicial, onGua
     signos_enfermedad: inspeccion?.signos_enfermedad ?? false,
     enfermedad_observada: inspeccion?.enfermedad_observada ?? "",
     tiras_medicamento: inspeccion?.tiras_medicamento ?? null,
+    // Tratamiento nuevo que se registra junto con la inspección.
+    registrarTratamiento: false,
+    tratamiento: TRATAMIENTO_VACIO,
     observaciones: inspeccion?.observaciones ?? "",
     camara: crearCaja(),
     tieneAlza: false,
@@ -72,21 +109,67 @@ export default function FormularioInspeccion({ inspeccion, colmenaInicial, onGua
   });
   const { valores, cambiar, errores } = formulario;
 
+  const tratamientosEnCurso = useMemo(
+    () =>
+      datos.tratamientos.filter((t) => String(t.colmena_id) === String(valores.colmena_id) && t.estado === "EN_CURSO"),
+    [datos.tratamientos, valores.colmena_id]
+  );
+  // Los apicultores rotan entre apiarios: quien inspecciona puede finalizar el
+  // tratamiento aunque lo haya registrado otra persona (decisión del Product Owner, 26-10).
+  const puedeFinalizar = () => true;
+
+  const cambiarApiario = (id) => {
+    cambiar("apiario_id", id);
+    cambiar("colmena_id", "");
+    cambiar("finalizar", []);
+    // Las transferencias solo van a colmenas del mismo apiario.
+    cambiar("camara", quitarDestinosColmena(valores.camara));
+    cambiar("alza", quitarDestinosColmena(valores.alza));
+  };
+
+  const cambiarColmena = (id) => {
+    cambiar("colmena_id", id);
+    cambiar("finalizar", []);
+  };
+
+  // Marcos actuales de las colmenas que reciben, para no superar 10 por piso.
+  const destinos = [...valores.camara, ...(valores.tieneAlza ? valores.alza : [])]
+    .filter(vaAColmena)
+    .map((marco) => marco.destino);
+  const marcosDestinos = useMarcosDestinos(destinos);
+  const plan = planDeDestinos(valores, marcosDestinos);
+
+  const validarConCapacidad = (v, caja, ubicacion, nombre, opciones) => {
+    const error = validarCaja(caja, nombre, v.colmena_id, opciones);
+    if (error) return error;
+    return validarCapacidad(caja, ubicacion, nombre, planDeDestinos(v, marcosDestinos), codigoColmena);
+  };
+
   const validar = (v) => ({
+    apiario_id: !esEdicion && !v.apiario_id && "Selecciona el apiario.",
     colmena_id: !v.colmena_id && "Selecciona la colmena inspeccionada.",
-    estado_general: !v.estado_general && "Indica el estado general de la colmena.",
+    estado_general: !v.estado_general && "Indica el estado de la colmena.",
     enfermedad_observada:
       v.signos_enfermedad && !v.enfermedad_observada.trim() && "Describe brevemente lo que observaste.",
+    tratamiento: v.signos_enfermedad && v.registrarTratamiento && validarTratamiento(v.tratamiento),
     alimentacion_suministrada:
       v.alimentacion_suministrada.trim().length > LARGO_MAXIMO_ALIMENTACION &&
       `Máximo ${LARGO_MAXIMO_ALIMENTACION} caracteres.`,
-    camara: !esEdicion && validarCaja(v.camara, "de la cámara de cría", v.colmena_id, { obligatoria: v.tieneAlza }),
-    alza: !esEdicion && v.tieneAlza && validarCaja(v.alza, "del alza", v.colmena_id, { obligatoria: true }),
+    camara:
+      !esEdicion && validarConCapacidad(v, v.camara, PISO_CAMARA, "de la cámara de cría", { obligatoria: v.tieneAlza }),
+    alza: !esEdicion && v.tieneAlza && validarConCapacidad(v, v.alza, PISO_ALZA, "del alza", { obligatoria: true }),
   });
 
-  const enviar = (evento) => {
+  // Lleva la vista al primer campo marcado en rojo para que el usuario vea qué falta.
+  const mostrarPrimerError = () =>
+    requestAnimationFrame(() => {
+      const campo = refFormulario.current?.querySelector('[data-invalido="true"], [aria-invalid="true"]');
+      campo?.scrollIntoView?.({ behavior: "smooth", block: "center" });
+    });
+
+  const enviar = async (evento) => {
     evento.preventDefault();
-    formulario.enviar(validar, (v) => {
+    const guardado = await formulario.enviar(validar, (v) => {
       const datos = {
         colmena_id: Number(v.colmena_id),
         estado_general: v.estado_general,
@@ -102,19 +185,29 @@ export default function FormularioInspeccion({ inspeccion, colmenaInicial, onGua
         tiras_medicamento: v.signos_enfermedad ? v.tiras_medicamento : null,
         observaciones: textoONulo(v.observaciones),
       };
-      if (esEdicion) return onGuardar(datos, []);
+      const nuevoTratamiento =
+        v.signos_enfermedad && v.registrarTratamiento
+          ? tratamientoParaEnviar(v.tratamiento, { motivo: v.enfermedad_observada, tiras: v.tiras_medicamento })
+          : null;
+      if (esEdicion) return onGuardar(datos, 0, v.finalizar, nuevoTratamiento);
 
       return onGuardar(
         {
           ...datos,
+          ...(sesionRevisionId ? { sesion_revision_id: sesionRevisionId } : {}),
           cantidad_marcos: totalMarcos(v),
           tiene_alza: v.tieneAlza,
           marcos: detalleMarcos(v),
         },
-        planDeTransferencias(v, v.colmena_id)
+        contarTransferencias(v),
+        v.finalizar,
+        nuevoTratamiento
       );
     });
+    if (!guardado) mostrarPrimerError();
   };
+
+  const camposConError = Object.keys(errores).filter((campo) => errores[campo]);
 
   const cantidadTransferencias =
     marcosATransferir(valores.camara).length + (valores.tieneAlza ? marcosATransferir(valores.alza).length : 0);
@@ -123,11 +216,28 @@ export default function FormularioInspeccion({ inspeccion, colmenaInicial, onGua
   return (
     <Modal
       titulo={esEdicion ? "Editar inspección" : "Registrar inspección"}
-      descripcion={esEdicion ? `Colmena ${codigoColmena(inspeccion.colmena_id)}` : undefined}
+      descripcion={
+        esEdicion
+          ? `Colmena ${codigoColmena(inspeccion.colmena_id)}`
+          : sesionRevisionId
+            ? [`Colmena ${codigoColmena(Number(valores.colmena_id))}`, contexto].filter(Boolean).join(" · ")
+            : undefined
+      }
       onCerrar={onCerrar}
       ancho={esEdicion ? "sm:max-w-2xl" : "sm:max-w-4xl"}
       pie={
         <>
+          {/* El aviso de error queda al pie, siempre visible junto a los botones. */}
+          {(formulario.errorGeneral || camposConError.length > 0) && (
+            <div role="alert" className="text-sm text-red-700 sm:mr-auto sm:max-w-md sm:self-center">
+              {formulario.errorGeneral && <p className="font-medium">{formulario.errorGeneral}</p>}
+              {camposConError.length > 0 && (
+                <p>
+                  Revisa lo marcado en rojo: {camposConError.map((campo) => NOMBRES_CAMPO[campo] ?? campo).join(", ")}.
+                </p>
+              )}
+            </div>
+          )}
           <Boton variante="secundario" onClick={onCerrar}>
             Cancelar
           </Boton>
@@ -137,27 +247,40 @@ export default function FormularioInspeccion({ inspeccion, colmenaInicial, onGua
         </>
       }
     >
-      <form id={idFormulario} onSubmit={enviar} noValidate className="grid gap-5">
-        {formulario.errorGeneral && <Alerta>{formulario.errorGeneral}</Alerta>}
-
-        {!esEdicion && (
-          <SelectorColmena
-            etiqueta="Colmena"
-            requerido
-            valor={valores.colmena_id}
-            onCambiar={(valor) => cambiar("colmena_id", valor)}
-            error={errores.colmena_id}
+      <form ref={refFormulario} id={idFormulario} onSubmit={enviar} noValidate className="grid gap-5">
+        {!esEdicion && !sesionRevisionId && (
+          <SelectorApiarioColmena
+            apiarioId={valores.apiario_id}
+            colmenaId={valores.colmena_id}
+            onCambiarApiario={cambiarApiario}
+            onCambiarColmena={cambiarColmena}
+            errores={errores}
           />
         )}
 
-        <Segmentado
-          etiqueta="Estado general"
-          requerido
-          opciones={opciones(ESTADO_GENERAL)}
-          valor={valores.estado_general}
-          onCambiar={(valor) => cambiar("estado_general", valor)}
-          error={errores.estado_general}
+        <TratamientosEnCurso
+          tratamientos={tratamientosEnCurso}
+          seleccionados={valores.finalizar}
+          onCambiar={(ids) => cambiar("finalizar", ids)}
+          puedeFinalizar={puedeFinalizar}
         />
+
+        <div className="grid gap-1.5">
+          <Segmentado
+            etiqueta="Estado de la colmena"
+            requerido
+            opciones={opciones(ESTADO_GENERAL)}
+            valor={valores.estado_general}
+            onCambiar={(valor) => cambiar("estado_general", valor)}
+            error={errores.estado_general}
+          />
+          {inspeccion?.estado_general in ESTADO_GENERAL_ANTERIOR && (
+            <p className="text-sm text-slate-500">
+              Esta inspección tenía el estado «{texto(ESTADO_GENERAL_ANTERIOR, inspeccion.estado_general)}». Elige el
+              estado actual.
+            </p>
+          )}
+        </div>
 
         <div className="grid gap-5 sm:grid-cols-2">
           <Segmentado
@@ -235,13 +358,24 @@ export default function FormularioInspeccion({ inspeccion, colmenaInicial, onGua
           />
         )}
 
+        {valores.signos_enfermedad && (
+          <TratamientoEnInspeccion
+            registrar={valores.registrarTratamiento}
+            tratamiento={valores.tratamiento}
+            tiras={valores.tiras_medicamento}
+            error={errores.tratamiento}
+            onRegistrar={(valor) => cambiar("registrarTratamiento", valor)}
+            onCambiar={(tratamiento) => cambiar("tratamiento", tratamiento)}
+          />
+        )}
+
         {!esEdicion && (
           <div className="grid gap-4">
             <div>
               <h3 className="font-semibold text-slate-900">Revisión de marcos</h3>
               <p className="text-sm text-slate-500">
-                Indica qué contiene cada marco. Si mueves un marco a otra colmena, márcalo con «Transferir»: la
-                transferencia se guarda sola al registrar la inspección.
+                Indica qué contiene cada marco. Si mueves un marco a otra colmena del apiario o a bodega, márcalo con
+                «Transferir»: se guarda solo al registrar la inspección.
               </p>
             </div>
 
@@ -250,7 +384,11 @@ export default function FormularioInspeccion({ inspeccion, colmenaInicial, onGua
               caja={valores.camara}
               onCambiar={(caja) => cambiar("camara", caja)}
               colmenaId={valores.colmena_id}
+              apiarioId={valores.apiario_id}
+              ubicacion={PISO_CAMARA}
+              plan={plan}
               error={errores.camara}
+              retiroDisponible={RETIRO_A_BODEGA}
             />
 
             <Segmentado
@@ -267,7 +405,11 @@ export default function FormularioInspeccion({ inspeccion, colmenaInicial, onGua
                 caja={valores.alza}
                 onCambiar={(caja) => cambiar("alza", caja)}
                 colmenaId={valores.colmena_id}
+                apiarioId={valores.apiario_id}
+                ubicacion={PISO_ALZA}
+                plan={plan}
                 error={errores.alza}
+                retiroDisponible={RETIRO_A_BODEGA}
               />
             )}
 
@@ -280,7 +422,8 @@ export default function FormularioInspeccion({ inspeccion, colmenaInicial, onGua
                 en la colmena
                 {cantidadTransferencias > 0 && (
                   <>
-                    {" "}y{" "}
+                    {" "}
+                    y{" "}
                     <strong>
                       {cantidadTransferencias} {cantidadTransferencias === 1 ? "transferencia" : "transferencias"}
                     </strong>{" "}

@@ -36,8 +36,9 @@ it("registra postura, miel y alimentación", async () => {
   await abrir();
   fireEvent.click(await screen.findByRole("button", { name: "Registrar inspección" }));
   const d = screen.getByRole("dialog");
+  fireEvent.change(within(d).getByLabelText(/^Apiario/), { target: { value: "1" } });
   fireEvent.change(within(d).getByLabelText(/^Colmena/), { target: { value: "1" } });
-  fireEvent.click(within(d).getByRole("radio", { name: "Bueno" }));
+  fireEvent.click(within(d).getByRole("radio", { name: "Completa" }));
   const postura = within(d).getByRole("radiogroup", { name: "¿Hay postura?" });
   fireEvent.click(within(postura).getByRole("radio", { name: "Sí" }));
   const miel = within(d).getByRole("radiogroup", { name: "Miel" });
@@ -53,8 +54,9 @@ it("sin completar los campos nuevos envía null", async () => {
   await abrir();
   fireEvent.click(await screen.findByRole("button", { name: "Registrar inspección" }));
   const d = screen.getByRole("dialog");
+  fireEvent.change(within(d).getByLabelText(/^Apiario/), { target: { value: "1" } });
   fireEvent.change(within(d).getByLabelText(/^Colmena/), { target: { value: "1" } });
-  fireEvent.click(within(d).getByRole("radio", { name: "Regular" }));
+  fireEvent.click(within(d).getByRole("radio", { name: "Débil" }));
   fireEvent.click(within(d).getAllByRole("button", { name: "Registrar inspección" }).at(-1));
   await waitFor(() => expect(llamadas.find((l) => l.metodo === "POST")).toBeTruthy());
   expect(llamadas.find((l) => l.metodo === "POST").cuerpo).toMatchObject({ postura: null, miel: null, alimentacion_suministrada: null });
@@ -71,11 +73,16 @@ it("muestra y edita los campos, conservando un valor de miel antiguo", async () 
   const miel = within(d).getByRole("radiogroup", { name: "Miel" });
   expect(within(miel).getByRole("radio", { name: "2 marcos operculados" }).getAttribute("aria-checked")).toBe("true");
   fireEvent.click(within(miel).getByRole("radio", { name: "Poca" }));
+  // La inspección tenía la escala anterior: hay que elegir el estado nuevo.
+  within(d).getByText(/tenía el estado «Bueno \(escala anterior\)»/);
+  fireEvent.click(within(d).getByRole("button", { name: "Guardar cambios" }));
+  await within(d).findByText("Indica el estado de la colmena.");
+  fireEvent.click(within(d).getByRole("radio", { name: "Donante" }));
   fireEvent.click(within(d).getByRole("button", { name: "Guardar cambios" }));
   await waitFor(() => expect(llamadas.find((l) => l.metodo === "PATCH")).toBeTruthy());
   const patch = llamadas.find((l) => l.metodo === "PATCH");
   expect(patch.ruta).toBe("/inspecciones/3");
-  expect(patch.cuerpo).toMatchObject({ postura: false, miel: "POCA", alimentacion_suministrada: "Fondant 1 kg" });
+  expect(patch.cuerpo).toMatchObject({ estado_general: "DONANTE", postura: false, miel: "POCA", alimentacion_suministrada: "Fondant 1 kg" });
   expect(patch.cuerpo.colmena_id).toBeUndefined();
 });
 
@@ -83,8 +90,9 @@ it("pide las tiras de medicamento solo con signos de enfermedad", async () => {
   await abrir();
   fireEvent.click(await screen.findByRole("button", { name: "Registrar inspección" }));
   const d = screen.getByRole("dialog");
+  fireEvent.change(within(d).getByLabelText(/^Apiario/), { target: { value: "1" } });
   fireEvent.change(within(d).getByLabelText(/^Colmena/), { target: { value: "1" } });
-  fireEvent.click(within(d).getByRole("radio", { name: "Crítico" }));
+  fireEvent.click(within(d).getByRole("radio", { name: "Requiere revisión" }));
   expect(within(d).queryByRole("radiogroup", { name: "Tiras de medicamento aplicadas" })).toBeNull();
   const signos = within(d).getByRole("radiogroup", { name: "¿Hay signos de enfermedad?" });
   fireEvent.click(within(signos).getByRole("radio", { name: "Sí" }));

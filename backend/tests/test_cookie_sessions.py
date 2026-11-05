@@ -29,6 +29,24 @@ class CookieTests(unittest.TestCase):
         self.assertEqual(status,200)
         cookie=next(v for k,v in headers if k=='set-cookie')
         return cookie.split(';')[0],body,headers
+    def test_mobile_token_works_as_bearer_without_csrf(self):
+        status,body,headers=self.request('/auth/token',{'email':self.user.email,'password':self.old_password})
+        self.assertEqual(status,200,body)
+        self.assertEqual((body['token_type'],body['usuario']['id']),('bearer',self.user.id))
+        self.assertFalse(any(k=='set-cookie' for k,_ in headers))
+        self.assertIn(('cache-control','no-store'),headers)
+        token=body['access_token']
+        self.assertEqual(self.request('/auth/me',bearer=token)[0],200)
+        # Escritura con Bearer: no exige CSRF (no hay cookie que el navegador envie solo).
+        self.assertNotEqual(self.request('/auth/logout',{},bearer=token)[0],403)
+        # El logout revoca el token.
+        self.assertEqual(self.request('/auth/me',bearer=token)[0],401)
+
+    def test_mobile_token_rejects_browsers_and_bad_password(self):
+        status,_,_=self.request('/auth/token',{'email':self.user.email,'password':self.old_password},origin='http://localhost:5173')
+        self.assertEqual(status,403)
+        self.assertEqual(self.request('/auth/token',{'email':self.user.email,'password':'incorrecta123'})[0],401)
+
     def test_login_cookie_flags_and_no_token_in_body(self):
         with patch.object(settings,'SESSION_COOKIE_SECURE',True): cookie,body,headers=self.login()
         value=next(v for k,v in headers if k=='set-cookie')

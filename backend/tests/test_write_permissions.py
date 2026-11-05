@@ -3,6 +3,7 @@ import asyncio
 import json
 from types import SimpleNamespace
 import unittest
+from datetime import date
 from unittest.mock import patch, MagicMock
 
 from fastapi import HTTPException
@@ -99,6 +100,26 @@ class WritePermissionsTests(unittest.TestCase):
                         with self.subTest(role=role,method=method,resource=resource):
                             with self.assertRaises(ReachedMutation):
                                 self.call(method,f'/{resource}/1')
+
+    def test_any_apicultor_can_finish_treatment_in_progress(self):
+        self.role('APICULTOR',10)
+        prefix='app.routers.tratamientos.tratamiento_service'
+        finalizar={'estado':'FINALIZADO','fecha_fin':'2026-10-26'}
+        def item(estado='EN_CURSO'):
+            return SimpleNamespace(id=1,usuario_id=20,colmena_id=1,inspeccion_id=None,
+                                   estado=estado,fecha_inicio=date(2026,10,1))
+        with patch(f'{prefix}.obtener_tratamiento',return_value=item()),              patch('app.routers.tratamientos.tratamiento_a_dict',return_value={}),              patch(f'{prefix}.actualizar_tratamiento',side_effect=ReachedMutation):
+            with self.assertRaises(ReachedMutation):
+                self.call('PATCH','/tratamientos/1',finalizar)
+        rejected=[(item(),{**finalizar,'dosis':'2 tiras'}),(item(),{'estado':'FINALIZADO'}),
+                  (item(),{'estado':'CANCELADO','fecha_fin':'2026-10-26'}),(item('PLANIFICADO'),finalizar)]
+        for tratamiento,body in rejected:
+            with self.subTest(body=body,estado=tratamiento.estado),                  patch(f'{prefix}.obtener_tratamiento',return_value=tratamiento),                  patch(f'{prefix}.actualizar_tratamiento') as update:
+                self.assertEqual(self.call('PATCH','/tratamientos/1',body)[0],403)
+                update.assert_not_called()
+        with patch(f'{prefix}.obtener_tratamiento',return_value=item()),              patch(f'{prefix}.actualizar_tratamiento') as update:
+            self.assertEqual(self.call('PATCH','/tratamientos/1',{**finalizar,'fecha_fin':'2026-09-01'})[0],400)
+            update.assert_not_called()
 
     def test_nonexistent_record_returns_404(self):
         self.role('APICULTOR')

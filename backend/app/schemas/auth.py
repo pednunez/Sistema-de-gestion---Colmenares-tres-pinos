@@ -140,3 +140,19 @@ class MensajeResponse(BaseModel):
 class LoginResponse(BaseModel):
     usuario: UsuarioAutenticado
     csrf_token: str
+
+
+# ==========================================================
+# TOKEN PARA LA APP MOVIL (POST /auth/token)
+# ==========================================================
+#
+# La app nativa guarda el token en almacenamiento seguro y
+# lo envia como Authorization: Bearer <access_token>.
+# ==========================================================
+
+class TokenMovilResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    # Segundos de validez desde que se emitio.
+    expira_en: int
+    usuario: UsuarioAutenticado

@@ -1,11 +1,12 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.apiario import Apiario
 from app.models.colmena import Colmena
+from app.models.inspeccion import Inspeccion
 from app.schemas.colmena import ColmenaCreate, ColmenaUpdate
 
 
@@ -13,24 +14,151 @@ from app.schemas.colmena import ColmenaCreate, ColmenaUpdate
 # LISTAR COLMENAS ACTIVAS
 # ==========================================================
 
+def escapar_like(texto: str) -> str:
+    """Busca el texto literal: % y _ no actuan como comodines."""
+    return (
+        texto.replace("\\", "\\\\")
+        .replace("%", "\\%")
+        .replace("_", "\\_")
+    )
+
+
 def listar_colmenas(
     db: Session,
     apiario_id: int | None = None,
     offset: int = 0,
-    limit: int | None = None
-):
+    limit: int | None = None,
+    estado: str | None = None,
+    codigo: str | None = None,
+    orden: str = "id"
+) -> tuple[list[Colmena], int]:
+    """Devuelve la pagina pedida y el total de colmenas que cumplen el filtro."""
+
+    condiciones = [Colmena.activo == True]
+
+    if apiario_id is not None:
+        condiciones.append(Colmena.apiario_id == apiario_id)
+
+    if estado is not None:
+        condiciones.append(Colmena.estado == estado)
+
+    if codigo:
+        condiciones.append(
+            Colmena.codigo.ilike(
+                f"%{escapar_like(codigo)}%",
+                escape="\\"
+            )
+        )
+
+    total = db.scalar(
+        select(func.count()).select_from(Colmena).where(*condiciones)
+    )
+
+    # El id desempata para que la paginacion sea estable.
+    orden_sql = (
+        (Colmena.codigo, Colmena.id)
+        if orden == "codigo"
+        else (Colmena.id,)
+    )
+
     consulta = (
         select(Colmena)
-        .where(Colmena.activo == True)
-        .order_by(Colmena.id)
+        .where(*condiciones)
+        .order_by(*orden_sql)
+        .offset(offset)
+    )
+
+    if limit is not None:
+        consulta = consulta.limit(limit)
+
+    return db.scalars(consulta).all(), total
+
+
+# ==========================================================
+# COLMENAS SIN REVISION EN EL PERIODO (RF-45)
+# ==========================================================
+#
+# Colmenas operativas (no INACTIVA ni BAJA) cuya ultima
+# inspeccion activa es anterior al periodo, o que nunca
+# fueron inspeccionadas. Primero las nunca revisadas y
+# luego de la mas antigua a la mas reciente.
+# ==========================================================
+
+ESTADOS_NO_OPERATIVOS = ("INACTIVA", "BAJA")
+
+
+def listar_colmenas_sin_revision(
+    db: Session,
+    dias: int,
+    apiario_id: int | None = None,
+    ahora: datetime | None = None
+) -> list[tuple[Colmena, datetime | None]]:
+
+    ahora = ahora or datetime.now(timezone.utc)
+    limite = ahora - timedelta(days=dias)
+
+    ultimas = (
+        select(
+            Inspeccion.colmena_id,
+            func.max(Inspeccion.fecha_inspeccion).label("ultima")
+        )
+        .where(Inspeccion.activo == True)
+        .group_by(Inspeccion.colmena_id)
+        .subquery()
+    )
+
+    consulta = (
+        select(Colmena, ultimas.c.ultima)
+        .outerjoin(ultimas, ultimas.c.colmena_id == Colmena.id)
+        .where(
+            Colmena.activo == True,
+            Colmena.estado.not_in(ESTADOS_NO_OPERATIVOS),
+            (ultimas.c.ultima.is_(None)) | (ultimas.c.ultima < limite)
+        )
+        .order_by(
+            ultimas.c.ultima.is_not(None),
+            ultimas.c.ultima,
+            Colmena.id
+        )
     )
 
     if apiario_id is not None:
         consulta = consulta.where(Colmena.apiario_id == apiario_id)
-    consulta = consulta.offset(offset)
-    if limit is not None:
-        consulta = consulta.limit(limit)
-    return db.scalars(consulta).all()
+
+    return [(fila[0], fila[1]) for fila in db.execute(consulta).all()]
+
+
+# ==========================================================
+# ASOCIAR CODIGO QR
+# ==========================================================
+#
+# El indice unico de codigo_qr incluye colmenas dadas de
+# baja: un codigo nunca se reutiliza para otra colmena.
+# ==========================================================
+
+def obtener_colmena_con_qr(
+    db: Session,
+    codigo_qr: UUID
+) -> Colmena | None:
+
+    return db.scalar(
+        select(Colmena).where(Colmena.codigo_qr == codigo_qr)
+    )
+
+
+def asignar_codigo_qr(
+    db: Session,
+    colmena: Colmena,
+    codigo_qr: UUID
+) -> Colmena:
+
+    colmena.codigo_qr = codigo_qr
+    colmena.fecha_actualizacion = datetime.now(timezone.utc)
+
+    db.commit()
+    db.refresh(colmena)
+
+    return colmena
 
 
 # ==========================================================

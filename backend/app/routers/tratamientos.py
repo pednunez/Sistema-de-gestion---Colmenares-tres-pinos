@@ -3,8 +3,9 @@ from decimal import Decimal
 from enum import Enum
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import inspect as sa_inspect
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.dependencies import obtener_usuario_actual, verificar_autor_o_admin
@@ -107,6 +108,29 @@ def obtener_tratamiento(
 
 
 # ==========================================================
+# SINCRONIZACIÓN DESDE LA APP MÓVIL
+# ==========================================================
+#
+# Si el id_cliente ya llegó antes (la app reintentó porque
+# se cortó la señal), se devuelve el registro existente con
+# 200 en vez de crear otro. Un id_cliente de otro usuario
+# se rechaza: no se entrega un registro ajeno.
+# ==========================================================
+
+def registro_ya_sincronizado(registro, usuario: Usuario, response: Response):
+
+    if registro.usuario_id != usuario.id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="El id_cliente ya fue usado por otro usuario"
+        )
+
+    response.status_code = status.HTTP_200_OK
+
+    return registro
+
+
+# ==========================================================
 # CREAR TRATAMIENTO
 # ==========================================================
 
@@ -117,9 +141,24 @@ def obtener_tratamiento(
 )
 def crear_tratamiento(
     datos: TratamientoCreate,
+    response: Response,
     db: Session = Depends(get_db),
     usuario_actual: Usuario = Depends(obtener_usuario_actual)
 ):
+
+    # ------------------------------------------------------
+    # REINTENTO DE SINCRONIZACIÓN
+    # ------------------------------------------------------
+
+    if datos.id_cliente is not None:
+
+        existente = tratamiento_service.obtener_por_id_cliente(
+            db,
+            datos.id_cliente
+        )
+
+        if existente is not None:
+            return registro_ya_sincronizado(existente, usuario_actual, response)
 
     # ------------------------------------------------------
     # VALIDAR COLMENA
@@ -169,10 +208,25 @@ def crear_tratamiento(
         }
     )
 
-    tratamiento = tratamiento_service.crear_tratamiento(
-        db,
-        datos_seguros
-    )
+    try:
+        tratamiento = tratamiento_service.crear_tratamiento(
+            db,
+            datos_seguros
+        )
+    except IntegrityError:
+        db.rollback()
+
+        # Dos envíos simultáneos del mismo id_cliente: gana el primero.
+        existente = (
+            tratamiento_service.obtener_por_id_cliente(db, datos.id_cliente)
+            if datos.id_cliente is not None
+            else None
+        )
+
+        if existente is None:
+            raise
+
+        return registro_ya_sincronizado(existente, usuario_actual, response)
 
     # ------------------------------------------------------
     # AUDITORÍA
@@ -221,15 +275,44 @@ def actualizar_tratamiento(
             detail="Tratamiento no encontrado"
         )
 
-    # Estado antes del cambio
-    verificar_autor_o_admin(usuario_actual, tratamiento.usuario_id)
-
-    datos_anteriores = tratamiento_a_dict(
-        tratamiento
-    )
-
     cambios = datos.model_dump(
         exclude_unset=True
+    )
+
+    # ------------------------------------------------------
+    # FINALIZAR DESDE LA INSPECCIÓN
+    # ------------------------------------------------------
+    # Los apicultores rotan entre apiarios: cualquiera que
+    # inspecciona la colmena puede finalizar un tratamiento
+    # EN_CURSO, aunque lo haya registrado otra persona.
+    # El resto de la edición queda para el autor o un ADMIN.
+    # La auditoría registra quién lo finalizó.
+
+    es_finalizacion = (
+        set(cambios) == {"estado", "fecha_fin"}
+        and cambios["estado"] == "FINALIZADO"
+        and cambios["fecha_fin"] is not None
+        and tratamiento.estado == "EN_CURSO"
+    )
+
+    if not (
+        es_finalizacion
+        and usuario_actual.rol == "APICULTOR"
+    ):
+        verificar_autor_o_admin(usuario_actual, tratamiento.usuario_id)
+
+    if (
+        cambios.get("fecha_fin") is not None
+        and cambios["fecha_fin"] < tratamiento.fecha_inicio
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La fecha_fin no puede ser anterior a fecha_inicio"
+        )
+
+    # Estado antes del cambio
+    datos_anteriores = tratamiento_a_dict(
+        tratamiento
     )
 
     # No permitimos cambiar quién creó el tratamiento

@@ -1,9 +1,10 @@
+
 from datetime import date, datetime
 from decimal import Decimal
 from enum import Enum
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy import inspect as sa_inspect
 from sqlalchemy.orm import Session
 
@@ -13,7 +14,7 @@ from app.models.usuario import Usuario
 
 from app.schemas.transferencia_marco import (
     TransferenciaMarcoCreate,
-    TransferenciaMarcoResponse
+    TransferenciaMarcoResponse,
 )
 from app.schemas.auditoria import AuditoriaCreate
 
@@ -21,9 +22,14 @@ from app.services import transferencia_marco as transferencia_service
 from app.services import auditoria as auditoria_service
 
 
+# ==========================================================
+# ROUTER DE TRANSFERENCIAS DE MARCOS
+# PROYECTO: COLMENARES TRES PINOS
+# ==========================================================
+
 router = APIRouter(
     prefix="/transferencias-marcos",
-    tags=["Transferencias de Marcos"]
+    tags=["Transferencias de Marcos"],
 )
 
 
@@ -33,10 +39,9 @@ router = APIRouter(
 
 def valor_json(valor):
     """
-    Convierte tipos especiales de Python a valores
-    compatibles con JSON para almacenarlos en auditoría.
+    Convierte valores especiales a formatos compatibles
+    con JSON para almacenarlos en auditoría.
     """
-
     if isinstance(valor, (datetime, date)):
         return valor.isoformat()
 
@@ -54,10 +59,9 @@ def valor_json(valor):
 
 def transferencia_a_dict(transferencia):
     """
-    Convierte las columnas de una transferencia
-    SQLAlchemy a un diccionario compatible con JSON.
+    Obtiene todas las columnas de la transferencia
+    para generar su registro de auditoría.
     """
-
     return {
         columna.key: valor_json(
             getattr(transferencia, columna.key)
@@ -74,14 +78,12 @@ def transferencia_a_dict(transferencia):
 
 @router.get(
     "/",
-    response_model=list[TransferenciaMarcoResponse]
+    response_model=list[TransferenciaMarcoResponse],
 )
 def listar_transferencias(
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
-    return transferencia_service.listar_transferencias(
-        db
-    )
+    return transferencia_service.listar_transferencias(db)
 
 
 # ==========================================================
@@ -90,64 +92,108 @@ def listar_transferencias(
 
 @router.get(
     "/{transferencia_id}",
-    response_model=TransferenciaMarcoResponse
+    response_model=TransferenciaMarcoResponse,
 )
 def obtener_transferencia(
     transferencia_id: int,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
-    transferencia = (
-        transferencia_service.obtener_transferencia(
-            db,
-            transferencia_id
-        )
+    transferencia = transferencia_service.obtener_transferencia(
+        db,
+        transferencia_id,
     )
 
     if transferencia is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Transferencia no encontrada"
+            detail="Transferencia no encontrada",
         )
 
     return transferencia
 
 
 # ==========================================================
-# CREAR TRANSFERENCIA
+# CREAR TRANSFERENCIA MANUAL
+# ==========================================================
+#
+# Este endpoint permite transferencias independientes.
+#
+# Las transferencias realizadas durante una inspección
+# deben registrarse exclusivamente desde el servicio
+# de inspecciones, dentro de su misma transacción.
 # ==========================================================
 
 @router.post(
     "/",
     response_model=TransferenciaMarcoResponse,
-    status_code=status.HTTP_201_CREATED
+    status_code=status.HTTP_201_CREATED,
 )
 def crear_transferencia(
     datos: TransferenciaMarcoCreate,
+    response: Response,
     db: Session = Depends(get_db),
     usuario_actual: Usuario = Depends(
         obtener_usuario_actual
-    )
+    ),
 ):
 
-    # ------------------------------------------------------
-    # VALIDAR ORIGEN Y DESTINO DIFERENTES
-    # ------------------------------------------------------
+    # ======================================================
+    # 1. PROTEGER TRANSFERENCIAS DE INSPECCIONES
+    # ======================================================
+    #
+    # Las transferencias de una inspección ya se registran
+    # al guardarla (marcos[].transferido_a_colmena_id).
+    #
+    # Si el cliente vuelve a enviar una de ellas, se responde
+    # 200 con la transferencia existente: no se duplica el
+    # movimiento ni se descuentan otra vez los marcos.
+    # Cualquier otra transferencia con inspeccion_id se
+    # rechaza para no crear movimientos fuera de la inspección.
+    # ======================================================
 
-    if (
-        datos.colmena_origen_id
-        == datos.colmena_destino_id
-    ):
+    if datos.inspeccion_id is not None:
+
+        existente = transferencia_service.obtener_transferencia_de_inspeccion(
+            db,
+            datos.inspeccion_id,
+            datos.ubicacion,
+            datos.numero_marco,
+        )
+
+        if (
+            existente is not None
+            and existente.colmena_origen_id == datos.colmena_origen_id
+            and existente.colmena_destino_id == datos.colmena_destino_id
+        ):
+            response.status_code = status.HTTP_200_OK
+            return existente
+
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                "Las transferencias asociadas a inspecciones "
+                "se registran automáticamente al guardar "
+                "la inspección, indicando el destino en "
+                "marcos[].transferido_a_colmena_id."
+            ),
+        )
+
+    # ======================================================
+    # 2. VALIDAR ORIGEN Y DESTINO DIFERENTES
+    # ======================================================
+
+    if datos.colmena_origen_id == datos.colmena_destino_id:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
                 "La colmena de origen y destino "
                 "deben ser diferentes"
-            )
+            ),
         )
 
-    # ------------------------------------------------------
-    # VALIDAR CANTIDAD DE MARCOS
-    # ------------------------------------------------------
+    # ======================================================
+    # 3. VALIDAR CANTIDAD
+    # ======================================================
 
     if datos.cantidad_marcos <= 0:
         raise HTTPException(
@@ -155,18 +201,16 @@ def crear_transferencia(
             detail=(
                 "La cantidad de marcos debe ser "
                 "mayor que cero"
-            )
+            ),
         )
 
-    # ------------------------------------------------------
-    # VALIDAR COLMENA DE ORIGEN
-    # ------------------------------------------------------
+    # ======================================================
+    # 4. VALIDAR COLMENA DE ORIGEN
+    # ======================================================
 
-    colmena_origen = (
-        transferencia_service.obtener_colmena_activa(
-            db,
-            datos.colmena_origen_id
-        )
+    colmena_origen = transferencia_service.obtener_colmena_activa(
+        db,
+        datos.colmena_origen_id,
     )
 
     if colmena_origen is None:
@@ -175,18 +219,16 @@ def crear_transferencia(
             detail=(
                 "La colmena de origen no existe "
                 "o está inactiva"
-            )
+            ),
         )
 
-    # ------------------------------------------------------
-    # VALIDAR COLMENA DE DESTINO
-    # ------------------------------------------------------
+    # ======================================================
+    # 5. VALIDAR COLMENA DE DESTINO
+    # ======================================================
 
-    colmena_destino = (
-        transferencia_service.obtener_colmena_activa(
-            db,
-            datos.colmena_destino_id
-        )
+    colmena_destino = transferencia_service.obtener_colmena_activa(
+        db,
+        datos.colmena_destino_id,
     )
 
     if colmena_destino is None:
@@ -195,19 +237,17 @@ def crear_transferencia(
             detail=(
                 "La colmena de destino no existe "
                 "o está inactiva"
-            )
+            ),
         )
 
-    # ------------------------------------------------------
-    # VALIDAR MARCOS DISPONIBLES
-    # ------------------------------------------------------
+    # ======================================================
+    # 6. VALIDAR MARCOS DISPONIBLES
+    # ======================================================
     #
-    # Esta primera validación permite entregar un mensaje
-    # claro al usuario antes de intentar la transferencia.
-    #
-    # El servicio vuelve a validar la disponibilidad,
-    # porque es allí donde se realiza la operación real.
-    # ------------------------------------------------------
+    # Esta validación entrega un mensaje claro.
+    # El servicio repetirá la comprobación con las
+    # colmenas bloqueadas para evitar inconsistencias.
+    # ======================================================
 
     marcos_disponibles = (
         colmena_origen.cantidad_marcos
@@ -215,87 +255,75 @@ def crear_transferencia(
         else 0
     )
 
-    if (
-        marcos_disponibles
-        < datos.cantidad_marcos
-    ):
+    if marcos_disponibles < datos.cantidad_marcos:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=(
-                "La colmena de origen no tiene "
-                "suficientes marcos disponibles. "
-                f"Tiene {marcos_disponibles} y se "
-                f"intentan transferir "
-                f"{datos.cantidad_marcos}."
-            )
+                "La colmena de origen no tiene suficientes "
+                "marcos disponibles. "
+                f"Tiene {marcos_disponibles} y se intentan "
+                f"transferir {datos.cantidad_marcos}."
+            ),
         )
 
-    # ------------------------------------------------------
-    # USUARIO REAL OBTENIDO DESDE EL JWT
-    # ------------------------------------------------------
+    # ======================================================
+    # 7. UTILIZAR USUARIO AUTENTICADO
+    # ======================================================
     #
-    # No confiamos en el usuario_id recibido desde
-    # el frontend.
-    #
-    # Se reemplaza por el ID del usuario autenticado.
-    # ------------------------------------------------------
+    # El usuario responsable se obtiene del JWT.
+    # No confiamos en usuario_id enviado por el cliente.
+    # ======================================================
 
     datos_seguros = datos.model_copy(
         update={
-            "usuario_id": usuario_actual.id
+            "usuario_id": usuario_actual.id,
         }
     )
 
-    # ------------------------------------------------------
-    # CREAR TRANSFERENCIA
-    # ------------------------------------------------------
-    #
-    # El servicio:
-    #
-    # 1. vuelve a validar los marcos disponibles;
-    # 2. descuenta del origen;
-    # 3. suma al destino;
-    # 4. crea la transferencia;
-    # 5. guarda todo en una misma transacción.
-    #
-    # Los errores de negocio generados por el servicio
-    # se convierten en HTTP 400.
-    # ------------------------------------------------------
+    # ======================================================
+    # 8. TRANSACCIÓN: TRANSFERENCIA + AUDITORÍA
+    # ======================================================
 
     try:
-        transferencia = (
-            transferencia_service.crear_transferencia(
-                db,
-                datos_seguros
-            )
+        # Crear sin confirmar todavía.
+        transferencia = transferencia_service.crear_transferencia(
+            db,
+            datos_seguros,
+            commit=False,
         )
+
+        # Registrar auditoría dentro de la misma transacción.
+        auditoria_service.registrar_auditoria(
+            db,
+            AuditoriaCreate(
+                usuario_id=usuario_actual.id,
+                entidad="TRANSFERENCIA_MARCO",
+                entidad_id=transferencia.id,
+                accion="CREAR",
+                datos_anteriores=None,
+                datos_nuevos=transferencia_a_dict(
+                    transferencia
+                ),
+            ),
+            commit=False,
+        )
+
+        # Confirmar ambos registros juntos.
+        db.commit()
+
+        # Recuperar los valores guardados.
+        db.refresh(transferencia)
+
+        return transferencia
 
     except ValueError as error:
+        db.rollback()
+
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(error)
+            detail=str(error),
         ) from error
 
-    # ------------------------------------------------------
-    # AUDITORÍA AUTOMÁTICA
-    # ------------------------------------------------------
-
-    auditoria_service.registrar_auditoria(
-        db,
-        AuditoriaCreate(
-            usuario_id=usuario_actual.id,
-            entidad="TRANSFERENCIA_MARCO",
-            entidad_id=transferencia.id,
-            accion="CREAR",
-            datos_anteriores=None,
-            datos_nuevos=transferencia_a_dict(
-                transferencia
-            )
-        )
-    )
-
-    # ------------------------------------------------------
-    # RESPUESTA
-    # ------------------------------------------------------
-
-    return transferencia
+    except Exception:
+        db.rollback()
+        raise

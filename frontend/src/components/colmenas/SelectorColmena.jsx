@@ -4,7 +4,18 @@ import { useDatos } from "../../hooks/useDatos";
 import { colmenaOperativa } from "../../utils/alertas";
 
 // Select de colmenas agrupadas por apiario, para ubicar rápido entre cientos de colmenas.
-export default function SelectorColmena({ valor, onCambiar, excluir, soloOperativas = true, ...props }) {
+// `children` agrega opciones al principio (por ejemplo, «Bodega (Stock)»), para
+// no tener que bajar entre todas las colmenas.
+// Con `apiarioId`, solo muestra las colmenas de ese apiario.
+export default function SelectorColmena({
+  valor,
+  onCambiar,
+  excluir,
+  apiarioId,
+  soloOperativas = true,
+  children,
+  ...props
+}) {
   const { datos, nombreApiario } = useDatos();
 
   const grupos = useMemo(() => {
@@ -12,6 +23,7 @@ export default function SelectorColmena({ valor, onCambiar, excluir, soloOperati
     for (const colmena of datos.colmenas) {
       if (soloOperativas && !colmenaOperativa(colmena) && String(colmena.id) !== String(valor)) continue;
       if (excluir !== undefined && String(colmena.id) === String(excluir)) continue;
+      if (apiarioId && String(colmena.apiario_id) !== String(apiarioId)) continue;
       if (!porApiario.has(colmena.apiario_id)) porApiario.set(colmena.apiario_id, []);
       porApiario.get(colmena.apiario_id).push(colmena);
     }
@@ -21,10 +33,16 @@ export default function SelectorColmena({ valor, onCambiar, excluir, soloOperati
         colmenas: colmenas.sort((a, b) => a.codigo.localeCompare(b.codigo, "es", { numeric: true })),
       }))
       .sort((a, b) => a.apiario.localeCompare(b.apiario, "es"));
-  }, [datos.colmenas, excluir, nombreApiario, soloOperativas, valor]);
+  }, [apiarioId, datos.colmenas, excluir, nombreApiario, soloOperativas, valor]);
 
   return (
-    <Seleccion value={valor} onChange={(evento) => onCambiar(evento.target.value)} placeholder="Selecciona una colmena" {...props}>
+    <Seleccion
+      value={valor}
+      onChange={(evento) => onCambiar(evento.target.value)}
+      placeholder="Selecciona una colmena"
+      {...props}
+    >
+      {children}
       {grupos.map((grupo) => (
         <optgroup key={grupo.apiario} label={grupo.apiario}>
           {grupo.colmenas.map((colmena) => (

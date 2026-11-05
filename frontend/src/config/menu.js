@@ -2,13 +2,16 @@ import {
   LayoutDashboard,
   MapPinned,
   Boxes,
+  Layers,
   ClipboardCheck,
   Pill,
   ArrowRightLeft,
   QrCode,
+  Warehouse,
   ShieldCheck,
   Users,
 } from "lucide-react";
+import { gruposActivos } from "./funciones";
 
 const TODOS = ["ADMIN", "APICULTOR"];
 const SOLO_ADMIN = ["ADMIN"];
@@ -18,16 +21,19 @@ export const MENU = [
   { id: "dashboard", nombre: "Dashboard", icono: LayoutDashboard, roles: SOLO_ADMIN },
   { id: "apiarios", nombre: "Apiarios", icono: MapPinned, roles: SOLO_ADMIN },
   { id: "colmenas", nombre: "Colmenas", icono: Boxes, roles: TODOS },
+  { id: "grupos", nombre: "Grupos", icono: Layers, roles: TODOS, activo: gruposActivos },
   { id: "inspecciones", nombre: "Inspecciones", icono: ClipboardCheck, roles: TODOS },
   { id: "tratamientos", nombre: "Tratamientos", icono: Pill, roles: TODOS },
   { id: "transferencias", nombre: "Transferencias", icono: ArrowRightLeft, roles: TODOS },
+  { id: "stock", nombre: "Stock", icono: Warehouse, roles: TODOS },
   { id: "qr", nombre: "Códigos QR", icono: QrCode, roles: TODOS },
   { id: "auditoria", nombre: "Auditoría", icono: ShieldCheck, roles: SOLO_ADMIN },
   { id: "usuarios", nombre: "Usuarios", icono: Users, roles: SOLO_ADMIN },
 ];
 
 export function menuParaRol(rol) {
-  return MENU.filter((item) => item.roles.includes(rol));
+  // Un módulo desactivado no aparece en el menú ni se puede abrir.
+  return MENU.filter((item) => item.roles.includes(rol) && (item.activo?.() ?? true));
 }
 
 export function vistaInicial(rol) {

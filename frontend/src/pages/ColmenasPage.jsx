@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Archive, Boxes, Eye, Pencil, Plus } from "lucide-react";
+import { Archive, Boxes, Eye, Pencil, Plus, ScanLine } from "lucide-react";
 import Boton from "../components/ui/Boton";
 import Confirmar from "../components/ui/Confirmar";
 import { InsigniaDe } from "../components/ui/Insignia";
@@ -9,13 +9,14 @@ import Paginador from "../components/ui/Paginador";
 import { BarraFiltros, Buscador, EncabezadoModulo } from "../components/ui/Estructura";
 import FormularioColmena from "../components/colmenas/FormularioColmena";
 import DetalleColmena from "../components/colmenas/DetalleColmena";
+import EscanearColmena from "../components/qr/EscanearColmena";
 import { useAuth } from "../hooks/useAuth";
 import { useAvisos } from "../hooks/useAvisos";
 import { useDatos } from "../hooks/useDatos";
 import { useNavegacion } from "../hooks/useNavegacion";
 import { usePaginaColmenas } from "../hooks/usePaginaColmenas";
 import { colmenasService } from "../services/colmenasService";
-import { ESTADO_COLMENA, ESTADO_GENERAL, opciones } from "../utils/etiquetas";
+import { ESTADO_COLMENA, ESTADO_GENERAL_TODOS, opciones } from "../utils/etiquetas";
 import { formatearFecha } from "../utils/formato";
 import { calcularAlertas, ultimaInspeccionPorColmena } from "../utils/alertas";
 
@@ -32,6 +33,7 @@ export default function ColmenasPage() {
   const [filtroEstado, setFiltroEstado] = useState("");
   const [soloAtencion, setSoloAtencion] = useState(false);
   const [detalleId, setDetalleId] = useState(parametros.detalle ?? null);
+  const [escaneando, setEscaneando] = useState(false);
   const [formulario, setFormulario] = useState(null);
   const [aDarDeBaja, setADarDeBaja] = useState(null);
   const [pagina, setPagina] = useState(1);
@@ -111,6 +113,9 @@ export default function ColmenasPage() {
             : `${datos.colmenas.length} colmenas registradas.`
         }
       >
+        <Boton variante="secundario" icono={ScanLine} onClick={() => setEscaneando(true)}>
+          Escanear QR
+        </Boton>
         {esAdmin && (
           <Boton icono={Plus} onClick={() => setFormulario({ apiario_id: filtroApiario || undefined })}>
             Nueva colmena
@@ -198,7 +203,7 @@ export default function ColmenasPage() {
                     <td className="p-4">
                       {ultima ? (
                         <span className="flex items-center gap-2">
-                          <InsigniaDe mapa={ESTADO_GENERAL} valor={ultima.estado_general} />
+                          <InsigniaDe mapa={ESTADO_GENERAL_TODOS} valor={ultima.estado_general} />
                           <span className="text-slate-500">{formatearFecha(ultima.fecha_inspeccion)}</span>
                         </span>
                       ) : (
@@ -238,6 +243,15 @@ export default function ColmenasPage() {
       />
 
       {detalleId && <DetalleColmena colmenaId={detalleId} onCerrar={() => setDetalleId(null)} />}
+      {escaneando && (
+        <EscanearColmena
+          onEncontrada={(colmena) => {
+            setEscaneando(false);
+            setDetalleId(colmena.id);
+          }}
+          onCerrar={() => setEscaneando(false)}
+        />
+      )}
 
       {formulario && (
         <FormularioColmena
