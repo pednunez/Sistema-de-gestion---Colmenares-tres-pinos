@@ -1,0 +1,8 @@
+colmenarestrespinos.tech {
+    encode zstd gzip
+    reverse_proxy frontend:80
+}
+
+www.colmenarestrespinos.tech {
+    redir https://colmenarestrespinos.tech{uri} permanent
+}

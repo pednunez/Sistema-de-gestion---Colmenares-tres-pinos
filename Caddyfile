@@ -1,0 +1,4 @@
+colmenarestrespinos.tech, www.colmenarestrespinos.tech {
+    encode zstd gzip
+    respond "Colmenares Tres Pinos - HTTPS configurado" 200
+}

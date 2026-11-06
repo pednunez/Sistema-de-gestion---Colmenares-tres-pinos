@@ -1,0 +1,22 @@
+services:
+  backend:
+    image: colmenares-backend:testing
+    restart: unless-stopped
+    env_file:
+      - ./backend/.env
+    networks:
+      - colmenares
+
+  frontend:
+    image: colmenares-frontend:testing
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "127.0.0.1:18080:80"
+    networks:
+      - colmenares
+
+networks:
+  colmenares:
+    driver: bridge
