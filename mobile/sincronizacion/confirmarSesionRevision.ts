@@ -48,6 +48,7 @@ export async function confirmarSesionRevision(
   }
 
   const usuarioId = sesion.usuario.id;
+  const idClienteRemoto = remota.id_cliente;
   const detalle = await obtenerRevisionLocal(revisionLocalId);
   const local = detalle.revision;
 
@@ -55,8 +56,8 @@ export async function confirmarSesionRevision(
     local.usuario_local_id !== usuarioId ||
     remota.usuario_id !== usuarioId ||
     remota.grupo_id !== local.grupo_id ||
-    !remota.id_cliente ||
-    remota.id_cliente.toLowerCase() !==
+    !idClienteRemoto ||
+    idClienteRemoto.toLowerCase() !==
       local.id_cliente.toLowerCase() ||
     remota.estado !== 'EN_CURSO'
   ) {
@@ -70,7 +71,11 @@ export async function confirmarSesionRevision(
 
   const db = await SQLite.openDatabaseAsync('colmenas.db');
 
-  return db.withExclusiveTransactionAsync(async tx => {
+  const resultado = {
+    estado: 'CONFIRMADA' as 'CONFIRMADA' | 'YA_CONFIRMADA',
+  };
+
+  await db.withExclusiveTransactionAsync(async tx => {
     const actual = await tx.getFirstAsync<RevisionDB>(
       `SELECT id, id_cliente, usuario_local_id,
               grupo_id, servidor_id
@@ -93,12 +98,12 @@ export async function confirmarSesionRevision(
       !operacion ||
       actual.grupo_id !== remota.grupo_id ||
       actual.id_cliente.toLowerCase() !==
-        remota.id_cliente.toLowerCase() ||
+        idClienteRemoto.toLowerCase() ||
       operacion.tipo !== 'CREAR_SESION' ||
       operacion.usuario_local_id !== usuarioId ||
       operacion.revision_local_id !== revisionLocalId ||
       operacion.id_cliente?.toLowerCase() !==
-        remota.id_cliente.toLowerCase() ||
+        idClienteRemoto.toLowerCase() ||
       operacion.activa !== 1
     ) {
       throw new Error(
@@ -112,7 +117,8 @@ export async function confirmarSesionRevision(
       operacion.estado === 'CONFIRMADA' &&
       operacion.revision_servidor_id === remota.id
     ) {
-      return 'YA_CONFIRMADA';
+      resultado.estado = 'YA_CONFIRMADA';
+      return;
     }
 
     if (
@@ -176,6 +182,7 @@ export async function confirmarSesionRevision(
       throw new Error('No se pudo confirmar la cola.');
     }
 
-    return 'CONFIRMADA';
   });
+
+  return resultado.estado;
 }
