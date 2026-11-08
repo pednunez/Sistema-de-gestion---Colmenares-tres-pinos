@@ -1,4 +1,3 @@
-
 import React, {
   useRef,
   useState,
@@ -52,6 +51,14 @@ import type {
 import {
   leerCatalogoLocal,
 } from './database/catalogo';
+
+// ==========================================
+// SINCRONIZACION AUTOMATICA
+// ==========================================
+
+import {
+  useControladorSincronizacion,
+} from './sincronizacion/controlador';
 
 // ==========================================
 // TIPOS
@@ -334,6 +341,12 @@ export default function App({
   onReintentarConexion,
   onCerrarSesion,
 }: Props) {
+
+  // ========================================
+  // SINCRONIZACION AUTOMATICA
+  // ========================================
+
+  useControladorSincronizacion();
 
   // ========================================
   // RESPONSIVE
@@ -890,9 +903,9 @@ export default function App({
     );
   }
 
-  // ========================================
+  // ==========================================
   // CONTENIDO DE LAS PANTALLAS
-  // ========================================
+  // ==========================================
 
   let contenido: React.ReactNode = null;
 
@@ -1152,9 +1165,9 @@ export default function App({
     );
   }
 
-  // ========================================
+  // ==========================================
   // INTERFAZ RESPONSIVE
-  // ========================================
+  // ==========================================
 
   return (
 

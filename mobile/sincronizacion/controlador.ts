@@ -34,11 +34,16 @@ import {
 
 // ==========================================
 // COLMENARES TRES PINOS
-// CONTROLADOR DE SINCRONIZACIÃ“N
+// CONTROLADOR DE SINCRONIZACIÓN
 // ==========================================
 
-// Envio habilitado exclusivamente por configuracion.
-const HABILITAR_ENVIOS_REALES = process.env.EXPO_PUBLIC_ENABLE_SYNC === 'true';
+// Envío habilitado exclusivamente por configuración.
+const HABILITAR_ENVIOS_REALES =
+  process.env.EXPO_PUBLIC_ENABLE_SYNC === 'true';
+
+// ==========================================
+// ESTADOS DEL CONTROLADOR
+// ==========================================
 
 export type EstadoControlador =
   | 'SIN_INTERNET'
@@ -49,8 +54,13 @@ export type EstadoControlador =
   | 'SIN_PENDIENTES'
   | 'MODO_DIAGNOSTICO'
   | 'SINCRONIZADO'
+  | 'SINCRONIZACION_PARCIAL'
   | 'EN_PROCESO'
   | 'ERROR';
+
+// ==========================================
+// RESULTADO DEL CONTROLADOR
+// ==========================================
 
 export type ResultadoControlador = {
   estado: EstadoControlador;
@@ -60,8 +70,13 @@ export type ResultadoControlador = {
   fallidas?: number;
 };
 
+// ==========================================
+// CONTROL DE EJECUCIÓN
+// ==========================================
+
 // Impide ejecutar varias sincronizaciones
 // al mismo tiempo.
+
 let ejecutando = false;
 
 // ==========================================
@@ -84,49 +99,64 @@ function hayInternet(
 export async function ejecutarControlador():
   Promise<ResultadoControlador> {
 
+  // Evitar ejecuciones simultáneas.
+
   if (ejecutando) {
     return {
       estado: 'EN_PROCESO',
       mensaje:
-        'Ya se estÃ¡ comprobando la sincronizaciÃ³n.',
+        'Ya se está comprobando la sincronización.',
     };
   }
 
   ejecutando = true;
 
   try {
-    // 1. Comprobar conectividad.
+
+    // ======================================
+    // 1. COMPROBAR CONECTIVIDAD
+    // ======================================
+
     const red = await NetInfo.fetch();
 
     if (!hayInternet(red)) {
       return {
         estado: 'SIN_INTERNET',
         mensaje:
-          'Sin conexiÃ³n. Los datos permanecen en SQLite.',
+          'Sin conexión. Los datos permanecen en SQLite.',
       };
     }
 
-    // 2. Obtener sesiÃ³n.
+    // ======================================
+    // 2. OBTENER SESIÓN
+    // ======================================
+
     const sesion = await leerSesionGuardada();
 
     if (!sesion) {
       return {
         estado: 'SIN_SESION',
         mensaje:
-          'No hay una sesiÃ³n iniciada. No se enviarÃ¡n registros.',
+          'No hay una sesión iniciada. No se enviarán registros.',
       };
     }
 
-    // 3. Verificar token.
+    // ======================================
+    // 3. VERIFICAR TOKEN
+    // ======================================
+
     if (!tokenVigente(sesion)) {
       return {
         estado: 'SESION_VENCIDA',
         mensaje:
-          'El token venciÃ³. Las inspecciones pendientes se conservan.',
+          'El token venció. Las inspecciones pendientes se conservan.',
       };
     }
 
-    // 4. Verificar catÃ¡logo del usuario.
+    // ======================================
+    // 4. VERIFICAR CATÁLOGO
+    // ======================================
+
     const catalogo = await leerCatalogoLocal(
       sesion.usuario.id
     );
@@ -135,12 +165,16 @@ export async function ejecutarControlador():
       return {
         estado: 'SIN_CATALOGO',
         mensaje:
-          'No existe un catÃ¡logo oficial descargado para este usuario.',
+          'No existe un catálogo oficial descargado para este usuario.',
       };
     }
 
-    // 5. Comprobar servidor.
+    // ======================================
+    // 5. COMPROBAR FASTAPI
+    // ======================================
+
     try {
+
       const respuesta = await solicitarAPI<{
         status: string;
       }>(
@@ -154,10 +188,12 @@ export async function ejecutarControlador():
         return {
           estado: 'SERVIDOR_NO_DISPONIBLE',
           mensaje:
-            'El servidor no respondiÃ³ correctamente.',
+            'El servidor no respondió correctamente.',
         };
       }
+
     } catch {
+
       return {
         estado: 'SERVIDOR_NO_DISPONIBLE',
         mensaje:
@@ -165,9 +201,83 @@ export async function ejecutarControlador():
       };
     }
 
-    // 6. Consultar registros del usuario.
+    // ======================================
+    // 6. CONSULTAR REGISTROS SQLITE
+    // ======================================
+
     const inspecciones =
       await listarInspeccionesLocales();
+
+    // ======================================
+    // 6.1 DIAGNÓSTICO GENERAL
+    // ======================================
+
+    console.info(
+      '[Colmenares] DIAGNOSTICO SQLITE:',
+      {
+        usuarioSesion: sesion.usuario.id,
+
+        total: inspecciones.length,
+
+        pendientes: inspecciones.filter(
+          i => i.estado === 'PENDIENTE'
+        ).length,
+
+        pendientesDelUsuario: inspecciones.filter(
+          i =>
+            i.estado === 'PENDIENTE' &&
+            i.usuario_local_id === sesion.usuario.id &&
+            i.servidor_id === null
+        ).length,
+
+        sinPropietario: inspecciones.filter(
+          i =>
+            i.estado === 'PENDIENTE' &&
+            i.usuario_local_id == null
+        ).length,
+
+        deOtroUsuario: inspecciones.filter(
+          i =>
+            i.estado === 'PENDIENTE' &&
+            i.usuario_local_id != null &&
+            i.usuario_local_id !== sesion.usuario.id
+        ).length,
+
+        conIdServidor: inspecciones.filter(
+          i => i.servidor_id != null
+        ).length,
+      }
+    );
+
+    // ======================================
+    // 6.2 DETALLE INDIVIDUAL DE REGISTROS
+    // ======================================
+
+    console.info(
+      '[Colmenares] DETALLE DE INSPECCIONES LOCALES:',
+      JSON.stringify(
+        inspecciones.map(item => ({
+          id: item.id,
+          id_cliente: item.id_cliente,
+          codigo_qr: item.codigo_qr,
+          fecha: item.fecha_local,
+          estado: item.estado,
+          servidor_id: item.servidor_id,
+          usuario_local_id: item.usuario_local_id,
+        })),
+        null,
+        2
+      )
+    );
+
+    // ======================================
+    // 6.3 FILTRAR PENDIENTES DEL USUARIO
+    // ======================================
+
+    // Solo se consideran inspecciones:
+    // - Pendientes.
+    // - Sin identificador de servidor.
+    // - Pertenecientes al usuario actual.
 
     const pendientes = inspecciones.filter(
       inspeccion =>
@@ -177,43 +287,118 @@ export async function ejecutarControlador():
           sesion.usuario.id
     );
 
+    // ======================================
+    // 6.4 COMPROBAR SI EXISTEN PENDIENTES
+    // ======================================
+
     if (pendientes.length === 0) {
       return {
         estado: 'SIN_PENDIENTES',
         mensaje:
           'No hay inspecciones pendientes de este usuario.',
         pendientes: 0,
+        sincronizadas: 0,
+        fallidas: 0,
       };
     }
 
-    // 7. ProtecciÃ³n para desarrollo.
-    // No se envÃ­a nada mientras no
-    // habilitemos explÃ­citamente la funciÃ³n.
+    // ======================================
+    // 7. MODO DIAGNÓSTICO
+    // ======================================
+
+    // No enviar registros mientras esté desactivado.
+
     if (!HABILITAR_ENVIOS_REALES) {
       return {
         estado: 'MODO_DIAGNOSTICO',
         mensaje:
-          'Hay inspecciones listas para revisar. Los envÃ­os reales estÃ¡n desactivados.',
+          'Hay inspecciones listas para revisar. Los envíos reales están desactivados.',
         pendientes: pendientes.length,
+        sincronizadas: 0,
+        fallidas: 0,
       };
     }
 
-    // 8. SincronizaciÃ³n real.
+    // ======================================
+    // 8. SINCRONIZACIÓN REAL
+    // ======================================
+
     const resultado =
       await sincronizarInspeccionesPendientes();
 
+    // ======================================
+    // 9. DETERMINAR RESULTADO REAL
+    // ======================================
+
+    let estado: EstadoControlador;
+
+    if (resultado.fallidas === 0) {
+
+      estado = 'SINCRONIZADO';
+
+    } else if (resultado.sincronizadas > 0) {
+
+      estado = 'SINCRONIZACION_PARCIAL';
+
+    } else {
+
+      estado = 'ERROR';
+    }
+
+    // ======================================
+    // 10. INFORMAR ERRORES
+    // ======================================
+
+    if (resultado.errores.length > 0) {
+
+      console.warn(
+        '[Colmenares] ERRORES DE SINCRONIZACIÓN:',
+        resultado.errores
+      );
+
+    }
+
+    // ======================================
+    // 11. DEVOLVER RESULTADO
+    // ======================================
+
+    let mensaje: string;
+
+    if (resultado.fallidas === 0) {
+
+      mensaje =
+        `Sincronización completada: ${resultado.sincronizadas} inspecciones enviadas.`;
+
+    } else if (resultado.sincronizadas > 0) {
+
+      mensaje =
+        `Sincronización parcial: ${resultado.sincronizadas} enviadas y ${resultado.fallidas} fallidas.`;
+
+    } else {
+
+      mensaje =
+        `No se pudo sincronizar ninguna inspección. Fallidas: ${resultado.fallidas}.`;
+    }
+
     return {
-      estado: 'SINCRONIZADO',
-      mensaje:
-        'TerminÃ³ el intento de sincronizaciÃ³n.',
+      estado,
+      mensaje,
       pendientes: pendientes.length,
-      sincronizadas:
-        resultado.sincronizadas,
-      fallidas:
-        resultado.fallidas,
+      sincronizadas: resultado.sincronizadas,
+      fallidas: resultado.fallidas,
     };
 
   } catch (error) {
+
+    // ======================================
+    // 12. CONTROL DE ERRORES
+    // ======================================
+
+    console.error(
+      '[Colmenares] ERROR DEL CONTROLADOR:',
+      error
+    );
+
     return {
       estado: 'ERROR',
       mensaje:
@@ -223,25 +408,34 @@ export async function ejecutarControlador():
     };
 
   } finally {
+
+    // Liberar el bloqueo de ejecución.
+
     ejecutando = false;
   }
 }
 
 // ==========================================
-// ESCUCHAR CAMBIOS AUTOMÃTICOS
+// ESCUCHAR CAMBIOS AUTOMÁTICOS
 // ==========================================
 
 export function useControladorSincronizacion():
   void {
 
   useEffect(() => {
+
     let activo = true;
 
     let teniaInternet = false;
 
+    // ======================================
+    // EJECUTAR REVISIÓN
+    // ======================================
+
     const revisar = async (
       motivo: string
     ) => {
+
       if (!activo) return;
 
       const resultado =
@@ -257,15 +451,21 @@ export function useControladorSincronizacion():
       );
     };
 
-    // Detectar cuando regresa internet.
+    // ======================================
+    // DETECTAR CUANDO REGRESA INTERNET
+    // ======================================
+
     const cancelarRed =
       NetInfo.addEventListener(
         estado => {
+
           const conectado =
             hayInternet(estado);
 
           if (!conectado) {
+
             teniaInternet = false;
+
             return;
           }
 
@@ -274,34 +474,47 @@ export function useControladorSincronizacion():
             !teniaInternet &&
             AppState.currentState === 'active'
           ) {
+
             teniaInternet = true;
 
             void revisar(
-              'ConexiÃ³n disponible'
+              'Conexión disponible'
             );
           }
         }
       );
 
-    // Volver a comprobar cuando
-    // el usuario abre la aplicaciÃ³n.
+    // ======================================
+    // VOLVER A COMPROBAR AL ABRIR LA APP
+    // ======================================
+
     const suscripcionApp =
       AppState.addEventListener(
         'change',
         estado => {
+
           if (estado === 'active') {
+
             void revisar(
-              'AplicaciÃ³n activa'
+              'Aplicación activa'
             );
+
           }
         }
       );
 
+    // ======================================
+    // LIMPIAR SUSCRIPCIONES
+    // ======================================
+
     return () => {
+
       activo = false;
 
       cancelarRed();
+
       suscripcionApp.remove();
     };
+
   }, []);
 }
