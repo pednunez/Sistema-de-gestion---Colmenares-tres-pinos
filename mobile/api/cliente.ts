@@ -22,7 +22,7 @@ export class ErrorAPI extends Error {
 }
 
 type OpcionesPeticion = {
-  method?: 'GET' | 'POST' | 'PATCH';
+method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
   body?: unknown;
   token?: string;
 };
