@@ -163,14 +163,7 @@ const MENU: ItemMenu[] = [
     disponible: true,
   },
 
-  {
-    id: 'grupos',
-    nombre: 'Grupos',
-    icono: '▤',
-    roles: TODOS,
-    destino: 'revisiones-grupos',
-    disponible: true,
-  },
+
 
   {
     id: 'inspecciones',
