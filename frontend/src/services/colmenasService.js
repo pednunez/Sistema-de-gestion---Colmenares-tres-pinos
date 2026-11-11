@@ -9,6 +9,13 @@ export const colmenasService = {
     if (apiarioId) parametros.set("apiario_id", String(apiarioId));
     return api.get(`/colmenas/?${parametros}`);
   },
+  // Colmenas activas sin inspección en los últimos `dias` días, o nunca
+  // inspeccionadas, con la fecha de su última inspección (S4-T04).
+  sinRevision: ({ dias = 30, apiarioId } = {}) => {
+    const parametros = new URLSearchParams({ dias: String(dias) });
+    if (apiarioId) parametros.set("apiario_id", String(apiarioId));
+    return api.get(`/colmenas/sin-revision?${parametros}`);
+  },
   // Marcos actuales de la colmena por piso (límite de 10 marcos por piso).
   // null si el backend todavía no tiene el endpoint o la colmena no tiene detalle.
   async obtenerMarcos(id) {

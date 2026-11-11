@@ -15,6 +15,7 @@ import RestablecerPasswordPage from "./pages/RestablecerPasswordPage";
 import DashboardPage from "./pages/DashboardPage";
 import ApiariosPage from "./pages/ApiariosPage";
 import ColmenasPage from "./pages/ColmenasPage";
+import PorRevisarPage from "./pages/PorRevisarPage";
 import GruposPage from "./pages/GruposPage";
 import InspeccionesPage from "./pages/InspeccionesPage";
 import TratamientosPage from "./pages/TratamientosPage";
@@ -29,6 +30,7 @@ const PAGINAS = {
   dashboard: DashboardPage,
   apiarios: ApiariosPage,
   colmenas: ColmenasPage,
+  revision: PorRevisarPage,
   grupos: GruposPage,
   inspecciones: InspeccionesPage,
   tratamientos: TratamientosPage,
