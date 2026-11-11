@@ -1,4 +1,5 @@
 import React, {
+  useEffect,
   useRef,
   useState,
 } from 'react';
@@ -29,12 +30,17 @@ import MisInspecciones from './MisInspecciones';
 import InicioModulos from './InicioModulos';
 import ColmenasLocales from './ColmenasLocales';
 import TratamientosLocales from './TratamientosLocales';
-import RevisionesGrupos from './RevisionesGrupos';
 import ApiariosLocales from './ApiariosLocales';
 import TransferenciasLocales from './TransferenciasLocales';
 import StockLocales from './StockLocales';
 import AuditoriaLocales from './AuditoriaLocales';
 import UsuariosLocales from './UsuariosLocales';
+import Tutorial from './Tutorial';
+
+import {
+  tutorialFueVisto,
+  marcarTutorialVisto,
+} from './api/tutorial';
 
 // ==========================================
 // AUTENTICACION Y CATALOGO
@@ -74,7 +80,6 @@ type Pantalla =
   | 'apiarios-locales'
   | 'transferencias-locales'
   | 'tratamientos-locales'
-  | 'revisiones-grupos'
   | 'stock-locales'
   | 'auditoria'
   | 'usuarios-locales';
@@ -85,7 +90,6 @@ type IdModulo =
   | 'dashboard'
   | 'apiarios'
   | 'colmenas'
-  | 'grupos'
   | 'inspecciones'
   | 'tratamientos'
   | 'transferencias'
@@ -271,9 +275,6 @@ function obtenerModuloActivo(
     case 'colmena':
       return 'colmenas';
 
-    case 'revisiones-grupos':
-      return 'grupos';
-
     case 'mis-inspecciones':
     case 'inspeccion':
       return 'inspecciones';
@@ -364,6 +365,94 @@ export default function App({
 
   const [menuAbierto, setMenuAbierto] =
     useState(false);
+
+  // ========================================
+  // TUTORIAL AUTOMATICO POR USUARIO
+  // ========================================
+
+  const [tutorialVisible, setTutorialVisible] =
+    useState(false);
+
+  const tutorialCerrado = useRef(false);
+
+  useEffect(() => {
+
+    let activo = true;
+
+    tutorialCerrado.current = false;
+    setTutorialVisible(false);
+
+    const comprobarTutorial = async () => {
+
+      try {
+
+        const visto = await tutorialFueVisto(usuario.id);
+
+        if (
+          activo &&
+          !visto &&
+          !tutorialCerrado.current
+        ) {
+          setTutorialVisible(true);
+        }
+
+      } catch (error) {
+
+        console.warn(
+          '[Colmenares] No se pudo consultar el tutorial:',
+          error
+        );
+
+        if (
+          activo &&
+          !tutorialCerrado.current
+        ) {
+          setTutorialVisible(true);
+        }
+
+      }
+    };
+
+    void comprobarTutorial();
+
+    return () => {
+      activo = false;
+    };
+
+  }, [usuario.id]);
+
+  // ========================================
+  // ABRIR TUTORIAL MANUALMENTE
+  // ========================================
+
+  const abrirTutorial = () => {
+    tutorialCerrado.current = false;
+    setMenuAbierto(false);
+    setTutorialVisible(true);
+  };
+
+  // ========================================
+  // CERRAR Y RECORDAR TUTORIAL
+  // ========================================
+
+  const cerrarTutorial = async () => {
+
+    tutorialCerrado.current = true;
+    setTutorialVisible(false);
+
+    try {
+
+      await marcarTutorialVisto(usuario.id);
+
+    } catch (error) {
+
+      console.warn(
+        '[Colmenares] No se pudo guardar el tutorial:',
+        error
+      );
+
+    }
+  };
 
   const itemsMenu = menuParaRol(usuario.rol);
 
@@ -808,6 +897,30 @@ export default function App({
 
         </View>
 
+        {/* AYUDA Y TUTORIAL */}
+
+        <Pressable
+          style={({ pressed }) => [
+            styles.botonAyuda,
+            pressed && styles.botonAyudaPresionado,
+          ]}
+          onPress={abrirTutorial}
+          accessibilityRole="button"
+          accessibilityLabel="Abrir guía de uso"
+        >
+
+          <View style={styles.botonAyudaIcono}>
+            <Text style={styles.botonAyudaIconoTexto}>
+              ?
+            </Text>
+          </View>
+
+          <Text style={styles.botonAyudaTexto}>
+            ¿Cómo se usa la app?
+          </Text>
+
+        </Pressable>
+
         <Pressable
           style={styles.botonSalir}
           onPress={onCerrarSesion}
@@ -925,7 +1038,10 @@ export default function App({
         }}
 
         onRevisiones={() => {
-          setPantalla('revisiones-grupos');
+          Alert.alert(
+            'Módulo no disponible',
+            'Las revisiones por grupo ya no forman parte de la navegación móvil.'
+          );
         }}
 
       />
@@ -980,16 +1096,6 @@ export default function App({
 
     contenido = (
       <UsuariosLocales
-        onVolver={volverInicio}
-      />
-    );
-  }
-
-  // REVISIONES POR GRUPO
-  else if (pantalla === 'revisiones-grupos') {
-
-    contenido = (
-      <RevisionesGrupos
         onVolver={volverInicio}
       />
     );
@@ -1346,6 +1452,20 @@ export default function App({
         </View>
       </Modal>
 
+      {/* TUTORIAL INTERACTIVO */}
+
+      <Tutorial
+        visible={tutorialVisible}
+        rol={
+          usuario.rol === 'ADMIN'
+            ? 'ADMIN'
+            : 'APICULTOR'
+        }
+        onDismiss={() => {
+          void cerrarTutorial();
+        }}
+      />
+
     </View>
   );
 }
@@ -1603,6 +1723,44 @@ const styles = StyleSheet.create({
     color: '#94A3B8',
     fontSize: 11,
     marginTop: 3,
+  },
+
+  botonAyuda: {
+    marginTop: 15,
+    minHeight: 43,
+    borderRadius: 9,
+    backgroundColor: '#172337',
+    borderWidth: 1,
+    borderColor: '#475569',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+  },
+
+  botonAyudaPresionado: {
+    backgroundColor: '#263449',
+  },
+
+  botonAyudaIcono: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#FBBF24',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+  },
+
+  botonAyudaIconoTexto: {
+    color: '#0F172A',
+    fontSize: 14,
+    fontWeight: '900',
+  },
+
+  botonAyudaTexto: {
+    color: '#CBD5E1',
+    fontSize: 12,
+    fontWeight: '700',
   },
 
   botonSalir: {
