@@ -10,6 +10,7 @@ import {
   QrCode,
   Warehouse,
   ShieldCheck,
+  FileText,
   Users,
 } from "lucide-react";
 import { gruposActivos } from "./funciones";
@@ -29,6 +30,7 @@ export const MENU = [
   { id: "transferencias", nombre: "Transferencias", icono: ArrowRightLeft, roles: TODOS },
   { id: "stock", nombre: "Stock", icono: Warehouse, roles: TODOS },
   { id: "qr", nombre: "Códigos QR", icono: QrCode, roles: TODOS },
+  { id: "reportes", nombre: "Reportes", icono: FileText, roles: SOLO_ADMIN },
   { id: "auditoria", nombre: "Auditoría", icono: ShieldCheck, roles: SOLO_ADMIN },
   { id: "usuarios", nombre: "Usuarios", icono: Users, roles: SOLO_ADMIN },
 ];

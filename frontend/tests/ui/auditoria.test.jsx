@@ -17,8 +17,8 @@ const datos = {
   "/apiarios/": [{ id: 1, nombre: "Mandinga" }],
   "/colmenas/": [{ id: 5, apiario_id: 1, codigo: "COL-005", estado: "ACTIVA" }],
   "/usuarios/": [
-    { id: 1, nombres: "Carlos", apellidos: "Núñez", rol: "ADMIN" },
-    { id: 7, nombres: "Ana", apellidos: "Pérez", rol: "APICULTOR" },
+    { id: 1, nombre: "Carlos", apellido: "Núñez", rol: "ADMIN" },
+    { id: 7, nombre: "Ana", apellido: "Pérez", rol: "APICULTOR" },
   ],
   "/auditoria/": REGISTROS,
 };

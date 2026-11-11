@@ -215,3 +215,13 @@ GET /auditoria/?entidad=COLMENA&accion=MODIFICAR&usuario_id=3&desde=2026-11-01&h
 - APICULTOR → 403 (ya ocurre con `requerir_admin`).
 
 Cuando esté, el frontend envía los filtros al servidor y pagina con `offset`/`limit`, sin cambiar la pantalla.
+
+## 11. Reportes y exportación (S4-T07 a S4-T10)
+
+**Ya está en el frontend (S4-T10):** pantalla Reportes (solo ADMIN) con tres reportes (inspecciones, tratamientos y estado actual de las colmenas), filtros por período, apiario, colmena y estado, y vista previa de las filas (`frontend/src/utils/reportes.js` define las columnas). Los botones PDF, Excel (XLSX) y CSV están **deshabilitados** hasta decidir quién genera los archivos.
+
+**Por decidir con José (11-11):**
+1. **Los genera el backend (S4-T07 a S4-T09):** `GET /reportes/{tipo}?formato=pdf|xlsx|csv&desde=AAAA-MM-DD&hasta=AAAA-MM-DD&apiario_id=&colmena_id=&estado=` con `tipo` = `inspecciones`, `tratamientos` o `colmenas`, que responda el archivo con `Content-Disposition: attachment` y registre la descarga en auditoría. Las columnas deberían ser las de la vista previa.
+2. **Los genera el frontend:** con las mismas filas de la vista previa (CSV sin librerías, XLSX con `exceljs`, PDF con `jspdf`). No queda registro de la descarga en auditoría y solo incluye lo que el usuario ya puede ver.
+
+**Minimización (S4-T11):** el responsable va solo con su nombre; los reportes no incluyen correos ni otros datos personales.

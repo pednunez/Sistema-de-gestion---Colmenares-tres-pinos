@@ -22,6 +22,7 @@ import TratamientosPage from "./pages/TratamientosPage";
 import TransferenciasPage from "./pages/TransferenciasPage";
 import StockPage from "./pages/StockPage";
 import QrPage from "./pages/QrPage";
+import ReportesPage from "./pages/ReportesPage";
 import AuditoriaPage from "./pages/AuditoriaPage";
 import UsuariosPage from "./pages/UsuariosPage";
 import SinAccesoPage from "./pages/SinAccesoPage";
@@ -37,6 +38,7 @@ const PAGINAS = {
   transferencias: TransferenciasPage,
   stock: StockPage,
   qr: QrPage,
+  reportes: ReportesPage,
   auditoria: AuditoriaPage,
   usuarios: UsuariosPage,
 };

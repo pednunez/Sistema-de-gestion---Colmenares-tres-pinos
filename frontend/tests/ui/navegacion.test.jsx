@@ -13,7 +13,7 @@ it("el administrador recorre todas las pantallas sin errores", async () => {
   simularBackend({ usuario: ADMIN, datos });
   await montarApp();
   await screen.findByText("Colmenas que requieren atención");
-  for (const seccion of ["Apiarios", "Colmenas", "Por revisar", "Inspecciones", "Tratamientos", "Transferencias", "Stock", "Códigos QR", "Auditoría", "Usuarios"]) {
+  for (const seccion of ["Apiarios", "Colmenas", "Por revisar", "Inspecciones", "Tratamientos", "Transferencias", "Stock", "Códigos QR", "Reportes", "Auditoría", "Usuarios"]) {
     await irA(seccion);
     await waitFor(() => expect(screen.getAllByRole("heading", { level: 1 })[0].textContent).toBe(seccion));
   }
@@ -26,7 +26,7 @@ it("el apicultor no ve las secciones de administración (RF-09)", async () => {
   simularBackend({ usuario: APICULTOR, datos });
   await montarApp();
   const nav = (await screen.findAllByRole("navigation"))[0];
-  for (const oculta of ["Dashboard", "Apiarios", "Auditoría", "Usuarios"]) {
+  for (const oculta of ["Dashboard", "Apiarios", "Reportes", "Auditoría", "Usuarios"]) {
     expect(within(nav).queryByText(oculta)).toBeNull();
   }
   within(nav).getByText("Inspecciones");
