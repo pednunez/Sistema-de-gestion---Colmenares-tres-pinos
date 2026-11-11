@@ -199,3 +199,19 @@ Regla definida por el Product Owner (28-10). Detalle completo en el documento "T
 
 **Falta en el backend:**
 - Hoy la imagen de `GET /colmenas/{id}/qr` contiene la URL del **backend** (`/colmenas/qr/{codigo}`), que al escanearla con la cámara del celular muestra un JSON. Debería contener la URL del **frontend**: `{FRONTEND_URL}/?qr={codigo_qr}` (por ejemplo con una variable `FRONTEND_URL`, como `PASSWORD_RESET_FRONTEND_URL`). El frontend ya reconoce las dos formas.
+
+## 10. Auditoría con filtros (S4-T12 y S4-T13)
+
+**Ya está en el frontend (S4-T13):** la pantalla Auditoría (solo ADMIN) filtra por módulo (`entidad`), acción, usuario y rango de fechas (desde/hasta, días completos en hora local), muestra cuántos registros coinciden y los ordena del más reciente al más antiguo. Hoy descarga todo `GET /auditoria/` y filtra en el navegador.
+
+**Falta en el backend (S4-T12):** aceptar estos parámetros opcionales en `GET /auditoria/`, para no descargar el registro completo cuando crezca:
+
+```
+GET /auditoria/?entidad=COLMENA&accion=MODIFICAR&usuario_id=3&desde=2026-11-01&hasta=2026-11-11&offset=0&limit=50
+```
+
+- `desde` y `hasta` en formato `AAAA-MM-DD`, ambos inclusivos (hora de Chile).
+- Orden por `fecha` descendente. Total filtrado en el encabezado `X-Total-Count`, igual que en colmenas.
+- APICULTOR → 403 (ya ocurre con `requerir_admin`).
+
+Cuando esté, el frontend envía los filtros al servidor y pagina con `offset`/`limit`, sin cambiar la pantalla.

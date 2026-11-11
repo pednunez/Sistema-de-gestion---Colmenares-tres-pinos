@@ -34,6 +34,14 @@ export function hoyISO() {
   return ahora.toISOString().slice(0, 10);
 }
 
+// Día local (AAAA-MM-DD) de una fecha con hora, para comparar con un <input type="date">.
+export function diaLocal(valor) {
+  const fecha = aFecha(valor);
+  if (!fecha) return "";
+  const local = new Date(fecha.getTime() - fecha.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 10);
+}
+
 export function diasDesde(valor) {
   const fecha = aFecha(valor);
   if (!fecha) return null;

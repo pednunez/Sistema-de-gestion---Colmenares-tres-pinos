@@ -1,4 +1,4 @@
-import { formatearFechaHora, humanizar } from "./formato";
+import { diaLocal, formatearFechaHora, humanizar } from "./formato";
 import { ESTADO_COLMENA, ESTADO_GENERAL_TODOS, ESTADO_TRATAMIENTO, NIVEL, ROL, TIPO_MARCO } from "./etiquetas";
 
 const VALORES_CONOCIDOS = { ...NIVEL, ...TIPO_MARCO, ...ROL, ...ESTADO_GENERAL_TODOS, ...ESTADO_TRATAMIENTO, ...ESTADO_COLMENA };
@@ -69,4 +69,31 @@ export function calcularCambios(registro) {
     .filter((campo) => !CAMPOS_TECNICOS.includes(campo))
     .filter((campo) => registro.datos_anteriores === null || JSON.stringify(antes[campo]) !== JSON.stringify(despues[campo]))
     .map((campo) => ({ campo, antes: antes[campo], despues: despues[campo] }));
+}
+
+// Filtros del registro de auditoría (S4-T13, RF-63 y RF-64).
+//
+// Hoy se filtra en el navegador sobre lo que entrega GET /auditoria/. Cuando el
+// backend acepte filtros (S4-T12), estos mismos valores se envían como
+// parámetros (ver PENDIENTES_BACKEND.md, sección 10).
+export const FILTROS_VACIOS = { entidad: "", accion: "", usuario: "", desde: "", hasta: "" };
+
+export function hayFiltros(filtros) {
+  return Object.values(filtros).some(Boolean);
+}
+
+// Del más reciente al más antiguo; las fechas desde/hasta incluyen el día completo.
+export function filtrarAuditoria(registros, filtros) {
+  const { entidad, accion, usuario, desde, hasta } = filtros;
+  return (registros ?? [])
+    .filter((r) => {
+      if (entidad && r.entidad !== entidad) return false;
+      if (accion && r.accion !== accion) return false;
+      if (usuario && String(r.usuario_id) !== usuario) return false;
+      const dia = diaLocal(r.fecha);
+      if (desde && (!dia || dia < desde)) return false;
+      if (hasta && (!dia || dia > hasta)) return false;
+      return true;
+    })
+    .sort((a, b) => new Date(b.fecha) - new Date(a.fecha) || b.id - a.id);
 }

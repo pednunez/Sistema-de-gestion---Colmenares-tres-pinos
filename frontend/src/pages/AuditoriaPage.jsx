@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { ShieldCheck } from "lucide-react";
 import Boton from "../components/ui/Boton";
 import { InsigniaDe } from "../components/ui/Insignia";
-import { Seleccion } from "../components/ui/Campo";
+import { Entrada, Seleccion } from "../components/ui/Campo";
 import { Cargando, ErrorCarga, EstadoVacio } from "../components/ui/Estados";
 import { BarraFiltros, EncabezadoModulo } from "../components/ui/Estructura";
 import DetalleAuditoria from "../components/auditoria/DetalleAuditoria";
@@ -10,7 +10,8 @@ import { useConsulta } from "../hooks/useConsulta";
 import { useDatos } from "../hooks/useDatos";
 import { auditoriaService } from "../services/auditoriaService";
 import { ACCION_AUDITORIA, ENTIDAD, opciones, texto } from "../utils/etiquetas";
-import { formatearFechaHora, nombreCompleto } from "../utils/formato";
+import { formatearFechaHora, hoyISO, nombreCompleto } from "../utils/formato";
+import { FILTROS_VACIOS, filtrarAuditoria, hayFiltros } from "../utils/auditoria";
 
 const POR_PAGINA = 50;
 
@@ -19,22 +20,24 @@ export default function AuditoriaPage() {
   const { datos, codigoColmena, nombreApiario, nombreUsuario } = useDatos();
   const auditoria = useConsulta(() => auditoriaService.listar(), []);
 
-  const [filtroEntidad, setFiltroEntidad] = useState("");
-  const [filtroAccion, setFiltroAccion] = useState("");
-  const [filtroUsuario, setFiltroUsuario] = useState("");
+  const [filtros, setFiltros] = useState(FILTROS_VACIOS);
   const [visibles, setVisibles] = useState(POR_PAGINA);
   const [detalle, setDetalle] = useState(null);
 
-  const filtrados = useMemo(
-    () =>
-      (auditoria.datos ?? []).filter(
-        (r) =>
-          (!filtroEntidad || r.entidad === filtroEntidad) &&
-          (!filtroAccion || r.accion === filtroAccion) &&
-          (!filtroUsuario || String(r.usuario_id) === filtroUsuario)
-      ),
-    [auditoria.datos, filtroEntidad, filtroAccion, filtroUsuario]
-  );
+  // Cada cambio de filtro vuelve a mostrar desde el registro más reciente.
+  const cambiar = (campo) => (evento) => {
+    setFiltros((previos) => ({ ...previos, [campo]: evento.target.value }));
+    setVisibles(POR_PAGINA);
+  };
+  const limpiar = () => {
+    setFiltros(FILTROS_VACIOS);
+    setVisibles(POR_PAGINA);
+  };
+
+  const total = auditoria.datos?.length ?? 0;
+  const filtrados = useMemo(() => filtrarAuditoria(auditoria.datos, filtros), [auditoria.datos, filtros]);
+  const conFiltros = hayFiltros(filtros);
+  const fechasInvertidas = filtros.desde && filtros.hasta && filtros.desde > filtros.hasta;
 
   const describirRegistro = (registro) => {
     const d = registro.datos_nuevos ?? registro.datos_anteriores ?? {};
@@ -51,26 +54,54 @@ export default function AuditoriaPage() {
 
   return (
     <>
-      <EncabezadoModulo descripcion="Quién hizo qué cambio y cuándo. Selecciona un registro para ver el detalle.">
+      <EncabezadoModulo
+        descripcion={
+          conFiltros
+            ? `${filtrados.length} de ${total} registros coinciden con los filtros. Selecciona uno para ver el detalle.`
+            : `${total} registros: quién hizo qué cambio y cuándo. Selecciona uno para ver el detalle.`
+        }
+      >
         <Boton variante="secundario" onClick={auditoria.recargar}>
           Actualizar registros
         </Boton>
       </EncabezadoModulo>
 
       <BarraFiltros>
-        <Seleccion aria-label="Filtrar por módulo" value={filtroEntidad} onChange={(e) => setFiltroEntidad(e.target.value)} placeholder="Todos los módulos" opciones={opciones(ENTIDAD)} />
-        <Seleccion aria-label="Filtrar por acción" value={filtroAccion} onChange={(e) => setFiltroAccion(e.target.value)} placeholder="Todas las acciones" opciones={opciones(ACCION_AUDITORIA)} />
+        <Seleccion aria-label="Filtrar por módulo" value={filtros.entidad} onChange={cambiar("entidad")} placeholder="Todos los módulos" opciones={opciones(ENTIDAD)} />
+        <Seleccion aria-label="Filtrar por acción" value={filtros.accion} onChange={cambiar("accion")} placeholder="Todas las acciones" opciones={opciones(ACCION_AUDITORIA)} />
         <Seleccion
           aria-label="Filtrar por usuario"
-          value={filtroUsuario}
-          onChange={(e) => setFiltroUsuario(e.target.value)}
+          value={filtros.usuario}
+          onChange={cambiar("usuario")}
           placeholder="Todos los usuarios"
           opciones={datos.usuarios.map((u) => ({ valor: String(u.id), texto: nombreCompleto(u) }))}
         />
       </BarraFiltros>
+      <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 lg:items-end print:hidden">
+        <Entrada
+          etiqueta="Desde"
+          type="date"
+          value={filtros.desde}
+          max={filtros.hasta || hoyISO()}
+          onChange={cambiar("desde")}
+          error={fechasInvertidas ? "Debe ser anterior a «Hasta»." : undefined}
+        />
+        <Entrada etiqueta="Hasta" type="date" value={filtros.hasta} min={filtros.desde || undefined} max={hoyISO()} onChange={cambiar("hasta")} />
+        {conFiltros && (
+          <div>
+            <Boton variante="fantasma" onClick={limpiar}>
+              Limpiar filtros
+            </Boton>
+          </div>
+        )}
+      </div>
 
       {filtrados.length === 0 ? (
-        <EstadoVacio icono={ShieldCheck} titulo="No hay registros con estos filtros" />
+        <EstadoVacio
+          icono={ShieldCheck}
+          titulo={conFiltros ? "No hay registros con estos filtros" : "Todavía no hay registros de auditoría"}
+          texto={conFiltros ? "Amplía el rango de fechas o limpia los filtros." : undefined}
+        />
       ) : (
         <>
           <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
