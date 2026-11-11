@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { colmenasService } from "../services/colmenasService";
-import { CARGANDO, CON_DATOS, SIN_DATOS, leerMarcosActuales } from "../utils/capacidad";
+import { CARGANDO, SIN_DATOS, estadoDeMarcos } from "../utils/capacidad";
 
 // Marcos actuales de las colmenas que reciben transferencias en la inspección.
 // Devuelve un Map id → { estado, marcos }. Cada colmena se consulta una sola vez.
@@ -16,13 +16,9 @@ export function useMarcosDestinos(ids) {
       pedidas.current.add(id);
       colmenasService
         .obtenerMarcos(id)
-        .then(leerMarcosActuales)
-        .catch(() => null)
-        .then((marcos) =>
-          setConsultas((previas) =>
-            new Map(previas).set(id, marcos ? { estado: CON_DATOS, marcos } : { estado: SIN_DATOS })
-          )
-        );
+        .then(estadoDeMarcos)
+        .catch(() => ({ estado: SIN_DATOS }))
+        .then((consulta) => setConsultas((previas) => new Map(previas).set(id, consulta)));
     }
   }, [clave]);
 

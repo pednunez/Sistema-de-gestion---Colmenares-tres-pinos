@@ -15,7 +15,7 @@ import {
   puedeTransferirse,
   vaAColmena,
 } from "../../utils/marcos";
-import { CARGANDO, CON_DATOS, PISO_ALZA, PISO_CAMARA, claveMarco, destinoDelDesplazado } from "../../utils/capacidad";
+import { CARGANDO, CON_DATOS, PISO_ALZA, PISO_CAMARA, SIN_REGISTRO, claveMarco, destinoDelDesplazado } from "../../utils/capacidad";
 import { useDatos } from "../../hooks/useDatos";
 
 const OPCIONES_CONTENIDO = opciones(CONTENIDO_MARCO);
@@ -255,6 +255,14 @@ function CapacidadDestino({ marco, titulo, ubicacion, colmenaId, info, error, on
   const nota = "text-xs text-slate-600";
 
   if (!info || info.estado === CARGANDO) return <p className={nota}>Revisando cuántos marcos tiene {destino}…</p>;
+  if (info.estado === SIN_REGISTRO) {
+    return (
+      <p className="text-xs font-medium text-amber-900">
+        {destino} todavía no tiene sus marcos registrados. Inspecciónala primero, con sus 10 marcos por piso, para
+        poder transferirle marcos; mientras tanto, elige otra colmena.
+      </p>
+    );
+  }
   if (info.estado !== CON_DATOS) {
     return (
       <p className={nota}>No se pudo revisar cuántos marcos tiene {destino}: el servidor todavía no lo informa.</p>

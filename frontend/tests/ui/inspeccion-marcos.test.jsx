@@ -221,6 +221,27 @@ it("sin datos del servidor, la transferencia es simple y lo avisa", async () => 
   await screen.findByText("Inspección de COL-001 registrada con 1 transferencia.");
 });
 
+it("no deja transferir a una colmena que todavía no tiene sus marcos registrados", async () => {
+  // El backend responde, pero sin marcos registrados: rechazaría toda la inspección.
+  marcosActuales = { 2: { colmena_id: 2, camara_cria: null, alza: null } };
+  const d = await abrirFormulario();
+  elegir(d, "Completar los marcos sin registrar de Cámara de cría", "SOLO_CRIA");
+  fireEvent.click(within(d).getByRole("button", { name: "Transferir el marco 1 de Cámara de cría" }));
+  elegir(d, "Colmena de destino del marco 1 de Cámara de cría", "2");
+  await within(d).findByText(/COL-002 todavía no tiene sus marcos registrados\. Inspecciónala primero/);
+  enviar(d);
+  await within(d).findByText(
+    "COL-002 todavía no tiene sus marcos registrados: inspecciónala primero para poder transferirle el marco 1 de la cámara de cría, o elige otra colmena."
+  );
+  expect(llamadas.some((l) => l.ruta === "/inspecciones/" && l.metodo === "POST")).toBe(false);
+
+  // Con otra colmena de destino, la inspección se guarda.
+  elegir(d, "Colmena de destino del marco 1 de Cámara de cría", "3");
+  await within(d).findByText(/No se pudo revisar cuántos marcos tiene COL-003/);
+  enviar(d);
+  await screen.findByText("Inspección de COL-001 registrada con 1 transferencia.");
+});
+
 it("con espacio en el destino, muestra cuántos marcos tiene", async () => {
   marcosActuales = { 2: { colmena_id: 2, camara_cria: piso(["SOLO_CRIA", "SOLO_CRIA", "SIN_MARCO", "SIN_MARCO", "SOLO_MIEL", "SIN_MARCO", "SIN_MARCO", "SIN_MARCO", "SIN_MARCO", "SIN_MARCO"]), alza: null } };
   const d = await abrirFormulario();

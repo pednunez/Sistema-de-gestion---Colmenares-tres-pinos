@@ -11,7 +11,13 @@ export const PISO_ALZA = "ALZA";
 
 // Estado de los marcos actuales de una colmena de destino.
 export const CARGANDO = "cargando";
+// No se pudo consultar (error de red o endpoint no disponible): se avisa y el
+// backend valida al guardar.
 export const SIN_DATOS = "sin_datos";
+// El backend responde, pero la colmena todavía no tiene sus marcos registrados
+// (camara_cria: null). El backend rechaza transferirle marcos, así que no se
+// deja elegir como destino hasta que se inspeccione con sus 10 marcos por piso.
+export const SIN_REGISTRO = "sin_registro";
 export const CON_DATOS = "con_datos";
 
 // Clave de un marco dentro del formulario: ubicación + número.
@@ -28,6 +34,14 @@ export function leerMarcosActuales(respuesta) {
           .sort((a, b) => a.numero - b.numero)
       : null;
   return { camara: piso(respuesta.camara_cria), alza: piso(respuesta.alza) };
+}
+
+// Estado de la consulta de una colmena de destino a partir de la respuesta.
+export function estadoDeMarcos(respuesta) {
+  if (!respuesta) return { estado: SIN_DATOS };
+  const marcos = leerMarcosActuales(respuesta);
+  if (marcos) return { estado: CON_DATOS, marcos };
+  return respuesta.camara_cria === null ? { estado: SIN_REGISTRO } : { estado: SIN_DATOS };
 }
 
 const conMarco = (posicion) => posicion.contenido && posicion.contenido !== SIN_MARCO;
@@ -88,8 +102,11 @@ export function validarCapacidad(caja, ubicacion, nombre, plan, codigoColmena) {
   const usados = new Map();
   for (const marco of marcosATransferir(caja)) {
     const info = plan.get(claveMarco(ubicacion, marco.numero));
-    if (!info || info.estado !== CON_DATOS || !info.requiereDesplazado) continue;
     const destino = codigoColmena(Number(marco.destino));
+    if (info?.estado === SIN_REGISTRO) {
+      return `${destino} todavía no tiene sus marcos registrados: inspecciónala primero para poder transferirle el marco ${marco.numero} ${nombre}, o elige otra colmena.`;
+    }
+    if (!info || info.estado !== CON_DATOS || !info.requiereDesplazado) continue;
     const nombrePiso = info.piso === PISO_ALZA ? "el alza" : "la cámara de cría";
     if (!marco.desplazado) {
       return `${destino} tiene ${nombrePiso} llena: elige qué marco sale de ella para recibir el marco ${marco.numero} ${nombre}.`;
