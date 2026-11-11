@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, within, cleanup } from "@testing-library/react";
 
 let llamadas, rechazarInspeccion, marcosActuales;
@@ -141,7 +141,9 @@ it("cualquier marco va a otra colmena y los de cera o miel también pueden ir a 
   expect(within(grupo).getByRole("radio", { name: "Bodega" }).getAttribute("aria-checked")).toBe("true");
   expect(within(grupo).getByRole("radio", { name: "Colmena" }).getAttribute("aria-checked")).toBe("false");
   expect(within(d).queryByLabelText("Colmena de destino del marco 2 de Cámara de cría")).toBeNull();
-  within(d).getByText(/Entra al stock como «Solo miel»\. El servidor todavía no lo suma/);
+  within(d).getByText("Entra al stock como «Solo miel» al guardar la inspección.");
+  // El backend ya suma el marco al stock: no se pide registrarlo también a mano.
+  expect(within(d).queryByText(/regístralo también en Stock/)).toBeNull();
   within(d).getByText(/9 marcos, 1 a bodega/);
 
   // Los marcos con cría solo van a colmenas: no ofrecen bodega.
@@ -191,20 +193,6 @@ it("los marcos de cera o miel enviados a bodega viajan en la inspección", async
   });
   expect(insp.marcos[9]).toMatchObject({ contenido: "CERA_ESTAMPADA", retirar_a_bodega: false });
   expect(llamadas.some((l) => l.ruta === "/transferencias-marcos/" && l.metodo === "POST")).toBe(false);
-});
-
-describe("con el retiro a bodega activo en el servidor", () => {
-  beforeEach(() => vi.stubEnv("VITE_RETIRO_A_BODEGA", "true"));
-  afterEach(() => vi.unstubAllEnvs());
-
-  it("no muestra el aviso de registrar también en Stock", async () => {
-    const d = await abrirFormulario();
-    elegir(d, "Contenido del marco 1 de Cámara de cría", "SOLO_MIEL");
-    fireEvent.click(within(d).getByRole("button", { name: "Transferir el marco 1 de Cámara de cría" }));
-    fireEvent.click(within(d).getByRole("radiogroup", { name: "Destino del marco 1 de Cámara de cría" }).querySelector("[aria-checked=false]"));
-    within(d).getByText("Entra al stock como «Solo miel».");
-    expect(within(d).queryByText(/El servidor todavía no lo suma/)).toBeNull();
-  });
 });
 
 // Límite de 10 marcos por piso en la colmena que recibe.

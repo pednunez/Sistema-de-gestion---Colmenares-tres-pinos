@@ -11,7 +11,6 @@ import { useFormulario } from "../../hooks/useFormulario";
 import { useDatos } from "../../hooks/useDatos";
 import { ESTADO_GENERAL, ESTADO_GENERAL_ANTERIOR, NIVEL, NIVEL_MIEL, opciones, texto } from "../../utils/etiquetas";
 import { textoONulo } from "../../utils/validacion";
-import { RETIRO_A_BODEGA } from "../../config/funciones";
 import { useMarcosDestinos } from "../../hooks/useMarcosDestinos";
 import { PISO_ALZA, PISO_CAMARA, planDeDestinos, validarCapacidad } from "../../utils/capacidad";
 import {
@@ -388,7 +387,6 @@ export default function FormularioInspeccion({
               ubicacion={PISO_CAMARA}
               plan={plan}
               error={errores.camara}
-              retiroDisponible={RETIRO_A_BODEGA}
             />
 
             <Segmentado
@@ -409,7 +407,6 @@ export default function FormularioInspeccion({
                 ubicacion={PISO_ALZA}
                 plan={plan}
                 error={errores.alza}
-                retiroDisponible={RETIRO_A_BODEGA}
               />
             )}
 

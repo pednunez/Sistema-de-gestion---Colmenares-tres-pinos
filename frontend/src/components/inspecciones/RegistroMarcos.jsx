@@ -28,8 +28,7 @@ function motivoSinAccion(marco) {
 
 // Registro unitario de los 10 marcos de una caja (cámara de cría o alza).
 // Cualquier marco se puede transferir a otra colmena del mismo apiario (`apiarioId`); los de cera o miel también
-// pueden ir a «Bodega (Stock)». `retiroDisponible` indica si el servidor ya suma
-// esos marcos al stock; si no, se muestra un aviso.
+// pueden ir a «Bodega (Stock)»: el backend los suma al stock al guardar la inspección.
 export default function RegistroMarcos({
   titulo,
   caja,
@@ -39,7 +38,6 @@ export default function RegistroMarcos({
   ubicacion,
   plan,
   error,
-  retiroDisponible = false,
 }) {
   const idTitulo = useId();
   const transferidos = marcosATransferir(caja).length;
@@ -125,7 +123,6 @@ export default function RegistroMarcos({
                 ubicacion={ubicacion}
                 plan={plan}
                 error={error}
-                retiroDisponible={retiroDisponible}
                 onCambiar={(cambios) => cambiarMarco(marco.numero, cambios)}
               />
             )}
@@ -144,7 +141,7 @@ export default function RegistroMarcos({
 
 // Franja «Hacia» de un marco que se transfiere. Los marcos con cría solo eligen
 // colmena; los de cera o miel eligen primero «Colmena» o «Bodega» (uno u otro).
-function DestinoMarco({ marco, titulo, colmenaId, apiarioId, ubicacion, plan, error, retiroDisponible, onCambiar }) {
+function DestinoMarco({ marco, titulo, colmenaId, apiarioId, ubicacion, plan, error, onCambiar }) {
   const conBodega = puedeRetirarse(marco);
   const aBodega = marco.destino === DESTINO_BODEGA;
   const capacidad = vaAColmena(marco) && (
@@ -233,10 +230,7 @@ function DestinoMarco({ marco, titulo, colmenaId, apiarioId, ubicacion, plan, er
       {aBodega ? (
         <p className="flex items-start gap-1 text-xs text-amber-800">
           <Warehouse size={13} className="mt-px shrink-0" aria-hidden="true" />
-          <span>
-            Entra al stock como «{texto(CONTENIDO_MARCO, marco.contenido)}».
-            {!retiroDisponible && " El servidor todavía no lo suma: regístralo también en Stock."}
-          </span>
+          <span>Entra al stock como «{texto(CONTENIDO_MARCO, marco.contenido)}» al guardar la inspección.</span>
         </p>
       ) : (
         selector
