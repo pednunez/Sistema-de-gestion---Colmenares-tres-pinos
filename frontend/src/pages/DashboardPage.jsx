@@ -7,29 +7,22 @@ import { Panel, TarjetaIndicador } from "../components/ui/Estructura";
 import AvisoStockBajo from "../components/stock/AvisoStockBajo";
 import FiltroApiario from "../components/ui/FiltroApiario";
 import DetalleInspeccion from "../components/inspecciones/DetalleInspeccion";
+import { DistribucionEstados, EstadosDeColmena } from "../components/dashboard/GraficoEstados";
+import { ESTADOS_GRAFICO } from "../utils/graficoEstados";
+import { Seleccion } from "../components/ui/Campo";
 import { useDatos } from "../hooks/useDatos";
-import { ESTADO_GENERAL } from "../utils/etiquetas";
+import { ESTADO_GENERAL, ESTADO_GENERAL_TODOS } from "../utils/etiquetas";
 import { formatearFecha } from "../utils/formato";
 import { useInventario } from "../hooks/useInventario";
 import { useNavegacion } from "../hooks/useNavegacion";
 import { calcularAlertas, colmenaOperativa, ultimaInspeccionPorColmena, DIAS_SIN_INSPECCION } from "../utils/alertas";
 
-// Estado según la última inspección (PB-08). Las inspecciones con la escala
-// anterior (Bueno, Regular, Crítico) se agrupan aparte.
-const DISTRIBUCION = [
-  { clave: "COMPLETA", texto: "Completa", barra: "bg-emerald-500" },
-  { clave: "EN_DESARROLLO", texto: "En desarrollo", barra: "bg-sky-500" },
-  { clave: "DONANTE", texto: "Donante", barra: "bg-teal-500" },
-  { clave: "DEBIL", texto: "Débil", barra: "bg-amber-400" },
-  { clave: "REQUIERE_REVISION", texto: "Requiere revisión", barra: "bg-red-500" },
-  { clave: "ANTERIOR", texto: "Escala anterior", barra: "bg-slate-400", soloSiHay: true },
-  { clave: "SIN", texto: "Sin inspección", barra: "bg-slate-300" },
-];
-
 export default function DashboardPage() {
   const { datos, cargado, nombreApiario } = useDatos();
   // "" = todos los apiarios; si no, el id del apiario elegido.
   const [apiarioId, setApiarioId] = useState("");
+  // "" = todas las colmenas del filtro de apiario; si no, el id de una colmena (S4-T03).
+  const [colmenaId, setColmenaId] = useState("");
   // Inspección que originó una alerta, abierta desde el panel (S4-T06).
   const [inspeccionAbierta, setInspeccionAbierta] = useState(null);
   const { navegar } = useNavegacion();
@@ -41,17 +34,35 @@ export default function DashboardPage() {
     [datos.apiarios]
   );
   const apiarioElegido = datos.apiarios.find((a) => String(a.id) === apiarioId) ?? null;
+  const colmenaElegida = datos.colmenas.find((c) => String(c.id) === colmenaId) ?? null;
+
+  // Colmenas que se pueden elegir: las en operación del apiario elegido.
+  const opcionesColmena = useMemo(
+    () =>
+      datos.colmenas
+        .filter((c) => colmenaOperativa(c) && (!apiarioId || String(c.apiario_id) === apiarioId))
+        .sort((a, b) => a.codigo.localeCompare(b.codigo, "es", { numeric: true }))
+        .map((c) => ({ valor: String(c.id), texto: c.codigo })),
+    [datos.colmenas, apiarioId]
+  );
+
+  // Al cambiar de apiario se quita la colmena si no es de ese apiario.
+  const cambiarApiario = (id) => {
+    setApiarioId(id);
+    if (colmenaElegida && id && String(colmenaElegida.apiario_id) !== id) setColmenaId("");
+  };
 
   const resumen = useMemo(() => {
     const todasOperativas = datos.colmenas.filter(colmenaOperativa);
     const todasAlertas = calcularAlertas(datos.colmenas, datos.inspecciones);
-    const delApiario = (colmena) => !apiarioId || String(colmena.apiario_id) === apiarioId;
+    const delApiario = (colmena) =>
+      (!apiarioId || String(colmena.apiario_id) === apiarioId) && (!colmenaId || String(colmena.id) === colmenaId);
     const operativas = todasOperativas.filter(delApiario);
     const alertas = todasAlertas.filter((a) => delApiario(a.colmena));
     const idsColmenas = new Set(datos.colmenas.filter(delApiario).map((c) => c.id));
     const ultimas = ultimaInspeccionPorColmena(datos.inspecciones);
 
-    const conteo = Object.fromEntries(DISTRIBUCION.map((fila) => [fila.clave, 0]));
+    const conteo = Object.fromEntries(ESTADOS_GRAFICO.map((fila) => [fila.clave, 0]));
     for (const colmena of operativas) {
       const estado = ultimas.get(colmena.id)?.estado_general;
       if (!estado) conteo.SIN += 1;
@@ -67,13 +78,15 @@ export default function DashboardPage() {
     }));
 
     return {
+      ultimaElegida: colmenaId ? (ultimas.get(Number(colmenaId)) ?? null) : null,
+      inspeccionesElegida: colmenaId ? datos.inspecciones.filter((i) => String(i.colmena_id) === colmenaId) : [],
       operativas,
       alertas,
       conteo,
       porApiario,
       tratamientosEnCurso: datos.tratamientos.filter((t) => t.estado === "EN_CURSO" && idsColmenas.has(t.colmena_id)).length,
     };
-  }, [datos, apiarioId, apiariosOrdenados]);
+  }, [datos, apiarioId, colmenaId, apiariosOrdenados]);
 
   if (!cargado) return <Cargando texto="Cargando resumen..." />;
 
@@ -88,7 +101,16 @@ export default function DashboardPage() {
         </div>
       )}
 
-      <FiltroApiario apiarios={apiariosOrdenados} valor={apiarioId} onCambiar={setApiarioId} />
+      <FiltroApiario apiarios={apiariosOrdenados} valor={apiarioId} onCambiar={cambiarApiario} />
+      <div className="-mt-3 mb-6 sm:w-72">
+        <Seleccion
+          etiqueta="Colmena"
+          value={colmenaId}
+          onChange={(e) => setColmenaId(e.target.value)}
+          placeholder={apiarioElegido ? `Todas las de ${apiarioElegido.nombre}` : "Todas las colmenas"}
+          opciones={opcionesColmena}
+        />
+      </div>
 
       <div className="mb-6 grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-4">
         {apiarioElegido ? (
@@ -102,12 +124,22 @@ export default function DashboardPage() {
         ) : (
           <TarjetaIndicador titulo="Apiarios" valor={datos.apiarios.length} icono={MapPinned} onClick={() => navegar("apiarios")} />
         )}
-        <TarjetaIndicador
-          titulo="Colmenas en operación"
-          valor={total}
-          icono={Boxes}
-          onClick={() => navegar("colmenas", apiarioElegido ? { apiario: apiarioElegido.id } : {})}
-        />
+        {colmenaElegida ? (
+          <TarjetaIndicador
+            titulo="Colmena"
+            valor={colmenaElegida.codigo}
+            detalle={`Última inspección: ${resumen.ultimaElegida ? `${formatearFecha(resumen.ultimaElegida.fecha_inspeccion)} · ${ESTADO_GENERAL_TODOS[resumen.ultimaElegida.estado_general]?.texto ?? "sin estado"}` : "ninguna"}`}
+            icono={Boxes}
+            onClick={() => navegar("colmenas", { detalle: colmenaElegida.id })}
+          />
+        ) : (
+          <TarjetaIndicador
+            titulo="Colmenas en operación"
+            valor={total}
+            icono={Boxes}
+            onClick={() => navegar("colmenas", apiarioElegido ? { apiario: apiarioElegido.id } : {})}
+          />
+        )}
         <TarjetaIndicador
           titulo="Requieren atención"
           valor={resumen.alertas.length}
@@ -127,14 +159,14 @@ export default function DashboardPage() {
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-3">
         <Panel
           titulo="Colmenas que requieren atención"
-          descripcion={`${apiarioElegido ? `${apiarioElegido.nombre}. ` : ""}Según su última inspección, su estado o más de ${DIAS_SIN_INSPECCION} días sin revisar.`}
+          descripcion={`${colmenaElegida ? `${colmenaElegida.codigo}. ` : apiarioElegido ? `${apiarioElegido.nombre}. ` : ""}Según su última inspección, su estado o más de ${DIAS_SIN_INSPECCION} días sin revisar.`}
           className="xl:col-span-2"
         >
           <div id="alertas" className="scroll-mt-24" />
           {resumen.alertas.length === 0 ? (
             <div className="flex items-center gap-3 px-5 py-10 text-slate-600">
               <CheckCircle2 className="text-emerald-500" aria-hidden="true" />
-              Todas las colmenas están al día.
+              {colmenaElegida ? `${colmenaElegida.codigo} está al día.` : "Todas las colmenas están al día."}
             </div>
           ) : (
             <ul className="divide-y divide-slate-100">
@@ -212,30 +244,21 @@ export default function DashboardPage() {
           )}
         </Panel>
 
-        <Panel
-          titulo="Estado según última inspección"
-          descripcion={`${apiarioElegido ? `${apiarioElegido.nombre} · ` : ""}${total} colmenas en operación`}
-        >
-          <div className="grid gap-5 p-5">
-            {DISTRIBUCION.filter((fila) => !fila.soloSiHay || resumen.conteo[fila.clave] > 0).map((fila) => {
-              const cantidad = resumen.conteo[fila.clave];
-              const porcentaje = total ? Math.round((cantidad * 100) / total) : 0;
-              return (
-                <div key={fila.clave}>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-slate-700">{fila.texto}</span>
-                    <span className="font-semibold">
-                      {cantidad} <span className="font-normal text-slate-400">({porcentaje}%)</span>
-                    </span>
-                  </div>
-                  <div className="mt-1.5 h-2.5 rounded-full bg-slate-100">
-                    <div className={`h-full rounded-full ${fila.barra}`} style={{ width: `${porcentaje}%` }} />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </Panel>
+        {colmenaElegida ? (
+          <Panel
+            titulo={`Estado de ${colmenaElegida.codigo} en sus inspecciones`}
+            descripcion="De la más antigua a la más reciente. Toca una para ver su detalle."
+          >
+            <EstadosDeColmena inspecciones={resumen.inspeccionesElegida} onVer={setInspeccionAbierta} />
+          </Panel>
+        ) : (
+          <Panel
+            titulo="Estado según última inspección"
+            descripcion={`${apiarioElegido ? `${apiarioElegido.nombre} · ` : ""}${total} colmenas en operación`}
+          >
+            <DistribucionEstados conteo={resumen.conteo} total={total} />
+          </Panel>
+        )}
 
         <Panel titulo="Resumen por apiario" className="xl:col-span-3">
           <div className="overflow-x-auto">
