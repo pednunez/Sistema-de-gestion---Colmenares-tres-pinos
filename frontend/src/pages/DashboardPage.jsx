@@ -1,13 +1,15 @@
 import { useMemo, useState } from "react";
-import { AlertTriangle, Boxes, CheckCircle2, MapPinned, Pill } from "lucide-react";
+import { AlertTriangle, Boxes, CheckCircle2, ClipboardCheck, ClipboardPlus, Eye, MapPinned, Pill } from "lucide-react";
 import Boton from "../components/ui/Boton";
 import Insignia from "../components/ui/Insignia";
 import { Cargando } from "../components/ui/Estados";
 import { Panel, TarjetaIndicador } from "../components/ui/Estructura";
 import AvisoStockBajo from "../components/stock/AvisoStockBajo";
 import FiltroApiario from "../components/ui/FiltroApiario";
+import DetalleInspeccion from "../components/inspecciones/DetalleInspeccion";
 import { useDatos } from "../hooks/useDatos";
 import { ESTADO_GENERAL } from "../utils/etiquetas";
+import { formatearFecha } from "../utils/formato";
 import { useInventario } from "../hooks/useInventario";
 import { useNavegacion } from "../hooks/useNavegacion";
 import { calcularAlertas, colmenaOperativa, ultimaInspeccionPorColmena, DIAS_SIN_INSPECCION } from "../utils/alertas";
@@ -28,6 +30,8 @@ export default function DashboardPage() {
   const { datos, cargado, nombreApiario } = useDatos();
   // "" = todos los apiarios; si no, el id del apiario elegido.
   const [apiarioId, setApiarioId] = useState("");
+  // Inspección que originó una alerta, abierta desde el panel (S4-T06).
+  const [inspeccionAbierta, setInspeccionAbierta] = useState(null);
   const { navegar } = useNavegacion();
   // Si el backend aún no tiene stock, el inventario queda en null y no se muestra nada.
   const { inventario } = useInventario();
@@ -134,8 +138,8 @@ export default function DashboardPage() {
             </div>
           ) : (
             <ul className="divide-y divide-slate-100">
-              {resumen.alertas.slice(0, 10).map(({ colmena, prioridad, motivos }) => (
-                <li key={colmena.id} className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+              {resumen.alertas.slice(0, 10).map(({ colmena, prioridad, detalles, ultima }) => (
+                <li key={colmena.id} className="flex flex-col gap-3 px-5 py-4 lg:flex-row lg:items-start lg:justify-between">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="font-semibold">{colmena.codigo}</p>
@@ -144,19 +148,67 @@ export default function DashboardPage() {
                         {prioridad === "alta" ? "Prioridad alta" : "Revisar"}
                       </Insignia>
                     </div>
-                    <p className="mt-1 text-sm text-slate-600">{motivos.join(" · ")}</p>
+                    <ul className="mt-1 grid gap-0.5 text-sm text-slate-600">
+                      {detalles.map((detalle) => (
+                        <li key={detalle.texto}>
+                          {detalle.texto}
+                          {detalle.origen === "INSPECCION" && ultima && (
+                            <span className="text-slate-400"> · inspección del {formatearFecha(ultima.fecha_inspeccion)}</span>
+                          )}
+                          {detalle.origen === "COLMENA" && <span className="text-slate-400"> · estado de la colmena</span>}
+                        </li>
+                      ))}
+                    </ul>
                   </div>
-                  <Boton variante="secundario" tamano="sm" onClick={() => navegar("colmenas", { detalle: colmena.id })}>
-                    Ver colmena
-                  </Boton>
+                  <div className="flex shrink-0 flex-wrap gap-2">
+                    <Boton
+                      variante="secundario"
+                      tamano="sm"
+                      icono={Eye}
+                      aria-label={`Ver colmena ${colmena.codigo}`}
+                      onClick={() => navegar("colmenas", { detalle: colmena.id })}
+                    >
+                      Ver colmena
+                    </Boton>
+                    {ultima ? (
+                      detalles.some((d) => d.origen === "INSPECCION") && (
+                        <Boton
+                          variante="secundario"
+                          tamano="sm"
+                          icono={ClipboardCheck}
+                          aria-label={`Ver la inspección que originó la alerta de ${colmena.codigo}`}
+                          onClick={() => setInspeccionAbierta(ultima)}
+                        >
+                          Ver inspección
+                        </Boton>
+                      )
+                    ) : (
+                      <Boton
+                        variante="secundario"
+                        tamano="sm"
+                        icono={ClipboardPlus}
+                        aria-label={`Registrar inspección de ${colmena.codigo}`}
+                        onClick={() => navegar("inspecciones", { nuevaPara: colmena.id })}
+                      >
+                        Inspeccionar
+                      </Boton>
+                    )}
+                  </div>
                 </li>
               ))}
             </ul>
           )}
           {resumen.alertas.length > 10 && (
-            <p className="border-t border-slate-100 px-5 py-3 text-sm text-slate-500">
-              Y {resumen.alertas.length - 10} colmenas más. Revísalas en el módulo Colmenas.
-            </p>
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 px-5 py-3 text-sm text-slate-500">
+              <span>Y {resumen.alertas.length - 10} colmenas más.</span>
+              <Boton
+                variante="fantasma"
+                tamano="sm"
+                onClick={() => navegar("colmenas", { atencion: true, ...(apiarioElegido ? { apiario: apiarioElegido.id } : {}) })}
+              >
+                Ver todas en Colmenas
+              </Boton>
+            </div>
           )}
         </Panel>
 
@@ -233,6 +285,10 @@ export default function DashboardPage() {
           </div>
         </Panel>
       </div>
+
+      {inspeccionAbierta && (
+        <DetalleInspeccion inspeccion={inspeccionAbierta} puedeEditar={false} onCerrar={() => setInspeccionAbierta(null)} />
+      )}
     </>
   );
 }

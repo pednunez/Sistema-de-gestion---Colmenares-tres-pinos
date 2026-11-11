@@ -31,7 +31,7 @@ export default function ColmenasPage() {
   const [busqueda, setBusqueda] = useState("");
   const [filtroApiario, setFiltroApiario] = useState(String(parametros.apiario ?? ""));
   const [filtroEstado, setFiltroEstado] = useState("");
-  const [soloAtencion, setSoloAtencion] = useState(false);
+  const [soloAtencion, setSoloAtencion] = useState(Boolean(parametros.atencion));
   const [detalleId, setDetalleId] = useState(parametros.detalle ?? null);
   const [escaneando, setEscaneando] = useState(false);
   const [formulario, setFormulario] = useState(null);

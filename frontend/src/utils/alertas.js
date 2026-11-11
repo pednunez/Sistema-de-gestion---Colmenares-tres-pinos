@@ -19,6 +19,12 @@ export function ultimaInspeccionPorColmena(inspecciones) {
   return ultimas;
 }
 
+// Cada alerta trae sus motivos como texto (`motivos`) y con el registro que
+// los originó (`detalles`, S4-T06):
+// - origen INSPECCION: la última inspección de la colmena (estado, enfermedad,
+//   colmena débil o días sin inspección).
+// - origen COLMENA: el estado de la colmena (en observación).
+// - origen SIN_INSPECCION: la colmena nunca se inspeccionó.
 export function calcularAlertas(colmenas, inspecciones) {
   const ultimas = ultimaInspeccionPorColmena(inspecciones);
   const alertas = [];
@@ -27,43 +33,47 @@ export function calcularAlertas(colmenas, inspecciones) {
     if (!colmenaOperativa(colmena)) continue;
 
     const ultima = ultimas.get(colmena.id);
-    const motivos = [];
-    let prioridad = null;
+    const detalles = [];
+    const agregar = (texto, prioridad, origen) => detalles.push({ texto, prioridad, origen });
 
     if (ultima?.estado_general === "REQUIERE_REVISION" || ultima?.estado_general === "CRITICO") {
-      motivos.push(
-        ultima.estado_general === "CRITICO" ? "Última inspección en estado crítico" : "Última inspección: requiere revisión"
+      agregar(
+        ultima.estado_general === "CRITICO" ? "Última inspección en estado crítico" : "Última inspección: requiere revisión",
+        "alta",
+        "INSPECCION"
       );
-      prioridad = "alta";
     }
     if (ultima?.signos_enfermedad) {
-      motivos.push(
-        ultima.enfermedad_observada
-          ? `Signos de enfermedad: ${ultima.enfermedad_observada}`
-          : "Signos de enfermedad"
+      agregar(
+        ultima.enfermedad_observada ? `Signos de enfermedad: ${ultima.enfermedad_observada}` : "Signos de enfermedad",
+        "alta",
+        "INSPECCION"
       );
-      prioridad = "alta";
     }
     if (ultima?.estado_general === "DEBIL" || ultima?.estado_general === "REGULAR") {
-      motivos.push(ultima.estado_general === "REGULAR" ? "Última inspección en estado regular" : "Última inspección: colmena débil");
-      prioridad ??= "media";
+      agregar(
+        ultima.estado_general === "REGULAR" ? "Última inspección en estado regular" : "Última inspección: colmena débil",
+        "media",
+        "INSPECCION"
+      );
     }
-    if (colmena.estado === "EN_OBSERVACION") {
-      motivos.push("Marcada en observación");
-      prioridad ??= "media";
-    }
+    if (colmena.estado === "EN_OBSERVACION") agregar("Marcada en observación", "media", "COLMENA");
     if (!ultima) {
-      motivos.push("Sin inspecciones registradas");
-      prioridad ??= "media";
+      agregar("Sin inspecciones registradas", "media", "SIN_INSPECCION");
     } else {
       const dias = diasDesde(ultima.fecha_inspeccion);
-      if (dias !== null && dias > DIAS_SIN_INSPECCION) {
-        motivos.push(`Sin inspección hace ${dias} días`);
-        prioridad ??= "media";
-      }
+      if (dias !== null && dias > DIAS_SIN_INSPECCION) agregar(`Sin inspección hace ${dias} días`, "media", "INSPECCION");
     }
 
-    if (motivos.length > 0) alertas.push({ colmena, prioridad, motivos, ultima });
+    if (detalles.length > 0) {
+      alertas.push({
+        colmena,
+        prioridad: detalles.some((d) => d.prioridad === "alta") ? "alta" : "media",
+        motivos: detalles.map((d) => d.texto),
+        detalles,
+        ultima: ultima ?? null,
+      });
+    }
   }
 
   return alertas.sort((a, b) => (a.prioridad === "alta" ? 0 : 1) - (b.prioridad === "alta" ? 0 : 1));
