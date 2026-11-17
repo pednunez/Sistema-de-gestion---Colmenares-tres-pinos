@@ -1,4 +1,3 @@
-
 import { useEffect } from 'react';
 
 import {
@@ -29,16 +28,27 @@ import {
 } from '../database/inspecciones';
 
 import {
+  listarTratamientosLocales,
+} from '../database/tratamientos';
+
+import {
   sincronizarInspeccionesPendientes,
 } from './inspecciones';
 
+import {
+  sincronizarTratamientosPendientes,
+} from './tratamientos';
+
 // ==========================================
-// COLMENARES TRES PINOS
-// CONTROLADOR DE SINCRONIZACIÃ“N
+// CONFIGURACIÓN
 // ==========================================
 
-// Envio habilitado exclusivamente por configuracion.
-const HABILITAR_ENVIOS_REALES = process.env.EXPO_PUBLIC_ENABLE_SYNC === 'true';
+const HABILITAR_ENVIOS_REALES =
+  process.env.EXPO_PUBLIC_ENABLE_SYNC === 'true';
+
+// ==========================================
+// ESTADOS
+// ==========================================
 
 export type EstadoControlador =
   | 'SIN_INTERNET'
@@ -49,8 +59,13 @@ export type EstadoControlador =
   | 'SIN_PENDIENTES'
   | 'MODO_DIAGNOSTICO'
   | 'SINCRONIZADO'
+  | 'SINCRONIZACION_PARCIAL'
   | 'EN_PROCESO'
   | 'ERROR';
+
+// ==========================================
+// RESULTADO
+// ==========================================
 
 export type ResultadoControlador = {
   estado: EstadoControlador;
@@ -58,89 +73,121 @@ export type ResultadoControlador = {
   pendientes?: number;
   sincronizadas?: number;
   fallidas?: number;
+  pendientesPorInspeccion?: number;
 };
 
-// Impide ejecutar varias sincronizaciones
-// al mismo tiempo.
+// ==========================================
+// BLOQUEO GLOBAL
+// ==========================================
+
 let ejecutando = false;
 
 // ==========================================
-// COMPROBAR INTERNET
+// CONECTIVIDAD
 // ==========================================
 
 function hayInternet(
   estado: NetInfoState
 ): boolean {
+
   return (
     estado.isConnected === true &&
     estado.isInternetReachable !== false
   );
+
 }
 
 // ==========================================
-// EVALUAR Y SINCRONIZAR
+// EJECUTAR SINCRONIZACIÓN
 // ==========================================
 
 export async function ejecutarControlador():
   Promise<ResultadoControlador> {
 
   if (ejecutando) {
+
     return {
       estado: 'EN_PROCESO',
       mensaje:
-        'Ya se estÃ¡ comprobando la sincronizaciÃ³n.',
+        'Ya se está comprobando la sincronización.',
     };
+
   }
 
   ejecutando = true;
 
   try {
-    // 1. Comprobar conectividad.
+
+    // ======================================
+    // 1. COMPROBAR INTERNET
+    // ======================================
+
     const red = await NetInfo.fetch();
 
     if (!hayInternet(red)) {
+
       return {
         estado: 'SIN_INTERNET',
         mensaje:
-          'Sin conexiÃ³n. Los datos permanecen en SQLite.',
+          'Sin conexión. Los datos permanecen en SQLite.',
       };
+
     }
 
-    // 2. Obtener sesiÃ³n.
+    // ======================================
+    // 2. OBTENER SESIÓN
+    // ======================================
+
     const sesion = await leerSesionGuardada();
 
     if (!sesion) {
+
       return {
         estado: 'SIN_SESION',
         mensaje:
-          'No hay una sesiÃ³n iniciada. No se enviarÃ¡n registros.',
+          'No hay una sesión iniciada. No se enviarán registros.',
       };
+
     }
 
-    // 3. Verificar token.
+    // ======================================
+    // 3. VALIDAR TOKEN
+    // ======================================
+
     if (!tokenVigente(sesion)) {
+
       return {
         estado: 'SESION_VENCIDA',
         mensaje:
-          'El token venciÃ³. Las inspecciones pendientes se conservan.',
+          'El token venció. Los registros pendientes se conservan.',
       };
+
     }
 
-    // 4. Verificar catÃ¡logo del usuario.
+    // ======================================
+    // 4. VALIDAR CATÁLOGO
+    // ======================================
+
     const catalogo = await leerCatalogoLocal(
       sesion.usuario.id
     );
 
     if (!catalogo) {
+
       return {
         estado: 'SIN_CATALOGO',
         mensaje:
-          'No existe un catÃ¡logo oficial descargado para este usuario.',
+          'No existe un catálogo oficial descargado para este usuario.',
       };
+
     }
 
-    // 5. Comprobar servidor.
+    // ======================================
+    // 5. COMPROBAR FASTAPI
+    // ======================================
+
     try {
+
       const respuesta = await solicitarAPI<{
         status: string;
       }>(
@@ -151,97 +198,422 @@ export async function ejecutarControlador():
       );
 
       if (respuesta.status !== 'ok') {
+
         return {
           estado: 'SERVIDOR_NO_DISPONIBLE',
           mensaje:
-            'El servidor no respondiÃ³ correctamente.',
+            'El servidor no respondió correctamente.',
         };
+
       }
+
     } catch {
+
       return {
         estado: 'SERVIDOR_NO_DISPONIBLE',
         mensaje:
           'No se pudo contactar con FastAPI.',
       };
+
     }
 
-    // 6. Consultar registros del usuario.
+    // ======================================
+    // 6. LEER SQLITE
+    // ======================================
+
+    // Se inicializan las tablas en orden.
+
     const inspecciones =
       await listarInspeccionesLocales();
 
-    const pendientes = inspecciones.filter(
-      inspeccion =>
-        inspeccion.estado === 'PENDIENTE' &&
-        inspeccion.servidor_id === null &&
-        inspeccion.usuario_local_id ===
-          sesion.usuario.id
+    const tratamientos =
+      await listarTratamientosLocales();
+
+    // ======================================
+    // 7. PENDIENTES DE INSPECCIONES
+    // ======================================
+
+    const pendientesInspecciones =
+      inspecciones.filter(
+        inspeccion =>
+          inspeccion.estado === 'PENDIENTE' &&
+          inspeccion.servidor_id === null &&
+          inspeccion.usuario_local_id ===
+            sesion.usuario.id
+      );
+
+    // ======================================
+    // 8. PENDIENTES DE TRATAMIENTOS
+    // ======================================
+
+    const pendientesTratamientos =
+      tratamientos.filter(
+        tratamiento =>
+          tratamiento.sincronizacion === 'PENDIENTE' &&
+          tratamiento.servidor_id === null &&
+          tratamiento.usuario_local_id ===
+            sesion.usuario.id
+      );
+
+    const totalPendientes =
+      pendientesInspecciones.length +
+      pendientesTratamientos.length;
+
+    // ======================================
+    // 9. DIAGNÓSTICO SQLITE
+    // ======================================
+
+    console.info(
+      '[Colmenares] DIAGNÓSTICO DE SINCRONIZACIÓN:',
+      {
+        usuarioSesion: sesion.usuario.id,
+
+        inspecciones: {
+          total: inspecciones.length,
+          pendientes: pendientesInspecciones.length,
+        },
+
+        tratamientos: {
+          total: tratamientos.length,
+          pendientes: pendientesTratamientos.length,
+        },
+
+        totalPendientes,
+      }
     );
 
-    if (pendientes.length === 0) {
+    // ======================================
+    // 10. COMPROBAR COLA VACÍA
+    // ======================================
+
+    if (totalPendientes === 0) {
+
       return {
         estado: 'SIN_PENDIENTES',
         mensaje:
-          'No hay inspecciones pendientes de este usuario.',
+          'No hay inspecciones ni tratamientos pendientes de sincronización.',
         pendientes: 0,
+        sincronizadas: 0,
+        fallidas: 0,
+        pendientesPorInspeccion: 0,
       };
+
     }
 
-    // 7. ProtecciÃ³n para desarrollo.
-    // No se envÃ­a nada mientras no
-    // habilitemos explÃ­citamente la funciÃ³n.
+    // ======================================
+    // 11. MODO DIAGNÓSTICO
+    // ======================================
+
     if (!HABILITAR_ENVIOS_REALES) {
+
       return {
         estado: 'MODO_DIAGNOSTICO',
+
         mensaje:
-          'Hay inspecciones listas para revisar. Los envÃ­os reales estÃ¡n desactivados.',
-        pendientes: pendientes.length,
+          `Hay ${pendientesInspecciones.length} inspecciones y ${pendientesTratamientos.length} tratamientos pendientes. Los envíos reales están desactivados.`,
+
+        pendientes: totalPendientes,
+        sincronizadas: 0,
+        fallidas: 0,
+        pendientesPorInspeccion: 0,
       };
+
     }
 
-    // 8. SincronizaciÃ³n real.
-    const resultado =
-      await sincronizarInspeccionesPendientes();
+    // ======================================
+    // 12. RESULTADOS INICIALES
+    // ======================================
+
+    const resultadoInspecciones = {
+      revisadas: 0,
+      sincronizadas: 0,
+      fallidas: 0,
+      errores: [] as {
+        idLocal: number;
+        mensaje: string;
+      }[],
+    };
+
+    const resultadoTratamientos = {
+      revisadas: 0,
+      sincronizadas: 0,
+      fallidas: 0,
+      pendientesPorInspeccion: 0,
+      errores: [] as {
+        idLocal: number;
+        mensaje: string;
+      }[],
+    };
+
+    // ======================================
+    // 13. SINCRONIZAR INSPECCIONES
+    // ======================================
+
+    if (pendientesInspecciones.length > 0) {
+
+      try {
+
+        const resultado =
+          await sincronizarInspeccionesPendientes();
+
+        resultadoInspecciones.revisadas =
+          resultado.revisadas;
+
+        resultadoInspecciones.sincronizadas =
+          resultado.sincronizadas;
+
+        resultadoInspecciones.fallidas =
+          resultado.fallidas;
+
+        resultadoInspecciones.errores =
+          resultado.errores;
+
+      } catch (error) {
+
+        resultadoInspecciones.fallidas++;
+
+        resultadoInspecciones.errores.push({
+          idLocal: 0,
+
+          mensaje:
+            error instanceof Error
+              ? error.message
+              : 'Error general al sincronizar inspecciones.',
+        });
+
+      }
+
+    }
+
+    // ======================================
+    // 14. SINCRONIZAR TRATAMIENTOS
+    // ======================================
+
+    // IMPORTANTE:
+    // Las inspecciones se procesan primero.
+    // Así los tratamientos pueden utilizar
+    // el ID real de la inspección en FastAPI.
+
+    if (pendientesTratamientos.length > 0) {
+
+      try {
+
+        const resultado =
+          await sincronizarTratamientosPendientes();
+
+        resultadoTratamientos.revisadas =
+          resultado.revisadas;
+
+        resultadoTratamientos.sincronizadas =
+          resultado.sincronizadas;
+
+        resultadoTratamientos.fallidas =
+          resultado.fallidas;
+
+        resultadoTratamientos.pendientesPorInspeccion =
+          resultado.pendientesPorInspeccion;
+
+        resultadoTratamientos.errores =
+          resultado.errores;
+
+      } catch (error) {
+
+        resultadoTratamientos.fallidas++;
+
+        resultadoTratamientos.errores.push({
+          idLocal: 0,
+
+          mensaje:
+            error instanceof Error
+              ? error.message
+              : 'Error general al sincronizar tratamientos.',
+        });
+
+      }
+
+    }
+
+    // ======================================
+    // 15. CONSOLIDAR RESULTADOS
+    // ======================================
+
+    const totalSincronizadas =
+      resultadoInspecciones.sincronizadas +
+      resultadoTratamientos.sincronizadas;
+
+    const totalFallidas =
+      resultadoInspecciones.fallidas +
+      resultadoTratamientos.fallidas;
+
+    const pendientesPorInspeccion =
+      resultadoTratamientos.pendientesPorInspeccion;
+
+    const errores = [
+      ...resultadoInspecciones.errores,
+      ...resultadoTratamientos.errores,
+    ];
+
+    // ======================================
+    // 16. MOSTRAR ERRORES
+    // ======================================
+
+    if (errores.length > 0) {
+
+      console.warn(
+        '[Colmenares] ERRORES DE SINCRONIZACIÓN:',
+        errores
+      );
+
+    }
+
+    // ======================================
+    // 17. DETERMINAR ESTADO
+    // ======================================
+
+    let estado: EstadoControlador;
+
+    if (totalFallidas > 0) {
+
+      estado =
+        totalSincronizadas > 0
+          ? 'SINCRONIZACION_PARCIAL'
+          : 'ERROR';
+
+    } else if (pendientesPorInspeccion > 0) {
+
+      estado = 'SINCRONIZACION_PARCIAL';
+
+    } else {
+
+      estado = 'SINCRONIZADO';
+
+    }
+
+    // ======================================
+    // 18. CONSTRUIR MENSAJE
+    // ======================================
+
+    const enviados: string[] = [];
+
+    if (
+      resultadoInspecciones.sincronizadas > 0
+    ) {
+
+      enviados.push(
+        `${resultadoInspecciones.sincronizadas} inspecciones`
+      );
+
+    }
+
+    if (
+      resultadoTratamientos.sincronizadas > 0
+    ) {
+
+      enviados.push(
+        `${resultadoTratamientos.sincronizadas} tratamientos`
+      );
+
+    }
+
+    let mensaje = '';
+
+    if (enviados.length > 0) {
+
+      mensaje =
+        `Sincronización completada: ${enviados.join(' y ')} enviados.`;
+
+    } else {
+
+      mensaje =
+        'No se enviaron registros nuevos.';
+
+    }
+
+    if (pendientesPorInspeccion > 0) {
+
+      mensaje +=
+        ` ${pendientesPorInspeccion} tratamientos esperan la sincronización de su inspección asociada.`;
+
+    }
+
+    if (totalFallidas > 0) {
+
+      mensaje +=
+        ` Se produjeron ${totalFallidas} errores. Revisa el registro de diagnóstico.`;
+
+    }
+
+    // ======================================
+    // 19. DEVOLVER RESULTADO
+    // ======================================
 
     return {
-      estado: 'SINCRONIZADO',
-      mensaje:
-        'TerminÃ³ el intento de sincronizaciÃ³n.',
-      pendientes: pendientes.length,
-      sincronizadas:
-        resultado.sincronizadas,
-      fallidas:
-        resultado.fallidas,
+
+      estado,
+
+      mensaje,
+
+      pendientes: totalPendientes,
+
+      sincronizadas: totalSincronizadas,
+
+      fallidas: totalFallidas,
+
+      pendientesPorInspeccion,
+
     };
 
   } catch (error) {
+
+    // ======================================
+    // 20. ERROR GENERAL
+    // ======================================
+
+    console.error(
+      '[Colmenares] ERROR DEL CONTROLADOR:',
+      error
+    );
+
     return {
+
       estado: 'ERROR',
+
       mensaje:
         error instanceof Error
           ? error.message
           : 'Error desconocido del controlador.',
+
     };
 
   } finally {
+
     ejecutando = false;
+
   }
+
 }
 
 // ==========================================
-// ESCUCHAR CAMBIOS AUTOMÃTICOS
+// SINCRONIZACIÓN AUTOMÁTICA
 // ==========================================
 
 export function useControladorSincronizacion():
   void {
 
   useEffect(() => {
+
     let activo = true;
 
     let teniaInternet = false;
 
+    // ======================================
+    // EJECUTAR REVISIÓN
+    // ======================================
+
     const revisar = async (
       motivo: string
     ) => {
+
       if (!activo) return;
 
       const resultado =
@@ -255,18 +627,26 @@ export function useControladorSincronizacion():
         resultado.estado,
         resultado.mensaje
       );
+
     };
 
-    // Detectar cuando regresa internet.
+    // ======================================
+    // DETECTAR CONEXIÓN
+    // ======================================
+
     const cancelarRed =
       NetInfo.addEventListener(
         estado => {
+
           const conectado =
             hayInternet(estado);
 
           if (!conectado) {
+
             teniaInternet = false;
+
             return;
+
           }
 
           if (
@@ -274,34 +654,52 @@ export function useControladorSincronizacion():
             !teniaInternet &&
             AppState.currentState === 'active'
           ) {
+
             teniaInternet = true;
 
             void revisar(
-              'ConexiÃ³n disponible'
+              'Conexión disponible'
             );
+
           }
+
         }
       );
 
-    // Volver a comprobar cuando
-    // el usuario abre la aplicaciÃ³n.
+    // ======================================
+    // VOLVER A ABRIR LA APP
+    // ======================================
+
     const suscripcionApp =
       AppState.addEventListener(
         'change',
         estado => {
+
           if (estado === 'active') {
+
             void revisar(
-              'AplicaciÃ³n activa'
+              'Aplicación activa'
             );
+
           }
+
         }
       );
 
+    // ======================================
+    // LIMPIAR EVENTOS
+    // ======================================
+
     return () => {
+
       activo = false;
 
       cancelarRed();
+
       suscripcionApp.remove();
+
     };
+
   }, []);
+
 }

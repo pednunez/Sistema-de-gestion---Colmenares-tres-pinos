@@ -89,8 +89,19 @@ export default function MisInspecciones({
     <ScrollView
       style={styles.container}
       contentContainerStyle={styles.content}
+      showsVerticalScrollIndicator={true}
     >
       <StatusBar barStyle="dark-content" />
+
+      {/* VOLVER AL INICIO */}
+      <Pressable
+        style={styles.botonVolver}
+        onPress={onVolver}
+      >
+        <Text style={styles.textoVolver}>
+          ‹ Volver al inicio
+        </Text>
+      </Pressable>
 
       {/* ENCABEZADO */}
       <Text style={styles.icon}>
@@ -253,20 +264,12 @@ export default function MisInspecciones({
         })
       )}
 
-      {/* VOLVER AL INICIO */}
-      <Pressable
-        style={styles.botonVolver}
-        onPress={onVolver}
-      >
-        <Text style={styles.textoVolver}>
-          Volver al inicio
-        </Text>
-      </Pressable>
-
+      {/* PIE DE PÁGINA */}
       <Text style={styles.footer}>
         Las inspecciones permanecen guardadas localmente.
         La sincronización con FastAPI todavía está en desarrollo.
       </Text>
+
     </ScrollView>
   );
 }
@@ -283,6 +286,19 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
     paddingTop: 60,
     paddingBottom: 50,
+  },
+
+  // VOLVER AL INICIO
+  botonVolver: {
+    alignSelf: 'flex-start',
+    marginBottom: 45,
+    paddingVertical: 5,
+  },
+
+  textoVolver: {
+    color: '#9A430D',
+    fontWeight: 'bold',
+    fontSize: 22,
   },
 
   icon: {
@@ -425,20 +441,6 @@ const styles = StyleSheet.create({
 
   error: {
     color: '#B42318',
-  },
-
-  botonVolver: {
-    backgroundColor: '#D99A24',
-    padding: 18,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginTop: 20,
-  },
-
-  textoVolver: {
-    color: '#FFFFFF',
-    fontWeight: 'bold',
-    fontSize: 17,
   },
 
   footer: {
