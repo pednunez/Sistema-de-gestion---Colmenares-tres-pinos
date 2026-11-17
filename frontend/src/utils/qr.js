@@ -10,7 +10,17 @@ export function extraerCodigoQr(texto) {
 
 // Código QR que viene en la dirección al abrir el sistema desde una etiqueta.
 export function codigoQrDeLaUrl(ubicacion = window.location) {
-  return extraerCodigoQr(new URLSearchParams(ubicacion.search).get("qr"));
+  const parametro = extraerCodigoQr(
+    new URLSearchParams(ubicacion.search).get("qr")
+  );
+  if (parametro) return parametro;
+
+  // Compatibilidad con etiquetas antiguas que abren una ruta.
+  const ruta = ubicacion.pathname ?? "";
+  if (/^\/(?:api\/)?colmenas\/qr\/[^/]+\/?$/i.test(ruta)) {
+    return extraerCodigoQr(ruta);
+  }
+  return null;
 }
 
 // Dirección del frontend que abre la colmena: es la que conviene imprimir.

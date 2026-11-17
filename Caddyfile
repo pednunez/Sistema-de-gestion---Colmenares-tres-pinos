@@ -1,4 +1,33 @@
-colmenarestrespinos.tech, www.colmenarestrespinos.tech {
+colmenarestrespinos.tech {
     encode zstd gzip
-    respond "Colmenares Tres Pinos - HTTPS configurado" 200
+
+    reverse_proxy frontend:80
+}
+
+www.colmenarestrespinos.tech {
+    redir https://colmenarestrespinos.tech{uri} permanent
+}
+
+api.colmenarestrespinos.tech {
+    encode zstd gzip
+
+    reverse_proxy backend:8000
+}
+
+# ========================================
+# COLMENARES TRES PINOS - PORTAL DE PRUEBAS
+# ========================================
+
+pruebas.colmenarestrespinos.tech {
+    encode zstd gzip
+    reverse_proxy colmenares-portal-pruebas:80
+}
+
+# ========================================
+# API DE PRUEBAS - AUN NO HABILITADA
+# ========================================
+
+api-pruebas.colmenarestrespinos.tech {
+    encode zstd gzip
+    reverse_proxy colmenares-backend-qa:8000
 }

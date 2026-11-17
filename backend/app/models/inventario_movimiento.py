@@ -122,7 +122,8 @@ class InventarioMovimiento(Base):
             "'INICIAR_REPARACION', "
             "'REPARAR', "
             "'BAJA', "
-            "'AJUSTE_INICIAL'"
+            "'AJUSTE_INICIAL', "
+            "'EXTRACCION'"
             ")",
             name="ck_inv_mov_tipo",
         ),

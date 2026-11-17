@@ -37,7 +37,7 @@ export default function AppLayout({ paginas, sinAcceso: SinAcceso }) {
     const codigo = qrPendiente.current;
     if (!codigo) return;
     qrPendiente.current = null;
-    window.history.replaceState(null, "", window.location.pathname);
+    window.history.replaceState(null, "", "/");
     colmenasService
       .obtenerPorQr(codigo)
       .then((colmena) => navegar("colmenas", { detalle: colmena.id }))

@@ -1,4 +1,3 @@
-
 import React, {
   useCallback,
   useEffect,
@@ -21,8 +20,7 @@ import {
   View,
 } from 'react-native';
 
-import DateTimePicker from
-  '@react-native-community/datetimepicker';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 import {
   actualizarTratamientoLocal,
@@ -58,6 +56,10 @@ import {
   leerCatalogoLocal,
 } from './database/catalogo';
 
+import {
+  ejecutarControlador,
+} from './sincronizacion/controlador';
+
 // ==========================================
 // TIPOS
 // ==========================================
@@ -87,6 +89,7 @@ function fechaADate(valor: string): Date {
 
 function dateAFecha(valor: Date): string {
   const a = valor.getFullYear();
+
   const m = String(
     valor.getMonth() + 1
   ).padStart(2, '0');
@@ -103,6 +106,7 @@ function moverAnios(
   cantidad: number
 ): string {
   const fecha = fechaADate(valor);
+
   fecha.setFullYear(
     fecha.getFullYear() + cantidad
   );
@@ -150,11 +154,14 @@ function SelectorFecha({
   deshabilitado = false,
   onChange,
 }: SelectorFechaProps) {
+
   const [abierto, setAbierto] = useState(false);
+
   const [temporal, setTemporal] =
     useState(new Date());
 
   const abrir = () => {
+
     if (deshabilitado) return;
 
     const inicial = valor || fechaLocalISO();
@@ -167,6 +174,7 @@ function SelectorFecha({
           : inicial;
 
     setTemporal(fechaADate(ajustada));
+
     setAbierto(true);
   };
 
@@ -174,7 +182,9 @@ function SelectorFecha({
     evento: { type: string },
     seleccion?: Date
   ) => {
+
     if (Platform.OS === 'android') {
+
       setAbierto(false);
 
       if (
@@ -183,13 +193,17 @@ function SelectorFecha({
       ) {
         onChange(dateAFecha(seleccion));
       }
+
     } else if (seleccion) {
+
       setTemporal(seleccion);
+
     }
   };
 
   return (
     <View style={{ marginTop: 12 }}>
+
       <Text style={styles.label}>
         {titulo}
       </Text>
@@ -198,8 +212,7 @@ function SelectorFecha({
         disabled={deshabilitado}
         style={[
           styles.input,
-          deshabilitado &&
-            styles.deshabilitado,
+          deshabilitado && styles.deshabilitado,
         ]}
         onPress={abrir}
       >
@@ -223,12 +236,8 @@ function SelectorFecha({
           <DateTimePicker
             value={temporal}
             mode="date"
-            minimumDate={
-              fechaADate(minimo)
-            }
-            maximumDate={
-              fechaADate(maximo)
-            }
+            minimumDate={fechaADate(minimo)}
+            maximumDate={fechaADate(maximo)}
             onChange={cambiar}
           />
         )}
@@ -238,15 +247,12 @@ function SelectorFecha({
           visible={abierto}
           transparent
           animationType="fade"
-          onRequestClose={() =>
-            setAbierto(false)
-          }
+          onRequestClose={() => setAbierto(false)}
         >
           <View style={styles.modalFondo}>
             <View style={styles.modalCaja}>
-              <Text
-                style={styles.tituloSeccion}
-              >
+
+              <Text style={styles.tituloSeccion}>
                 {titulo}
               </Text>
 
@@ -255,26 +261,19 @@ function SelectorFecha({
                 mode="date"
                 display="spinner"
                 locale="es-CL"
-                minimumDate={
-                  fechaADate(minimo)
-                }
-                maximumDate={
-                  fechaADate(maximo)
-                }
+                minimumDate={fechaADate(minimo)}
+                maximumDate={fechaADate(maximo)}
                 onChange={cambiar}
                 style={{ height: 190 }}
               />
 
               <View style={styles.fila}>
+
                 <Pressable
                   style={styles.botonBorde}
-                  onPress={() =>
-                    setAbierto(false)
-                  }
+                  onPress={() => setAbierto(false)}
                 >
-                  <Text
-                    style={styles.textoBorde}
-                  >
+                  <Text style={styles.textoBorde}>
                     Cancelar
                   </Text>
                 </Pressable>
@@ -282,23 +281,21 @@ function SelectorFecha({
                 <Pressable
                   style={styles.boton}
                   onPress={() => {
-                    onChange(
-                      dateAFecha(temporal)
-                    );
+                    onChange(dateAFecha(temporal));
                     setAbierto(false);
                   }}
                 >
-                  <Text
-                    style={styles.textoBoton}
-                  >
+                  <Text style={styles.textoBoton}>
                     Confirmar
                   </Text>
                 </Pressable>
+
               </View>
             </View>
           </View>
         </Modal>
       )}
+
     </View>
   );
 }
@@ -320,6 +317,7 @@ function Opcion({
   onPress,
   disabled = false,
 }: OpcionProps) {
+
   return (
     <Pressable
       onPress={onPress}
@@ -327,8 +325,7 @@ function Opcion({
       style={[
         styles.opcion,
         activa && styles.opcionActiva,
-        disabled &&
-          styles.deshabilitado,
+        disabled && styles.deshabilitado,
       ]}
     >
       <Text style={styles.textoOpcion}>
@@ -346,6 +343,7 @@ function Opcion({
 export default function TratamientosLocales({
   onVolver,
 }: Props) {
+
   const [tratamientos, setTratamientos] =
     useState<TratamientoGuardado[]>([]);
 
@@ -359,6 +357,9 @@ export default function TratamientosLocales({
     useState(true);
 
   const [guardando, setGuardando] =
+    useState(false);
+
+  const [sincronizando, setSincronizando] =
     useState(false);
 
   const [error, setError] = useState('');
@@ -390,44 +391,48 @@ export default function TratamientosLocales({
 
   const bloqueo = useRef(false);
 
+  const bloqueoSincronizacion = useRef(false);
+
   // ========================================
   // CARGAR SQLITE Y CATÁLOGO
   // ========================================
 
   const recargar = useCallback(
     async () => {
+
       setCargando(true);
       setError('');
 
       try {
+
         const sesion =
           await leerSesionGuardada();
 
         // Inicializar primero las tablas
         // de inspecciones.
+
         const i =
           await listarInspeccionesLocales();
 
         const [t, c] = await Promise.all([
+
           listarTratamientosLocales(),
 
           sesion
-            ? leerCatalogoLocal(
-                sesion.usuario.id
-              )
+            ? leerCatalogoLocal(sesion.usuario.id)
             : Promise.resolve(null),
+
         ]);
 
-        // Mostrar los registros propios.
-        // Sin sesión solo se muestran
-        // registros antiguos sin propietario.
+        // Mostrar únicamente los registros
+        // pertenecientes al usuario actual.
+
         const propios = t.filter(
           registro =>
             sesion
               ? registro.usuario_local_id ===
                 sesion.usuario.id
-              : registro.usuario_local_id ===
-                null
+              : registro.usuario_local_id === null
         );
 
         setTratamientos(propios);
@@ -437,13 +442,14 @@ export default function TratamientosLocales({
             sesion
               ? registro.usuario_local_id ===
                 sesion.usuario.id
-              : registro.usuario_local_id ===
-                null
+              : registro.usuario_local_id === null
           )
         );
 
         setCatalogo(c);
+
       } catch (e) {
+
         console.error(
           'Error SQLite:',
           e
@@ -452,8 +458,11 @@ export default function TratamientosLocales({
         setError(
           'Error al consultar registros locales.'
         );
+
       } finally {
+
         setCargando(false);
+
       }
     },
     []
@@ -475,8 +484,7 @@ export default function TratamientosLocales({
   const inspeccionesColmena =
     inspecciones.filter(
       inspeccion =>
-        inspeccion.codigo_qr ===
-        datos.codigoQR
+        inspeccion.codigo_qr === datos.codigoQR
     );
 
   // ========================================
@@ -485,25 +493,30 @@ export default function TratamientosLocales({
 
   const filtrados =
     tratamientos.filter(tratamiento => {
-      const texto =
-        busqueda.toLowerCase();
+
+      const texto = busqueda.toLowerCase();
 
       return (
+
         (
           filtro === 'TODOS' ||
           tratamiento.estado === filtro
         ) &&
+
         (
           tratamiento.codigo_qr
             .toLowerCase()
             .includes(texto) ||
+
           tratamiento.tipo_tratamiento
             .toLowerCase()
             .includes(texto) ||
+
           tratamiento.producto
             .toLowerCase()
             .includes(texto)
         )
+
       );
     });
 
@@ -517,10 +530,12 @@ export default function TratamientosLocales({
     campo: K,
     valor: DatosTratamiento[K]
   ) => {
+
     setDatos(actual => ({
       ...actual,
       [campo]: valor,
     }));
+
   };
 
   // ========================================
@@ -528,7 +543,9 @@ export default function TratamientosLocales({
   // ========================================
 
   const nuevo = () => {
+
     if (colmenas.length === 0) {
+
       Alert.alert(
         'Catálogo no disponible',
         'Debes iniciar sesión y descargar el catálogo oficial para registrar tratamientos.'
@@ -538,9 +555,13 @@ export default function TratamientosLocales({
     }
 
     setEditandoId(null);
+
     setDatos(formularioVacio());
+
     setCantidad('');
+
     setUnidad('mg');
+
     setFormularioVisible(true);
   };
 
@@ -551,7 +572,9 @@ export default function TratamientosLocales({
   const editar = (
     t: TratamientoGuardado
   ) => {
+
     if (!catalogo) {
+
       Alert.alert(
         'Catálogo no disponible',
         'Necesitas el catálogo oficial del usuario para editar este tratamiento.'
@@ -567,6 +590,7 @@ export default function TratamientosLocales({
         'EN_CURSO',
       ].includes(t.estado)
     ) {
+
       Alert.alert(
         'Edición bloqueada',
         'Un tratamiento cerrado o sincronizado no se puede editar.'
@@ -577,10 +601,10 @@ export default function TratamientosLocales({
 
     if (
       !catalogo.colmenas.some(
-        c =>
-          c.codigo_qr === t.codigo_qr
+        c => c.codigo_qr === t.codigo_qr
       )
     ) {
+
       Alert.alert(
         'Colmena no disponible',
         'La colmena no se encuentra en el catálogo oficial.'
@@ -603,22 +627,64 @@ export default function TratamientosLocales({
 
     setDatos({
       codigoQR: t.codigo_qr,
-      inspeccionLocalId:
-        t.inspeccion_local_id,
-      tipoTratamiento:
-        t.tipo_tratamiento,
+      inspeccionLocalId: t.inspeccion_local_id,
+      tipoTratamiento: t.tipo_tratamiento,
       producto: t.producto,
       dosis: t.dosis,
       motivo: t.motivo,
       fechaInicio: t.fecha_inicio,
       fechaFin: t.fecha_fin,
       estado: t.estado,
-      observaciones:
-        t.observaciones,
+      observaciones: t.observaciones,
     });
 
     setEditandoId(t.id);
+
     setFormularioVisible(true);
+  };
+
+  // ========================================
+  // SINCRONIZAR AHORA
+  // ========================================
+
+  const sincronizarAhora = async () => {
+
+    if (bloqueoSincronizacion.current) return;
+
+    bloqueoSincronizacion.current = true;
+
+    setSincronizando(true);
+
+    try {
+
+      const resultado =
+        await ejecutarControlador();
+
+      await recargar();
+
+      Alert.alert(
+        resultado.estado === 'SINCRONIZADO'
+          ? 'Sincronización completada'
+          : 'Estado de sincronización',
+        resultado.mensaje
+      );
+
+    } catch (e) {
+
+      Alert.alert(
+        'Error de sincronización',
+        e instanceof Error
+          ? e.message
+          : 'No se pudo ejecutar la sincronización.'
+      );
+
+    } finally {
+
+      bloqueoSincronizacion.current = false;
+
+      setSincronizando(false);
+
+    }
   };
 
   // ========================================
@@ -626,15 +692,17 @@ export default function TratamientosLocales({
   // ========================================
 
   const guardar = async () => {
+
     if (bloqueo.current) return;
 
     bloqueo.current = true;
+
     setGuardando(true);
 
     try {
+
       const dosis =
-        datos.producto ===
-        'Sin producto (prueba)'
+        datos.producto === 'Sin producto (prueba)'
           ? ''
           : cantidad.trim()
             ? `${cantidad.replace(',', '.')} ${unidad}`
@@ -645,35 +713,85 @@ export default function TratamientosLocales({
         dosis,
       };
 
+      // ------------------------------------
+      // GUARDAR EN SQLITE
+      // ------------------------------------
+
       if (editandoId === null) {
+
         await guardarTratamientoLocal(
           seguros
         );
+
       } else {
+
         await actualizarTratamientoLocal(
           editandoId,
           seguros
         );
+
       }
+
+      // ------------------------------------
+      // INTENTAR SINCRONIZACIÓN
+      // ------------------------------------
+
+      let mensajeSincronizacion =
+        'El tratamiento quedó guardado localmente y pendiente de sincronización.';
+
+      try {
+
+        setSincronizando(true);
+
+        const resultado =
+          await ejecutarControlador();
+
+        mensajeSincronizacion =
+          resultado.mensaje;
+
+      } catch (errorSync) {
+
+        mensajeSincronizacion =
+          errorSync instanceof Error
+            ? `El registro quedó guardado localmente. ${errorSync.message}`
+            : 'El registro quedó guardado localmente. No se pudo comprobar la sincronización.';
+
+      } finally {
+
+        setSincronizando(false);
+
+      }
+
+      // ------------------------------------
+      // ACTUALIZAR HISTORIAL
+      // ------------------------------------
 
       await recargar();
 
       setFormularioVisible(false);
 
+      setEditandoId(null);
+
       Alert.alert(
         'Tratamiento guardado',
-        'Registro local de prueba guardado en SQLite. La sincronización aún no está habilitada.'
+        `El registro se guardó correctamente en SQLite.\n\n${mensajeSincronizacion}`
       );
+
     } catch (e) {
+
       Alert.alert(
         'Datos inválidos',
         e instanceof Error
           ? e.message
           : 'No se pudo guardar.'
       );
+
     } finally {
+
       bloqueo.current = false;
+
       setGuardando(false);
+
     }
   };
 
@@ -687,13 +805,16 @@ export default function TratamientosLocales({
       | 'FINALIZADO'
       | 'CANCELADO'
   ) => {
+
     Alert.alert(
       'Confirmar',
+
       `¿Quieres ${
         estado === 'FINALIZADO'
           ? 'finalizar'
           : 'cancelar'
       } este tratamiento?`,
+
       [
         {
           text: 'Volver',
@@ -701,24 +822,33 @@ export default function TratamientosLocales({
         },
         {
           text: 'Confirmar',
+
           onPress: () => {
+
             void (async () => {
+
               try {
+
                 await cambiarEstadoTratamientoLocal(
                   t.id,
                   estado
                 );
 
                 await recargar();
+
               } catch (e) {
+
                 Alert.alert(
                   'Error',
                   e instanceof Error
                     ? e.message
                     : 'No se pudo actualizar.'
                 );
+
               }
+
             })();
+
           },
         },
       ]
@@ -730,30 +860,26 @@ export default function TratamientosLocales({
   // ========================================
 
   if (formularioVisible) {
-    const hoy = fechaLocalISO();
-    const minimo =
-      moverAnios(hoy, -5);
 
-    const maximo =
-      moverAnios(hoy, 1);
+    const hoy = fechaLocalISO();
+
+    const minimo = moverAnios(hoy, -5);
+
+    const maximo = moverAnios(hoy, 1);
 
     return (
+
       <ScrollView
         style={styles.pantalla}
-        contentContainerStyle={
-          styles.contenido
-        }
+        contentContainerStyle={styles.contenido}
         keyboardShouldPersistTaps="handled"
       >
-        <StatusBar
-          barStyle="dark-content"
-        />
+
+        <StatusBar barStyle="dark-content" />
 
         <Pressable
           disabled={guardando}
-          onPress={() =>
-            setFormularioVisible(false)
-          }
+          onPress={() => setFormularioVisible(false)}
         >
           <Text style={styles.enlace}>
             ‹ Volver a tratamientos
@@ -767,238 +893,195 @@ export default function TratamientosLocales({
         </Text>
 
         <View style={styles.aviso}>
-          <Text
-            style={styles.avisoTexto}
-          >
+          <Text style={styles.avisoTexto}>
             Modo de prueba.
-            Los tipos y productos
-            disponibles son simulados.
-            No representan medicamentos
-            autorizados ni aplicaciones
-            reales.
+            Los tipos y productos disponibles son simulados.
+            No representan medicamentos autorizados ni aplicaciones reales.
           </Text>
         </View>
 
-        <Text
-          style={styles.tituloSeccion}
-        >
+        <Text style={styles.tituloSeccion}>
           Colmena *
         </Text>
 
         {colmenas.map(colmena => {
+
           const apiario =
             catalogo?.apiarios.find(
-              item =>
-                item.id ===
-                colmena.apiario_id
+              item => item.id === colmena.apiario_id
             );
 
           return (
+
             <Opcion
               key={colmena.id}
               etiqueta={
                 `${colmena.codigo} · ${
-                  apiario?.nombre ??
-                  'Apiario sin nombre'
+                  apiario?.nombre ?? 'Apiario sin nombre'
                 }`
               }
               activa={
-                datos.codigoQR ===
-                colmena.codigo_qr
+                datos.codigoQR === colmena.codigo_qr
               }
-              disabled={
-                editandoId !== null
-              }
+              disabled={editandoId !== null}
               onPress={() => {
+
                 setDatos(actual => ({
                   ...actual,
-                  codigoQR:
-                    colmena.codigo_qr,
+                  codigoQR: colmena.codigo_qr,
                   inspeccionLocalId: null,
                 }));
+
               }}
             />
+
           );
         })}
 
         {colmenas.length === 0 && (
+
           <View style={styles.aviso}>
-            <Text
-              style={styles.avisoTexto}
-            >
-              No hay colmenas
-              oficiales disponibles.
-              Inicia sesión para
-              descargar el catálogo.
+            <Text style={styles.avisoTexto}>
+              No hay colmenas oficiales disponibles.
+              Inicia sesión para descargar el catálogo.
             </Text>
           </View>
+
         )}
 
         {editandoId === null &&
           inspeccionesColmena.length > 0 && (
+
             <>
-              <Text
-                style={styles.tituloSeccion}
-              >
+
+              <Text style={styles.tituloSeccion}>
                 Inspección asociada
               </Text>
 
               <Opcion
                 etiqueta="Ninguna"
-                activa={
-                  datos.inspeccionLocalId ===
-                  null
-                }
+                activa={datos.inspeccionLocalId === null}
                 onPress={() =>
-                  cambiar(
-                    'inspeccionLocalId',
-                    null
-                  )
+                  cambiar('inspeccionLocalId', null)
                 }
               />
 
-              {inspeccionesColmena.map(
-                inspeccion => (
-                  <Opcion
-                    key={inspeccion.id}
-                    etiqueta={
-                      `Inspección N.º ${inspeccion.id}`
-                    }
-                    activa={
-                      datos.inspeccionLocalId ===
+              {inspeccionesColmena.map(inspeccion => (
+
+                <Opcion
+                  key={inspeccion.id}
+                  etiqueta={`Inspección N.º ${inspeccion.id}`}
+                  activa={
+                    datos.inspeccionLocalId === inspeccion.id
+                  }
+                  onPress={() =>
+                    cambiar(
+                      'inspeccionLocalId',
                       inspeccion.id
-                    }
-                    onPress={() =>
-                      cambiar(
-                        'inspeccionLocalId',
-                        inspeccion.id
-                      )
-                    }
-                  />
-                )
-              )}
+                    )
+                  }
+                />
+
+              ))}
+
             </>
           )}
 
-        <Text
-          style={styles.tituloSeccion}
-        >
+        <Text style={styles.tituloSeccion}>
           Tipo de tratamiento *
         </Text>
 
-        {TIPOS_TRATAMIENTO.map(
-          tipo => (
-            <Opcion
-              key={tipo}
-              etiqueta={tipo}
-              activa={
-                datos.tipoTratamiento ===
-                tipo
-              }
-              onPress={() =>
-                cambiar(
-                  'tipoTratamiento',
-                  tipo
-                )
-              }
-            />
-          )
-        )}
+        {TIPOS_TRATAMIENTO.map(tipo => (
 
-        <Text
-          style={styles.tituloSeccion}
-        >
+          <Opcion
+            key={tipo}
+            etiqueta={tipo}
+            activa={datos.tipoTratamiento === tipo}
+            onPress={() =>
+              cambiar('tipoTratamiento', tipo)
+            }
+          />
+
+        ))}
+
+        <Text style={styles.tituloSeccion}>
           Producto *
         </Text>
 
-        {PRODUCTOS_TRATAMIENTO.map(
-          producto => (
-            <Opcion
-              key={producto}
-              etiqueta={producto}
-              activa={
-                datos.producto ===
-                producto
+        {PRODUCTOS_TRATAMIENTO.map(producto => (
+
+          <Opcion
+            key={producto}
+            etiqueta={producto}
+            activa={datos.producto === producto}
+            onPress={() => {
+
+              cambiar('producto', producto);
+
+              if (producto === 'Sin producto (prueba)') {
+                setCantidad('');
               }
-              onPress={() => {
-                cambiar(
-                  'producto',
-                  producto
-                );
+
+            }}
+          />
+
+        ))}
+
+        {datos.producto === 'Producto simulado' && (
+
+          <>
+
+            <Text style={styles.tituloSeccion}>
+              Dosis de prueba *
+            </Text>
+
+            <Text style={styles.label}>
+              Cantidad
+            </Text>
+
+            <TextInput
+              style={styles.input}
+              keyboardType="decimal-pad"
+              value={cantidad}
+              onChangeText={valor => {
+
+                const limpio = valor
+                  .replace(/[^0-9.,]/g, '')
+                  .replace(',', '.');
 
                 if (
-                  producto ===
-                  'Sin producto (prueba)'
+                  /^\d{0,6}(?:\.\d{0,3})?$/.test(limpio)
                 ) {
-                  setCantidad('');
+                  setCantidad(limpio);
                 }
+
               }}
+              placeholder="Ejemplo: 5"
             />
-          )
+
+            <Text style={styles.label}>
+              Unidad
+            </Text>
+
+            <View style={styles.fila}>
+
+              {UNIDADES_DOSIS.map(u => (
+
+                <Opcion
+                  key={u}
+                  etiqueta={u}
+                  activa={unidad === u}
+                  onPress={() => setUnidad(u)}
+                />
+
+              ))}
+
+            </View>
+
+          </>
         )}
 
-        {datos.producto ===
-          'Producto simulado' && (
-            <>
-              <Text
-                style={styles.tituloSeccion}
-              >
-                Dosis de prueba *
-              </Text>
-
-              <Text style={styles.label}>
-                Cantidad
-              </Text>
-
-              <TextInput
-                style={styles.input}
-                keyboardType="decimal-pad"
-                value={cantidad}
-                onChangeText={valor => {
-                  const limpio = valor
-                    .replace(
-                      /[^0-9.,]/g,
-                      ''
-                    )
-                    .replace(',', '.');
-
-                  if (
-                    /^\d{0,6}(?:\.\d{0,3})?$/.test(
-                      limpio
-                    )
-                  ) {
-                    setCantidad(limpio);
-                  }
-                }}
-                placeholder="Ejemplo: 5"
-              />
-
-              <Text style={styles.label}>
-                Unidad
-              </Text>
-
-              <View style={styles.fila}>
-                {UNIDADES_DOSIS.map(
-                  u => (
-                    <Opcion
-                      key={u}
-                      etiqueta={u}
-                      activa={
-                        unidad === u
-                      }
-                      onPress={() =>
-                        setUnidad(u)
-                      }
-                    />
-                  )
-                )}
-              </View>
-            </>
-          )}
-
-        <Text
-          style={styles.tituloSeccion}
-        >
+        <Text style={styles.tituloSeccion}>
           Estado *
         </Text>
 
@@ -1008,18 +1091,14 @@ export default function TratamientosLocales({
             'EN_CURSO',
           ] as const
         ).map(estado => (
+
           <Opcion
             key={estado}
-            etiqueta={
-              NOMBRES[estado]
-            }
-            activa={
-              datos.estado === estado
-            }
-            disabled={
-              editandoId !== null
-            }
+            etiqueta={NOMBRES[estado]}
+            activa={datos.estado === estado}
+            disabled={editandoId !== null}
             onPress={() => {
+
               setDatos(actual => ({
                 ...actual,
                 estado,
@@ -1028,8 +1107,10 @@ export default function TratamientosLocales({
                     ? null
                     : actual.fechaFin,
               }));
+
             }}
           />
+
         ))}
 
         <SelectorFecha
@@ -1037,15 +1118,13 @@ export default function TratamientosLocales({
           valor={datos.fechaInicio}
           minimo={minimo}
           maximo={
-            datos.estado ===
-            'PLANIFICADO'
+            datos.estado === 'PLANIFICADO'
               ? maximo
               : hoy
           }
-          deshabilitado={
-            editandoId !== null
-          }
+          deshabilitado={editandoId !== null}
           onChange={fecha => {
+
             if (!fecha) return;
 
             setDatos(actual => ({
@@ -1057,26 +1136,23 @@ export default function TratamientosLocales({
                   ? null
                   : actual.fechaFin,
             }));
+
           }}
         />
 
-        {datos.estado ===
-          'PLANIFICADO' && (
-            <SelectorFecha
-              titulo="Fecha de término planificada"
-              valor={datos.fechaFin}
-              minimo={
-                datos.fechaInicio
-              }
-              maximo={maximo}
-              onChange={fecha =>
-                cambiar(
-                  'fechaFin',
-                  fecha
-                )
-              }
-            />
-          )}
+        {datos.estado === 'PLANIFICADO' && (
+
+          <SelectorFecha
+            titulo="Fecha de término planificada"
+            valor={datos.fechaFin}
+            minimo={datos.fechaInicio}
+            maximo={maximo}
+            onChange={fecha =>
+              cambiar('fechaFin', fecha)
+            }
+          />
+
+        )}
 
         <Text style={styles.label}>
           Motivo
@@ -1112,9 +1188,7 @@ export default function TratamientosLocales({
           multiline
           textAlignVertical="top"
           maxLength={1000}
-          value={
-            datos.observaciones
-          }
+          value={datos.observaciones}
           onChangeText={valor =>
             cambiar(
               'observaciones',
@@ -1127,23 +1201,32 @@ export default function TratamientosLocales({
         <Pressable
           style={[
             styles.botonAncho,
-            guardando &&
-              styles.deshabilitado,
+            guardando && styles.deshabilitado,
           ]}
           disabled={guardando}
-          onPress={() =>
-            void guardar()
-          }
+          onPress={() => void guardar()}
         >
-          <Text
-            style={styles.textoBoton}
-          >
+          <Text style={styles.textoBoton}>
             {guardando
               ? 'Guardando...'
               : 'Guardar tratamiento'}
           </Text>
         </Pressable>
+
+        {sincronizando && (
+
+          <View style={styles.fila}>
+            <ActivityIndicator color="#D99A24" />
+
+            <Text style={styles.texto}>
+              Comprobando sincronización...
+            </Text>
+          </View>
+
+        )}
+
       </ScrollView>
+
     );
   }
 
@@ -1151,20 +1234,24 @@ export default function TratamientosLocales({
   // HISTORIAL
   // ========================================
 
+  const pendientes = tratamientos.filter(
+    t => t.sincronizacion === 'PENDIENTE'
+  ).length;
+
+  const sincronizados = tratamientos.filter(
+    t => t.sincronizacion === 'SINCRONIZADO'
+  ).length;
+
   return (
+
     <ScrollView
       style={styles.pantalla}
-      contentContainerStyle={
-        styles.contenido
-      }
+      contentContainerStyle={styles.contenido}
     >
-      <StatusBar
-        barStyle="dark-content"
-      />
 
-      <Pressable
-        onPress={onVolver}
-      >
+      <StatusBar barStyle="dark-content" />
+
+      <Pressable onPress={onVolver}>
         <Text style={styles.enlace}>
           ‹ Volver al inicio
         </Text>
@@ -1175,37 +1262,64 @@ export default function TratamientosLocales({
       </Text>
 
       <Text style={styles.subtitulo}>
-        Registros locales
+        Historial de tratamientos
       </Text>
 
+      {/* RESUMEN */}
+
       <View style={styles.resumen}>
-        <Text
-          style={styles.resumenNumero}
-        >
+
+        <Text style={styles.resumenNumero}>
           {tratamientos.length} registros
         </Text>
 
         <Text style={styles.texto}>
-          {
-            tratamientos.filter(
-              t =>
-                t.sincronizacion ===
-                'PENDIENTE'
-            ).length
-          } pendientes de sincronización
+          {pendientes} pendientes de sincronización
         </Text>
+
+        <Text style={styles.texto}>
+          {sincronizados} sincronizados con FastAPI
+        </Text>
+
       </View>
+
+      {/* NUEVO TRATAMIENTO */}
 
       <Pressable
         style={styles.botonAncho}
         onPress={nuevo}
       >
-        <Text
-          style={styles.textoBoton}
-        >
+        <Text style={styles.textoBoton}>
           + Registrar tratamiento
         </Text>
       </Pressable>
+
+      {/* SINCRONIZACIÓN MANUAL */}
+
+      <Pressable
+        style={[
+          styles.botonSincronizar,
+          sincronizando && styles.deshabilitado,
+        ]}
+        disabled={sincronizando}
+        onPress={() => void sincronizarAhora()}
+      >
+
+        {sincronizando ? (
+
+          <ActivityIndicator color="#FFFFFF" />
+
+        ) : (
+
+          <Text style={styles.textoBoton}>
+            ↻ Sincronizar ahora
+          </Text>
+
+        )}
+
+      </Pressable>
+
+      {/* BÚSQUEDA */}
 
       <TextInput
         style={styles.input}
@@ -1214,63 +1328,73 @@ export default function TratamientosLocales({
         placeholder="Buscar en el historial"
       />
 
+      {/* FILTROS */}
+
       <View style={styles.fila}>
+
         {(
           [
             'TODOS',
             ...Object.keys(NOMBRES),
           ]
         ).map(estado => (
+
           <Opcion
             key={estado}
             etiqueta={
               estado === 'TODOS'
                 ? 'Todos'
                 : NOMBRES[
-                    estado as
-                      EstadoTratamiento
+                    estado as EstadoTratamiento
                   ]
             }
-            activa={
-              filtro === estado
-            }
-            onPress={() =>
-              setFiltro(estado)
-            }
+            activa={filtro === estado}
+            onPress={() => setFiltro(estado)}
           />
+
         ))}
+
       </View>
 
+      {/* RECARGAR */}
+
       <Pressable
-        onPress={() =>
-          void recargar()
-        }
+        onPress={() => void recargar()}
       >
         <Text style={styles.enlace}>
           Actualizar historial
         </Text>
       </Pressable>
 
+      {/* RESULTADOS */}
+
       {cargando ? (
+
         <ActivityIndicator
           size="large"
           color="#D99A24"
         />
+
       ) : error ? (
+
         <Text style={styles.error}>
           {error}
         </Text>
+
       ) : filtrados.length === 0 ? (
+
         <View style={styles.tarjeta}>
           <Text>
             No hay resultados.
           </Text>
         </View>
+
       ) : (
+
         filtrados.map(t => {
+
           const editable =
-            t.sincronizacion ===
-              'PENDIENTE' &&
+            t.sincronizacion === 'PENDIENTE' &&
             [
               'PLANIFICADO',
               'EN_CURSO',
@@ -1279,21 +1403,24 @@ export default function TratamientosLocales({
 
           const codigoColmena =
             catalogo?.colmenas.find(
-              c =>
-                c.codigo_qr ===
-                t.codigo_qr
+              c => c.codigo_qr === t.codigo_qr
             )?.codigo ?? t.codigo_qr;
 
+          const inspeccionAsociada =
+            t.inspeccion_local_id !== null
+              ? inspecciones.find(
+                  i => i.id === t.inspeccion_local_id
+                )
+              : null;
+
           return (
+
             <View
               key={t.id}
               style={styles.tarjeta}
             >
-              <Text
-                style={
-                  styles.tarjetaTitulo
-                }
-              >
+
+              <Text style={styles.tarjetaTitulo}>
                 {t.tipo_tratamiento}
               </Text>
 
@@ -1301,139 +1428,138 @@ export default function TratamientosLocales({
                 {codigoColmena}
               </Text>
 
+              {/* ESTADO */}
+
               <View style={styles.aviso}>
-                <Text
-                  style={styles.avisoTexto}
-                >
+
+                <Text style={styles.avisoTexto}>
+
                   {NOMBRES[t.estado]}
+
                   {' · '}
-                  {
-                    t.sincronizacion ===
-                    'PENDIENTE'
-                      ? 'Pendiente de envío'
-                      : 'Sincronizado'
-                  }
+
+                  {t.sincronizacion === 'PENDIENTE'
+                    ? 'Pendiente de envío'
+                    : 'Sincronizado'}
+
                 </Text>
+
               </View>
 
+              {/* TRAZABILIDAD */}
+
               <Text style={styles.detalle}>
-                Producto: {
-                  t.producto ||
-                  'Sin registrar'
-                }
+                ID local: {t.id}
               </Text>
 
               <Text style={styles.detalle}>
-                Dosis: {
-                  t.dosis ||
-                  'Sin dosis'
-                }
+                ID servidor: {t.servidor_id ?? 'Pendiente'}
+              </Text>
+
+              {t.inspeccion_local_id !== null && (
+
+                <Text style={styles.detalle}>
+                  Inspección asociada: #{t.inspeccion_local_id}
+
+                  {inspeccionAsociada
+                    ? inspeccionAsociada.estado === 'SINCRONIZADO'
+                      ? ' · Sincronizada'
+                      : ' · Pendiente'
+                    : ' · No encontrada'}
+                </Text>
+
+              )}
+
+              {/* INFORMACIÓN */}
+
+              <Text style={styles.detalle}>
+                Producto: {t.producto || 'Sin registrar'}
               </Text>
 
               <Text style={styles.detalle}>
-                Inicio: {
-                  t.fecha_inicio
-                }
+                Dosis: {t.dosis || 'Sin dosis'}
               </Text>
 
               <Text style={styles.detalle}>
-                Término: {
-                  t.fecha_fin ||
-                  'Sin definir'
-                }
+                Inicio: {t.fecha_inicio}
+              </Text>
+
+              <Text style={styles.detalle}>
+                Término: {t.fecha_fin || 'Sin definir'}
               </Text>
 
               {!!t.motivo && (
-                <Text
-                  style={styles.detalle}
-                >
+
+                <Text style={styles.detalle}>
                   Motivo: {t.motivo}
                 </Text>
+
               )}
 
               {!!t.observaciones && (
-                <Text
-                  style={styles.detalle}
-                >
-                  Observaciones: {
-                    t.observaciones
-                  }
+
+                <Text style={styles.detalle}>
+                  Observaciones: {t.observaciones}
                 </Text>
+
               )}
 
+              {/* ACCIONES */}
+
               {editable && (
-                <View
-                  style={styles.fila}
-                >
+
+                <View style={styles.fila}>
+
                   <Pressable
-                    style={
-                      styles.botonBorde
-                    }
-                    onPress={() =>
-                      editar(t)
-                    }
+                    style={styles.botonBorde}
+                    onPress={() => editar(t)}
                   >
-                    <Text
-                      style={
-                        styles.textoBorde
-                      }
-                    >
+                    <Text style={styles.textoBorde}>
                       Editar
                     </Text>
                   </Pressable>
 
                   <Pressable
-                    style={
-                      styles.botonBorde
-                    }
+                    style={styles.botonBorde}
                     onPress={() =>
-                      cambiarEstado(
-                        t,
-                        'FINALIZADO'
-                      )
+                      cambiarEstado(t, 'FINALIZADO')
                     }
                   >
-                    <Text
-                      style={
-                        styles.textoBorde
-                      }
-                    >
+                    <Text style={styles.textoBorde}>
                       Finalizar
                     </Text>
                   </Pressable>
 
                   <Pressable
-                    style={
-                      styles.botonBorde
-                    }
+                    style={styles.botonBorde}
                     onPress={() =>
-                      cambiarEstado(
-                        t,
-                        'CANCELADO'
-                      )
+                      cambiarEstado(t, 'CANCELADO')
                     }
                   >
-                    <Text
-                      style={
-                        styles.textoBorde
-                      }
-                    >
+                    <Text style={styles.textoBorde}>
                       Cancelar
                     </Text>
                   </Pressable>
+
                 </View>
+
               )}
+
             </View>
+
           );
+
         })
+
       )}
 
       <Text style={styles.subtitulo}>
-        La sincronización automática
-        con FastAPI todavía no
-        está implementada.
+        Los registros pendientes permanecen almacenados
+        localmente hasta que puedan sincronizarse con FastAPI.
       </Text>
+
     </ScrollView>
+
   );
 }
 
@@ -1442,6 +1568,7 @@ export default function TratamientosLocales({
 // ==========================================
 
 const styles = StyleSheet.create({
+
   pantalla: {
     flex: 1,
     backgroundColor: '#F8FAFC',
@@ -1514,6 +1641,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 8,
     marginVertical: 10,
+    alignItems: 'center',
   },
 
   opcion: {
@@ -1550,6 +1678,16 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     alignItems: 'center',
     marginVertical: 14,
+  },
+
+  botonSincronizar: {
+    backgroundColor: '#475569',
+    padding: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginBottom: 14,
+    minHeight: 50,
+    justifyContent: 'center',
   },
 
   textoBoton: {
@@ -1646,4 +1784,5 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 20,
   },
+
 });
