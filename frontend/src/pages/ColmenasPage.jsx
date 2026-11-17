@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Archive, Boxes, Eye, Pencil, Plus, ScanLine } from "lucide-react";
+import { Archive, Boxes, Eye, Layers, Pencil, Plus, ScanLine } from "lucide-react";
 import Boton from "../components/ui/Boton";
 import Confirmar from "../components/ui/Confirmar";
 import { InsigniaDe } from "../components/ui/Insignia";
@@ -8,6 +8,7 @@ import { Cargando, ErrorCarga, EstadoVacio } from "../components/ui/Estados";
 import Paginador from "../components/ui/Paginador";
 import { BarraFiltros, Buscador, EncabezadoModulo } from "../components/ui/Estructura";
 import FormularioColmena from "../components/colmenas/FormularioColmena";
+import FormularioColmenasLote from "../components/colmenas/FormularioColmenasLote";
 import DetalleColmena from "../components/colmenas/DetalleColmena";
 import EscanearColmena from "../components/qr/EscanearColmena";
 import { useAuth } from "../hooks/useAuth";
@@ -35,6 +36,7 @@ export default function ColmenasPage() {
   const [detalleId, setDetalleId] = useState(parametros.detalle ?? null);
   const [escaneando, setEscaneando] = useState(false);
   const [formulario, setFormulario] = useState(null);
+  const [enLote, setEnLote] = useState(false);
   const [aDarDeBaja, setADarDeBaja] = useState(null);
   const [pagina, setPagina] = useState(1);
 
@@ -116,6 +118,11 @@ export default function ColmenasPage() {
         <Boton variante="secundario" icono={ScanLine} onClick={() => setEscaneando(true)}>
           Escanear QR
         </Boton>
+        {esAdmin && (
+          <Boton variante="secundario" icono={Layers} onClick={() => setEnLote(true)}>
+            Crear en lote
+          </Boton>
+        )}
         {esAdmin && (
           <Boton icono={Plus} onClick={() => setFormulario({ apiario_id: filtroApiario || undefined })}>
             Nueva colmena
@@ -259,6 +266,17 @@ export default function ColmenasPage() {
           apiarioInicial={formulario.apiario_id}
           onGuardar={guardar}
           onCerrar={() => setFormulario(null)}
+        />
+      )}
+
+      {enLote && (
+        <FormularioColmenasLote
+          apiarioInicial={filtroApiario || undefined}
+          onTerminar={async ({ creadas }) => {
+            await recargarTodo();
+            avisos.exito(`${creadas.length} ${creadas.length === 1 ? "colmena creada" : "colmenas creadas"}.`);
+          }}
+          onCerrar={() => setEnLote(false)}
         />
       )}
 
