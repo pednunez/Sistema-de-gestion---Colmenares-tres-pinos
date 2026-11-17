@@ -14,6 +14,7 @@ COPY alembic ./alembic
 COPY migrations ./migrations
 
 RUN useradd --create-home --uid 10001 appuser
+RUN chown -R appuser:appuser /app
 USER appuser
 
 EXPOSE 8000
