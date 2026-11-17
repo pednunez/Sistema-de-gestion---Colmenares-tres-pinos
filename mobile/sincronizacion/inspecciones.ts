@@ -598,9 +598,22 @@ export async function sincronizarInspeccionesPendientes():
       'colmenas.db'
     );
 
-    // Solo registros pendientes del usuario.
-    // Los registros antiguos sin propietario
-    // no se envían.
+    // Evitar que la sincronizacion individual
+    // envie inspecciones ligadas a revisiones.
+    const columnas = await db.getAllAsync<{ name: string }>(
+      'PRAGMA table_info(inspecciones_locales)'
+    );
+
+    const tieneVinculoRevision = columnas.some(
+      columna => columna.name === 'sesion_revision_local_id'
+    );
+
+    const filtroRevision = tieneVinculoRevision
+      ? 'AND sesion_revision_local_id IS NULL'
+      : '';
+
+    // Solo registros individuales pendientes
+    // que pertenecen al usuario actual.
     const pendientes =
       await db.getAllAsync<InspeccionGuardada>(
         `SELECT *
@@ -608,6 +621,7 @@ export async function sincronizarInspeccionesPendientes():
          WHERE estado = 'PENDIENTE'
            AND servidor_id IS NULL
            AND usuario_local_id = ?
+           ${filtroRevision}
          ORDER BY id ASC`,
         [sesion.usuario.id]
       );
