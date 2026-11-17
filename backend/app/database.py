@@ -54,6 +54,7 @@ class Settings(BaseSettings):
     # ------------------------------------------------------
 
     JWT_SECRET_KEY: str
+    FRONTEND_URL: str | None = None
 
     JWT_ALGORITHM: str = "HS256"
 
