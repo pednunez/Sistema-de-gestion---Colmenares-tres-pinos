@@ -47,7 +47,6 @@ it("solo ofrece registrar un tratamiento cuando hay signos de enfermedad", async
 it("registra la inspección y el tratamiento asociado a ella", async () => {
   const { d, llamadas } = await abrirConSignos();
   marcarSignos(d);
-  fireEvent.click(within(within(d).getByRole("radiogroup", { name: "Tiras de medicamento aplicadas" })).getByRole("radio", { name: "2" }));
   fireEvent.click(within(within(d).getByRole("radiogroup", { name: "¿Se aplicó un tratamiento?" })).getByRole("radio", { name: "Sí, registrar" }));
 
   // Sin tipo de tratamiento no se guarda.
@@ -57,6 +56,7 @@ it("registra la inspección y el tratamiento asociado a ella", async () => {
 
   fireEvent.change(within(d).getByLabelText(/Tipo de tratamiento/), { target: { value: "Control de varroa" } });
   fireEvent.change(within(d).getByLabelText(/^Producto/), { target: { value: "Amitraz" } });
+  fireEvent.change(within(d).getByLabelText(/^Dosis/), { target: { value: "2 tiras" } });
   enviar(d);
 
   await screen.findByText("Inspección de COL-001 registrada. Se registró el tratamiento.");

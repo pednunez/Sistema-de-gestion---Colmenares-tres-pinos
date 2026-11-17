@@ -13,7 +13,7 @@ const OPCIONES_ESTADO = ["EN_CURSO", "FINALIZADO"].map((valor) => ({ valor, text
 
 // Registrar un tratamiento desde la inspección cuando hay signos de enfermedad.
 // Queda en Tratamientos asociado a esta inspección.
-export default function TratamientoEnInspeccion({ registrar, tratamiento, tiras, error, onRegistrar, onCambiar }) {
+export default function TratamientoEnInspeccion({ registrar, tratamiento, error, onRegistrar, onCambiar }) {
   const idSugerencias = useId();
   const { datos } = useDatos();
   const tiposUsados = useMemo(
@@ -67,8 +67,7 @@ export default function TratamientoEnInspeccion({ registrar, tratamiento, tiras,
               etiqueta="Dosis"
               value={tratamiento.dosis}
               onChange={(e) => cambiar("dosis", e.target.value)}
-              placeholder={tiras ? `${tiras} ${tiras === 1 ? "tira" : "tiras"}` : undefined}
-              ayuda={tiras ? "Si la dejas vacía, se usan las tiras indicadas arriba." : undefined}
+              placeholder="Por ejemplo: 2 tiras"
               maxLength={100}
             />
           </div>

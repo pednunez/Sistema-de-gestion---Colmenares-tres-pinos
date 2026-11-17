@@ -123,11 +123,12 @@ export default function DetalleInspeccion({ inspeccion, puedeEditar, onEditar, o
                 <Insignia tono="rojo">Sí</Insignia>
               </Dato>
               <Dato nombre="Enfermedad observada">{inspeccion.enfermedad_observada || "Sin detallar"}</Dato>
-              <Dato nombre="Tiras de medicamento">
-                {inspeccion.tiras_medicamento == null
-                  ? "Sin registrar"
-                  : `${inspeccion.tiras_medicamento} ${inspeccion.tiras_medicamento === 1 ? "tira" : "tiras"}`}
-              </Dato>
+              {/* Solo inspecciones antiguas: hoy lo aplicado se registra en el tratamiento. */}
+              {inspeccion.tiras_medicamento != null && (
+                <Dato nombre="Tiras de medicamento">
+                  {`${inspeccion.tiras_medicamento} ${inspeccion.tiras_medicamento === 1 ? "tira" : "tiras"}`}
+                </Dato>
+              )}
             </dl>
           ) : (
             <p className="text-sm text-slate-600">Sin signos de enfermedad.</p>
