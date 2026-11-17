@@ -86,20 +86,19 @@ it("muestra y edita los campos, conservando un valor de miel antiguo", async () 
   expect(patch.cuerpo.colmena_id).toBeUndefined();
 });
 
-it("pide las tiras de medicamento solo con signos de enfermedad", async () => {
+it("con signos de enfermedad pide qué se observó, sin preguntar por tiras de medicamento", async () => {
   await abrir();
   fireEvent.click(await screen.findByRole("button", { name: "Registrar inspección" }));
   const d = screen.getByRole("dialog");
   fireEvent.change(within(d).getByLabelText(/^Apiario/), { target: { value: "1" } });
   fireEvent.change(within(d).getByLabelText(/^Colmena/), { target: { value: "1" } });
   fireEvent.click(within(d).getByRole("radio", { name: "Requiere revisión" }));
-  expect(within(d).queryByRole("radiogroup", { name: "Tiras de medicamento aplicadas" })).toBeNull();
   const signos = within(d).getByRole("radiogroup", { name: "¿Hay signos de enfermedad?" });
   fireEvent.click(within(signos).getByRole("radio", { name: "Sí" }));
   fireEvent.change(within(d).getByLabelText(/Qué se observó/), { target: { value: "Varroa" } });
-  const tiras = within(d).getByRole("radiogroup", { name: "Tiras de medicamento aplicadas" });
-  fireEvent.click(within(tiras).getByRole("radio", { name: "2" }));
+  // Lo aplicado (por ejemplo, las tiras) se registra en el tratamiento, más abajo.
+  expect(within(d).queryByText("Tiras de medicamento aplicadas")).toBeNull();
   fireEvent.click(within(d).getAllByRole("button", { name: "Registrar inspección" }).at(-1));
   await waitFor(() => expect(llamadas.find((l) => l.metodo === "POST")).toBeTruthy());
-  expect(llamadas.find((l) => l.metodo === "POST").cuerpo).toMatchObject({ signos_enfermedad: true, enfermedad_observada: "Varroa", tiras_medicamento: 2 });
+  expect(llamadas.find((l) => l.metodo === "POST").cuerpo).toMatchObject({ signos_enfermedad: true, enfermedad_observada: "Varroa", tiras_medicamento: null });
 });

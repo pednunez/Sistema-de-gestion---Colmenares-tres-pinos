@@ -21,11 +21,11 @@ export function validarTratamiento(t) {
 }
 
 // Datos para POST /tratamientos/. La colmena y la inspección se agregan al guardar.
-export function tratamientoParaEnviar(t, { motivo, tiras }) {
+export function tratamientoParaEnviar(t, { motivo }) {
   return {
     tipo_tratamiento: t.tipo_tratamiento.trim(),
     producto: textoONulo(t.producto),
-    dosis: textoONulo(t.dosis) ?? (tiras ? `${tiras} ${tiras === 1 ? "tira" : "tiras"}` : null),
+    dosis: textoONulo(t.dosis),
     motivo: textoONulo(motivo),
     fecha_inicio: hoyISO(),
     fecha_fin: t.estado === "FINALIZADO" ? t.fecha_fin || hoyISO() : t.fecha_fin || null,

@@ -32,14 +32,6 @@ const OPCIONES_SI_NO = [
 
 const OPCIONES_NIVEL = [...opciones(NIVEL), { valor: null, texto: "No revisado" }];
 
-// Tiras de medicamento aplicadas cuando hay signos de enfermedad.
-const OPCIONES_TIRAS = [
-  { valor: 1, texto: "1" },
-  { valor: 2, texto: "2" },
-  { valor: 3, texto: "3" },
-  { valor: null, texto: "No se aplicaron" },
-];
-
 // Nombre de cada campo para el resumen de errores al pie del formulario.
 const NOMBRES_CAMPO = {
   apiario_id: "Apiario",
@@ -97,6 +89,8 @@ export default function FormularioInspeccion({
     alimentacion_suministrada: inspeccion?.alimentacion_suministrada ?? "",
     signos_enfermedad: inspeccion?.signos_enfermedad ?? false,
     enfermedad_observada: inspeccion?.enfermedad_observada ?? "",
+    // Ya no se pide en el formulario: lo aplicado se registra en el tratamiento.
+    // Se conserva el valor de inspecciones antiguas al editarlas.
     tiras_medicamento: inspeccion?.tiras_medicamento ?? null,
     // Tratamiento nuevo que se registra junto con la inspección.
     registrarTratamiento: false,
@@ -186,7 +180,7 @@ export default function FormularioInspeccion({
       };
       const nuevoTratamiento =
         v.signos_enfermedad && v.registrarTratamiento
-          ? tratamientoParaEnviar(v.tratamiento, { motivo: v.enfermedad_observada, tiras: v.tiras_medicamento })
+          ? tratamientoParaEnviar(v.tratamiento, { motivo: v.enfermedad_observada })
           : null;
       if (esEdicion) return onGuardar(datos, 0, v.finalizar, nuevoTratamiento);
 
@@ -349,19 +343,9 @@ export default function FormularioInspeccion({
         )}
 
         {valores.signos_enfermedad && (
-          <Segmentado
-            etiqueta="Tiras de medicamento aplicadas"
-            opciones={OPCIONES_TIRAS}
-            valor={valores.tiras_medicamento}
-            onCambiar={(valor) => cambiar("tiras_medicamento", valor)}
-          />
-        )}
-
-        {valores.signos_enfermedad && (
           <TratamientoEnInspeccion
             registrar={valores.registrarTratamiento}
             tratamiento={valores.tratamiento}
-            tiras={valores.tiras_medicamento}
             error={errores.tratamiento}
             onRegistrar={(valor) => cambiar("registrarTratamiento", valor)}
             onCambiar={(tratamiento) => cambiar("tratamiento", tratamiento)}
