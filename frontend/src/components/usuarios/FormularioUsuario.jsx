@@ -55,7 +55,7 @@ export default function FormularioUsuario({ usuario, onGuardar, onCerrar }) {
     <button
       type="button"
       onClick={() => setVerClave(!verClave)}
-      className="justify-self-start text-sm font-medium text-slate-600 hover:text-slate-900"
+      className="justify-self-start text-sm font-medium text-bosque-600 hover:text-bosque-900"
     >
       <span className="flex items-center gap-1.5">
         {verClave ? <EyeOff size={16} /> : <Eye size={16} />}
@@ -105,7 +105,7 @@ export default function FormularioUsuario({ usuario, onGuardar, onCerrar }) {
           valor={valores.rol}
           onCambiar={(valor) => cambiar("rol", valor)}
         />
-        <p className="-mt-2 text-sm text-slate-500">
+        <p className="-mt-2 text-sm text-bosque-500">
           {valores.rol === "ADMIN"
             ? "Acceso completo: usuarios, apiarios, colmenas y auditoría."
             : "Registra inspecciones, tratamientos y transferencias en terreno."}

@@ -61,9 +61,9 @@ export default function UsuariosPage() {
       {filtrados.length === 0 ? (
         <EstadoVacio icono={Users} titulo="No hay usuarios con esa búsqueda" />
       ) : (
-        <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+        <div className="overflow-x-auto rounded-2xl border border-bosque-200 bg-white">
           <table className="w-full min-w-[680px] text-sm">
-            <thead className="border-b border-slate-200 bg-slate-50 text-left text-slate-500">
+            <thead className="border-b border-bosque-200 bg-bosque-50 text-left text-bosque-500">
               <tr>
                 <th className="p-4 font-medium">Nombre</th>
                 <th className="p-4 font-medium">Correo</th>
@@ -78,7 +78,7 @@ export default function UsuariosPage() {
               {filtrados.map((u) => {
                 const esPropio = u.id === sesion.id;
                 return (
-                  <tr key={u.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
+                  <tr key={u.id} className="border-b border-bosque-100 last:border-0 hover:bg-bosque-50">
                     <td className="p-4 font-semibold">
                       {nombreCompleto(u)}
                       {esPropio && (
@@ -87,11 +87,11 @@ export default function UsuariosPage() {
                         </span>
                       )}
                     </td>
-                    <td className="p-4 text-slate-600">{u.email}</td>
+                    <td className="p-4 text-bosque-600">{u.email}</td>
                     <td className="p-4">
                       <InsigniaDe mapa={ROL} valor={u.rol} />
                     </td>
-                    <td className="p-4 text-slate-600">{formatearFecha(u.fecha_creacion)}</td>
+                    <td className="p-4 text-bosque-600">{formatearFecha(u.fecha_creacion)}</td>
                     <td className="p-4">
                       <div className="flex justify-end gap-1">
                         <Boton variante="fantasma" tamano="icono" icono={Pencil} aria-label={`Editar a ${nombreCompleto(u)}`} title="Editar" onClick={() => setFormulario(u)} />

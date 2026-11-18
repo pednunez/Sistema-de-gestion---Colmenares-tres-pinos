@@ -8,6 +8,6 @@ export const ESTADOS_GRAFICO = [
   { clave: "DONANTE", texto: "Donante", color: "#8b5cf6" },
   { clave: "DEBIL", texto: "Débil", color: "#f59e0b" },
   { clave: "REQUIERE_REVISION", texto: "Requiere revisión", color: "#dc2626" },
-  { clave: "ANTERIOR", texto: "Escala anterior", color: "#64748b", soloSiHay: true },
-  { clave: "SIN", texto: "Sin inspección", color: "#cbd5e1" },
+  { clave: "ANTERIOR", texto: "Escala anterior", color: "#65705f", soloSiHay: true },
+  { clave: "SIN", texto: "Sin inspección", color: "#c9ccbd" },
 ];

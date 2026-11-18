@@ -25,7 +25,7 @@ export default function TratamientoEnInspeccion({ registrar, tratamiento, error,
   return (
     <div
       data-invalido={error ? "true" : undefined}
-      className={`grid gap-4 rounded-2xl border p-4 ${error ? "border-red-400 bg-red-50/40" : "border-slate-200"}`}
+      className={`grid gap-4 rounded-2xl border p-4 ${error ? "border-red-400 bg-red-50/40" : "border-bosque-200"}`}
     >
       <Segmentado
         etiqueta="¿Se aplicó un tratamiento?"
@@ -37,8 +37,8 @@ export default function TratamientoEnInspeccion({ registrar, tratamiento, error,
 
       {registrar && (
         <>
-          <p className="flex items-start gap-2 text-sm text-slate-600">
-            <Pill size={16} className="mt-0.5 shrink-0 text-amber-600" aria-hidden="true" />
+          <p className="flex items-start gap-2 text-sm text-bosque-600">
+            <Pill size={16} className="mt-0.5 shrink-0 text-miel-600" aria-hidden="true" />
             Se registra en Tratamientos con fecha de hoy y asociado a esta inspección.
           </p>
           <Entrada

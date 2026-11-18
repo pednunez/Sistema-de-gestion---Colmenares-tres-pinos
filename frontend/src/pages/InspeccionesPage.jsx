@@ -132,7 +132,7 @@ export default function InspeccionesPage() {
           {filtradas.slice(0, visibles).map((inspeccion) => {
             const colmena = indices.colmenas.get(inspeccion.colmena_id);
             return (
-              <article key={inspeccion.id} className="flex flex-col rounded-2xl border border-slate-200 bg-white p-5">
+              <article key={inspeccion.id} className="flex flex-col rounded-2xl border border-bosque-200 bg-white p-5">
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <p className="text-lg font-semibold">
@@ -143,9 +143,9 @@ export default function InspeccionesPage() {
                       >
                         {codigoColmena(inspeccion.colmena_id)}
                       </button>
-                      {colmena && <span className="ml-2 text-sm font-normal text-slate-500">{nombreApiario(colmena.apiario_id)}</span>}
+                      {colmena && <span className="ml-2 text-sm font-normal text-bosque-500">{nombreApiario(colmena.apiario_id)}</span>}
                     </p>
-                    <p className="text-sm text-slate-500">
+                    <p className="text-sm text-bosque-500">
                       {formatearFechaHora(inspeccion.fecha_inspeccion)} · {nombreUsuario(inspeccion.usuario_id)}
                       {inspeccion.cantidad_marcos != null && ` · ${inspeccion.cantidad_marcos} marcos`}
                     </p>
@@ -166,23 +166,23 @@ export default function InspeccionesPage() {
                   <div className="mb-3">
                     <Insignia tono="rojo">Signos de enfermedad</Insignia>
                     {inspeccion.enfermedad_observada && (
-                      <span className="ml-2 text-sm text-slate-700">{inspeccion.enfermedad_observada}</span>
+                      <span className="ml-2 text-sm text-bosque-700">{inspeccion.enfermedad_observada}</span>
                     )}
                     {inspeccion.tiras_medicamento != null && (
-                      <span className="ml-2 text-sm text-slate-700">
+                      <span className="ml-2 text-sm text-bosque-700">
                         · {inspeccion.tiras_medicamento} {inspeccion.tiras_medicamento === 1 ? "tira" : "tiras"} de medicamento
                       </span>
                     )}
                   </div>
                 )}
                 {inspeccion.alimentacion_suministrada && (
-                  <p className="mb-3 text-sm text-slate-600">
-                    <span className="font-medium text-slate-800">Alimentación:</span> {inspeccion.alimentacion_suministrada}
+                  <p className="mb-3 text-sm text-bosque-600">
+                    <span className="font-medium text-bosque-800">Alimentación:</span> {inspeccion.alimentacion_suministrada}
                   </p>
                 )}
-                {inspeccion.observaciones && <p className="mb-3 line-clamp-2 text-sm text-slate-600">{inspeccion.observaciones}</p>}
+                {inspeccion.observaciones && <p className="mb-3 line-clamp-2 text-sm text-bosque-600">{inspeccion.observaciones}</p>}
 
-                <div className="mt-auto flex flex-wrap gap-2 border-t border-slate-100 pt-3">
+                <div className="mt-auto flex flex-wrap gap-2 border-t border-bosque-100 pt-3">
                   <Boton
                     variante="fantasma"
                     tamano="sm"

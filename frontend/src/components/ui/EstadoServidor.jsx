@@ -3,9 +3,9 @@ import { useEstadoServidor } from "../../hooks/useEstadoServidor";
 import { ESTADO_SERVIDOR } from "../../services/estadoService";
 
 const PRESENTACION = {
-  [ESTADO_SERVIDOR.VERIFICANDO]: { texto: "Verificando servidor", punto: "bg-slate-400 animate-pulse", caja: "border-slate-200 text-slate-600" },
+  [ESTADO_SERVIDOR.VERIFICANDO]: { texto: "Verificando servidor", punto: "bg-bosque-400 animate-pulse", caja: "border-bosque-200 text-bosque-600" },
   [ESTADO_SERVIDOR.EN_LINEA]: { texto: "Servidor en línea", punto: "bg-emerald-500", caja: "border-emerald-200 text-emerald-700" },
-  [ESTADO_SERVIDOR.CON_PROBLEMAS]: { texto: "Servidor con problemas", punto: "bg-amber-500", caja: "border-amber-300 bg-amber-50 text-amber-800" },
+  [ESTADO_SERVIDOR.CON_PROBLEMAS]: { texto: "Servidor con problemas", punto: "bg-miel-500", caja: "border-miel-300 bg-miel-50 text-miel-800" },
   [ESTADO_SERVIDOR.SIN_CONEXION]: { texto: "Sin conexión con el servidor", punto: "bg-red-500", caja: "border-red-300 bg-red-50 text-red-700" },
 };
 
@@ -23,7 +23,7 @@ export default function EstadoServidor() {
       onClick={verificar}
       title={detalle}
       aria-label={detalle}
-      className={`flex min-h-11 items-center gap-2 rounded-xl border bg-white px-3 text-sm transition hover:bg-slate-50 ${caja}`}
+      className={`flex min-h-11 items-center gap-2 rounded-xl border bg-white px-3 text-sm transition hover:bg-bosque-50 ${caja}`}
     >
       <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${punto}`} aria-hidden="true" />
       {/* En pantallas chicas solo se ve el punto, salvo que haya una falla. */}

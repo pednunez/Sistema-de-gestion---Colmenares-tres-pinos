@@ -146,12 +146,12 @@ export default function ColmenasPage() {
           placeholder="Todos los estados"
           opciones={opciones(ESTADO_COLMENA, ["BAJA"])}
         />
-        <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-xl border border-slate-300 bg-white px-3 text-sm">
+        <label className="flex min-h-11 cursor-pointer items-center gap-3 rounded-xl border border-bosque-300 bg-white px-3 text-sm">
           <input
             type="checkbox"
             checked={soloAtencion}
             onChange={(e) => conFiltro(setSoloAtencion)(e.target.checked)}
-            className="h-4 w-4 accent-amber-500"
+            className="h-4 w-4 accent-miel-500"
           />
           Solo las que requieren atención
         </label>
@@ -172,9 +172,9 @@ export default function ColmenasPage() {
           texto={datos.colmenas.length === 0 ? "Registra la primera colmena para comenzar." : "Ajusta o limpia los filtros."}
         />
       ) : (
-        <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+        <div className="overflow-x-auto rounded-2xl border border-bosque-200 bg-white">
           <table className="w-full min-w-[720px] text-sm">
-            <thead className="border-b border-slate-200 bg-slate-50 text-left text-slate-500">
+            <thead className="border-b border-bosque-200 bg-bosque-50 text-left text-bosque-500">
               <tr>
                 <th className="p-4 font-medium">Código</th>
                 <th className="p-4 font-medium">Apiario</th>
@@ -190,17 +190,17 @@ export default function ColmenasPage() {
               {visibles.map((colmena) => {
                 const ultima = ultimas.get(colmena.id);
                 return (
-                  <tr key={colmena.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
+                  <tr key={colmena.id} className="border-b border-bosque-100 last:border-0 hover:bg-bosque-50">
                     <td className="p-4">
                       <button
                         type="button"
                         onClick={() => setDetalleId(colmena.id)}
-                        className="font-semibold text-slate-900 underline-offset-2 hover:underline"
+                        className="font-semibold text-bosque-900 underline-offset-2 hover:underline"
                       >
                         {colmena.codigo}
                       </button>
                       {conAlerta.has(colmena.id) && (
-                        <span className="ml-2 inline-block h-2 w-2 rounded-full bg-amber-500" title="Requiere atención" />
+                        <span className="ml-2 inline-block h-2 w-2 rounded-full bg-miel-500" title="Requiere atención" />
                       )}
                     </td>
                     <td className="p-4">{nombreApiario(colmena.apiario_id)}</td>
@@ -211,13 +211,13 @@ export default function ColmenasPage() {
                       {ultima ? (
                         <span className="flex items-center gap-2">
                           <InsigniaDe mapa={ESTADO_GENERAL_TODOS} valor={ultima.estado_general} />
-                          <span className="text-slate-500">{formatearFecha(ultima.fecha_inspeccion)}</span>
+                          <span className="text-bosque-500">{formatearFecha(ultima.fecha_inspeccion)}</span>
                         </span>
                       ) : (
-                        <span className="text-slate-400">Sin inspecciones</span>
+                        <span className="text-bosque-400">Sin inspecciones</span>
                       )}
                     </td>
-                    <td className="p-4 text-slate-600">{formatearFecha(colmena.fecha_instalacion)}</td>
+                    <td className="p-4 text-bosque-600">{formatearFecha(colmena.fecha_instalacion)}</td>
                     <td className="p-4">
                       <div className="flex justify-end gap-1">
                         <Boton variante="fantasma" tamano="icono" icono={Eye} aria-label={`Ver ${colmena.codigo}`} title="Ver detalle" onClick={() => setDetalleId(colmena.id)} />

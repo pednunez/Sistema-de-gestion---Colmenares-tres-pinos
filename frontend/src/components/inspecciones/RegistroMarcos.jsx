@@ -64,14 +64,14 @@ export default function RegistroMarcos({
     <section
       aria-labelledby={idTitulo}
       data-invalido={error ? "true" : undefined}
-      className={`rounded-2xl border p-4 ${error ? "border-red-400 bg-red-50/40" : "border-slate-200"}`}
+      className={`rounded-2xl border p-4 ${error ? "border-red-400 bg-red-50/40" : "border-bosque-200"}`}
     >
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h3 id={idTitulo} className="font-semibold text-slate-900">
+          <h3 id={idTitulo} className="font-semibold text-bosque-900">
             {titulo}
           </h3>
-          <p className="text-sm text-slate-500">
+          <p className="text-sm text-bosque-500">
             {sinRegistrar === caja.length
               ? "Sin registrar"
               : [
@@ -100,9 +100,9 @@ export default function RegistroMarcos({
       {/* En pantallas anchas, del 1 al 5 a la izquierda y del 6 al 10 a la derecha. */}
       <ol className="grid gap-x-6 gap-y-2 lg:grid-flow-col lg:grid-cols-2 lg:grid-rows-[repeat(5,auto)]">
         {caja.map((marco) => (
-          <li key={marco.numero} className="grid content-start gap-2 border-t border-slate-100 pt-2">
+          <li key={marco.numero} className="grid content-start gap-2 border-t border-bosque-100 pt-2">
             <div className="grid grid-cols-[4.75rem_1fr_auto] items-center gap-2">
-              <span className="text-sm font-medium text-slate-700">Marco {marco.numero}</span>
+              <span className="text-sm font-medium text-bosque-700">Marco {marco.numero}</span>
               <Seleccion
                 aria-label={`Contenido del marco ${marco.numero} de ${titulo}`}
                 value={marco.contenido}
@@ -182,7 +182,7 @@ function DestinoMarco({ marco, titulo, colmenaId, apiarioId, ubicacion, plan, er
     />
   );
   const hacia = (
-    <span className="flex items-center justify-end gap-1 text-sm text-amber-900">
+    <span className="flex items-center justify-end gap-1 text-sm text-miel-900">
       <ArrowRight size={15} aria-hidden="true" />
       Hacia
     </span>
@@ -190,7 +190,7 @@ function DestinoMarco({ marco, titulo, colmenaId, apiarioId, ubicacion, plan, er
 
   if (!conBodega) {
     return (
-      <div className="grid grid-cols-[4.75rem_1fr_auto] items-center gap-2 rounded-xl bg-amber-50 py-1.5 pr-1.5">
+      <div className="grid grid-cols-[4.75rem_1fr_auto] items-center gap-2 rounded-xl bg-miel-50 py-1.5 pr-1.5">
         {hacia}
         {selector}
         {quitar}
@@ -205,8 +205,8 @@ function DestinoMarco({ marco, titulo, colmenaId, apiarioId, ubicacion, plan, er
       role="radio"
       aria-checked={activa}
       onClick={() => onCambiar(cambios)}
-      className={`inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg px-3 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${
-        activa ? "bg-amber-400 text-slate-950 shadow-sm" : "text-slate-700 hover:bg-white"
+      className={`inline-flex min-h-9 items-center justify-center gap-1.5 rounded-lg px-3 text-sm font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-miel-400 ${
+        activa ? "bg-miel-400 text-bosque-950 shadow-sm" : "text-bosque-700 hover:bg-white"
       }`}
     >
       <Icono size={15} aria-hidden="true" />
@@ -215,12 +215,12 @@ function DestinoMarco({ marco, titulo, colmenaId, apiarioId, ubicacion, plan, er
   );
 
   return (
-    <div className="grid grid-cols-[4.75rem_1fr_auto] items-center gap-2 rounded-xl bg-amber-50 py-1.5 pr-1.5">
+    <div className="grid grid-cols-[4.75rem_1fr_auto] items-center gap-2 rounded-xl bg-miel-50 py-1.5 pr-1.5">
       {hacia}
       <div
         role="radiogroup"
         aria-label={`Destino del marco ${marco.numero} de ${titulo}`}
-        className="grid grid-cols-2 gap-1 rounded-xl border border-amber-200 bg-amber-100/60 p-1"
+        className="grid grid-cols-2 gap-1 rounded-xl border border-miel-200 bg-miel-100/60 p-1"
       >
         {opcion(!aBodega, Boxes, "Colmena", { destino: aBodega ? "" : marco.destino })}
         {opcion(aBodega, Warehouse, "Bodega", { destino: DESTINO_BODEGA })}
@@ -228,7 +228,7 @@ function DestinoMarco({ marco, titulo, colmenaId, apiarioId, ubicacion, plan, er
       {quitar}
       <span />
       {aBodega ? (
-        <p className="flex items-start gap-1 text-xs text-amber-800">
+        <p className="flex items-start gap-1 text-xs text-miel-800">
           <Warehouse size={13} className="mt-px shrink-0" aria-hidden="true" />
           <span>Entra al stock como «{texto(CONTENIDO_MARCO, marco.contenido)}» al guardar la inspección.</span>
         </p>
@@ -246,12 +246,12 @@ function DestinoMarco({ marco, titulo, colmenaId, apiarioId, ubicacion, plan, er
 function CapacidadDestino({ marco, titulo, ubicacion, colmenaId, info, error, onCambiar }) {
   const { codigoColmena } = useDatos();
   const destino = codigoColmena(Number(marco.destino));
-  const nota = "text-xs text-slate-600";
+  const nota = "text-xs text-bosque-600";
 
   if (!info || info.estado === CARGANDO) return <p className={nota}>Revisando cuántos marcos tiene {destino}…</p>;
   if (info.estado === SIN_REGISTRO) {
     return (
-      <p className="text-xs font-medium text-amber-900">
+      <p className="text-xs font-medium text-miel-900">
         {destino} todavía no tiene sus marcos registrados. Inspecciónala primero, con sus 10 marcos por piso, para
         poder transferirle marcos; mientras tanto, elige otra colmena.
       </p>
@@ -275,7 +275,7 @@ function CapacidadDestino({ marco, titulo, ubicacion, colmenaId, info, error, on
           aria-label={`Piso de ${destino} que recibe el marco ${marco.numero} de ${titulo}`}
           className="flex flex-wrap items-center gap-1 text-xs"
         >
-          <span className="text-slate-600">Va a:</span>
+          <span className="text-bosque-600">Va a:</span>
           {[
             [PISO_CAMARA, "Cámara de cría"],
             [PISO_ALZA, "Alza"],
@@ -288,8 +288,8 @@ function CapacidadDestino({ marco, titulo, ubicacion, colmenaId, info, error, on
               onClick={() => onCambiar({ pisoDestino: valor, desplazado: "" })}
               className={`rounded-lg border px-2 py-1 font-medium ${
                 info.piso === valor
-                  ? "border-amber-400 bg-amber-100 text-slate-950"
-                  : "border-slate-200 bg-white text-slate-700"
+                  ? "border-miel-400 bg-miel-100 text-bosque-950"
+                  : "border-bosque-200 bg-white text-bosque-700"
               }`}
             >
               {textoPiso}
@@ -297,7 +297,7 @@ function CapacidadDestino({ marco, titulo, ubicacion, colmenaId, info, error, on
           ))}
         </div>
       )}
-      <p className={info.requiereDesplazado ? "text-xs font-medium text-amber-900" : nota}>
+      <p className={info.requiereDesplazado ? "text-xs font-medium text-miel-900" : nota}>
         {nombrePiso} de {destino}: {info.ocupados} de {MARCOS_POR_CAJA} marcos.
         {!info.requiereDesplazado
           ? " Hay espacio."
@@ -319,7 +319,7 @@ function CapacidadDestino({ marco, titulo, ubicacion, colmenaId, info, error, on
             }))}
           />
           {elegido && (
-            <p className="text-xs text-amber-800">
+            <p className="text-xs text-miel-800">
               {destinoDelDesplazado(elegido.contenido) === "BODEGA"
                 ? `El marco ${elegido.numero} de ${destino} se retira a bodega.`
                 : `Intercambio: el marco ${elegido.numero} de ${destino} vuelve a ${codigoColmena(Number(colmenaId))}, al marco ${marco.numero} ${pisoOrigen}.`}

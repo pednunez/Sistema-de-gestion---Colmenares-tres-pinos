@@ -17,14 +17,14 @@ export default function PanelReparaciones({ items, puedeEditar, onAccion }) {
     <Panel titulo="Dañado y en reparación" descripcion="El material dañado se lleva a reparar; si no tiene arreglo, va a merma.">
       <div id="reparaciones" className="scroll-mt-24" />
       {items.length === 0 ? (
-        <div className="flex items-center gap-3 px-5 py-6 text-sm text-slate-600">
+        <div className="flex items-center gap-3 px-5 py-6 text-sm text-bosque-600">
           <CheckCircle2 className="text-emerald-500" aria-hidden="true" />
           No hay material dañado ni en reparación.
         </div>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full min-w-[720px] text-sm">
-            <thead className="border-b border-slate-200 bg-slate-50 text-left text-slate-500">
+            <thead className="border-b border-bosque-200 bg-bosque-50 text-left text-bosque-500">
               <tr>
                 <th className="p-4 font-medium">Material</th>
                 <th className="p-4 font-medium">Dañado (por reparar)</th>
@@ -35,11 +35,11 @@ export default function PanelReparaciones({ items, puedeEditar, onAccion }) {
               {items.map((item) => {
                 const nombre = (item.textoDanado ?? item.texto).toLowerCase();
                 return (
-                  <tr key={item.material} className="border-b border-slate-100 last:border-0">
+                  <tr key={item.material} className="border-b border-bosque-100 last:border-0">
                     <td className="p-4 font-medium">{item.textoDanado ?? item.texto}</td>
                     <td className="p-4">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className={item.danado > 0 ? "min-w-20 font-semibold text-red-600" : "min-w-20 text-slate-400"}>
+                        <span className={item.danado > 0 ? "min-w-20 font-semibold text-red-600" : "min-w-20 text-bosque-400"}>
                           {cantidadCon(item.danado, item)}
                         </span>
                         {item.danado > 0 && (
@@ -52,7 +52,7 @@ export default function PanelReparaciones({ items, puedeEditar, onAccion }) {
                     </td>
                     <td className="p-4">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className={item.enReparacion > 0 ? "min-w-20 font-semibold text-amber-700" : "min-w-20 text-slate-400"}>
+                        <span className={item.enReparacion > 0 ? "min-w-20 font-semibold text-miel-700" : "min-w-20 text-bosque-400"}>
                           {cantidadCon(item.enReparacion, item)}
                         </span>
                         {item.enReparacion > 0 && (

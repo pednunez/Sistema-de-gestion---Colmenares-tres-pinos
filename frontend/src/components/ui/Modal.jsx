@@ -33,7 +33,7 @@ export default function Modal({ titulo, descripcion, onCerrar, pie, ancho = "sm:
 
   return createPortal(
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-slate-950/50 sm:items-center sm:p-4 print:hidden"
+      className="fixed inset-0 z-50 flex items-end justify-center bg-bosque-950/50 sm:items-center sm:p-4 print:hidden"
       onMouseDown={(evento) => {
         if (evento.target === evento.currentTarget) cerrarRef.current?.();
       }}
@@ -46,18 +46,18 @@ export default function Modal({ titulo, descripcion, onCerrar, pie, ancho = "sm:
         aria-labelledby={idTitulo}
         className={`flex max-h-[92vh] w-full flex-col rounded-t-2xl bg-white shadow-xl outline-none sm:rounded-2xl ${ancho}`}
       >
-        <div className="flex items-start justify-between gap-4 border-b border-slate-200 px-5 py-4">
+        <div className="flex items-start justify-between gap-4 border-b border-bosque-200 px-5 py-4">
           <div className="min-w-0">
-            <h2 id={idTitulo} className="text-lg font-semibold text-slate-900">
+            <h2 id={idTitulo} className="text-lg font-semibold text-bosque-900">
               {titulo}
             </h2>
-            {descripcion && <p className="mt-0.5 text-sm text-slate-500">{descripcion}</p>}
+            {descripcion && <p className="mt-0.5 text-sm text-bosque-500">{descripcion}</p>}
           </div>
           <button
             type="button"
             onClick={() => cerrarRef.current?.()}
             aria-label="Cerrar"
-            className="rounded-lg p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+            className="rounded-lg p-2 text-bosque-400 hover:bg-bosque-100 hover:text-bosque-700"
           >
             <X size={20} />
           </button>
@@ -66,7 +66,7 @@ export default function Modal({ titulo, descripcion, onCerrar, pie, ancho = "sm:
         <div className="overflow-y-auto px-5 py-5">{children}</div>
 
         {pie && (
-          <div className="flex flex-col-reverse gap-2 border-t border-slate-200 px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4 sm:flex-row sm:justify-end">
+          <div className="flex flex-col-reverse gap-2 border-t border-bosque-200 px-5 pb-[max(1rem,env(safe-area-inset-bottom))] pt-4 sm:flex-row sm:justify-end">
             {pie}
           </div>
         )}

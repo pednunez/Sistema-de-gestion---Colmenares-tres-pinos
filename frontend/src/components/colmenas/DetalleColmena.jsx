@@ -32,7 +32,7 @@ export default function DetalleColmena({ colmenaId, onCerrar }) {
   if (!colmena) {
     return (
       <Modal titulo="Colmena no disponible" onCerrar={onCerrar}>
-        <p className="text-slate-600">Esta colmena fue dada de baja o ya no existe.</p>
+        <p className="text-bosque-600">Esta colmena fue dada de baja o ya no existe.</p>
       </Modal>
     );
   }

@@ -117,12 +117,12 @@ export default function GruposPage() {
           {visibles.map((g) => (
             <article
               key={g.id}
-              className="flex flex-col rounded-2xl border border-slate-200 bg-white p-5"
+              className="flex flex-col rounded-2xl border border-bosque-200 bg-white p-5"
               aria-label={`Grupo ${g.nombre}`}
             >
               <button type="button" onClick={() => setDetalleId(g.id)} className="text-left">
                 <h3 className="text-lg font-bold hover:underline">{g.nombre}</h3>
-                <p className="text-sm text-slate-500">{nombreApiario(g.apiario_id)}</p>
+                <p className="text-sm text-bosque-500">{nombreApiario(g.apiario_id)}</p>
               </button>
               {revisionDe.has(g.id) && (
                 <div className="mt-3">
@@ -132,11 +132,11 @@ export default function GruposPage() {
                   </Insignia>
                 </div>
               )}
-              <p className="mt-4 text-3xl font-bold text-slate-900">{g.cantidad_colmenas}</p>
-              <p className="text-xs text-slate-500">{g.cantidad_colmenas === 1 ? "colmena" : "colmenas"}</p>
-              {g.descripcion && <p className="mt-3 line-clamp-2 text-sm text-slate-600">{g.descripcion}</p>}
+              <p className="mt-4 text-3xl font-bold text-bosque-900">{g.cantidad_colmenas}</p>
+              <p className="text-xs text-bosque-500">{g.cantidad_colmenas === 1 ? "colmena" : "colmenas"}</p>
+              {g.descripcion && <p className="mt-3 line-clamp-2 text-sm text-bosque-600">{g.descripcion}</p>}
               <div className="mt-auto flex flex-wrap gap-2 pt-4">
-                <div className="flex w-full flex-wrap gap-2 border-t border-slate-100 pt-3">
+                <div className="flex w-full flex-wrap gap-2 border-t border-bosque-100 pt-3">
                   {revisionDe.has(g.id) ? (
                     <Boton tamano="sm" icono={ClipboardList} onClick={() => setRevisionId(revisionDe.get(g.id).id)}>
                       Continuar revisión

@@ -97,7 +97,7 @@ export default function AsignarColmenas({ grupo, idsEnGrupo, grupoDe, onGuardar,
         )}
 
         {disponibles.length === 0 ? (
-          <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-500">
+          <p className="rounded-xl bg-bosque-50 p-4 text-sm text-bosque-500">
             {busqueda
               ? "Ninguna colmena coincide con la búsqueda."
               : "Todas las colmenas activas de este apiario ya están en este grupo."}
@@ -111,12 +111,12 @@ export default function AsignarColmenas({ grupo, idsEnGrupo, grupoDe, onGuardar,
                 <li key={c.id}>
                   <label
                     className={`flex min-h-12 cursor-pointer items-center gap-3 rounded-xl border px-3 py-2 ${
-                      marcada ? "border-amber-400 bg-amber-50" : "border-slate-200 bg-white hover:bg-slate-50"
+                      marcada ? "border-miel-400 bg-miel-50" : "border-bosque-200 bg-white hover:bg-bosque-50"
                     }`}
                   >
                     <input
                       type="checkbox"
-                      className="h-4 w-4 accent-amber-500"
+                      className="h-4 w-4 accent-miel-500"
                       checked={marcada}
                       onChange={() => alternar(c.id)}
                       aria-label={`Agregar ${c.codigo}`}

@@ -204,8 +204,8 @@ export default function FormularioColmenasLote({ apiarioInicial, onTerminar, onC
           </div>
 
           {listoParaVer && (
-            <div className="rounded-2xl border border-amber-200 bg-amber-50/60 p-4 text-sm text-slate-700" aria-live="polite">
-              <p className="font-semibold text-slate-900">
+            <div className="rounded-2xl border border-miel-200 bg-miel-50/60 p-4 text-sm text-bosque-700" aria-live="polite">
+              <p className="font-semibold text-bosque-900">
                 Se crearán {plural(codigos.length - ocupados.length, "colmena activa", "colmenas activas")}
                 {apiario && valores.apiario_id ? ` en ${apiario}` : ""}
               </p>
@@ -213,13 +213,13 @@ export default function FormularioColmenasLote({ apiarioInicial, onTerminar, onC
                 Códigos {codigos[0]} a {codigos.at(-1)} · {plural(Number(valores.cantidad_marcos) || 0, "marco", "marcos")} cada una.
               </p>
               {ocupados.length > 0 && (
-                <p className="mt-2 text-amber-900">
+                <p className="mt-2 text-miel-900">
                   {plural(ocupados.length, "código ya existe", "códigos ya existen")} y se omitirá
                   {ocupados.length === 1 ? "" : "n"}: {ocupados.slice(0, 6).join(", ")}
                   {ocupados.length > 6 ? "…" : ""}
                 </p>
               )}
-              <p className="mt-2 text-slate-500">
+              <p className="mt-2 text-bosque-500">
                 Sus marcos por posición se registran en la primera inspección de cada colmena.
               </p>
             </div>
@@ -229,7 +229,7 @@ export default function FormularioColmenasLote({ apiarioInicial, onTerminar, onC
 
       {etapa === "creando" && (
         <div className="grid gap-3" aria-live="polite">
-          <p className="text-sm text-slate-700">
+          <p className="text-sm text-bosque-700">
             Creando colmenas en {apiario}: {avance.listas} de {avance.total}. No cierres esta ventana.
           </p>
           <div
@@ -238,22 +238,22 @@ export default function FormularioColmenasLote({ apiarioInicial, onTerminar, onC
             aria-valuemin={0}
             aria-valuemax={100}
             aria-valuenow={porcentaje}
-            className="h-3 overflow-hidden rounded-full bg-slate-100"
+            className="h-3 overflow-hidden rounded-full bg-bosque-100"
           >
-            <div className="h-full rounded-full bg-amber-400 transition-all" style={{ width: `${porcentaje}%` }} />
+            <div className="h-full rounded-full bg-miel-400 transition-all" style={{ width: `${porcentaje}%` }} />
           </div>
         </div>
       )}
 
       {etapa === "listo" && resultado && (
         <div className="grid gap-3 text-sm">
-          <p className="flex items-center gap-2 font-semibold text-slate-900">
+          <p className="flex items-center gap-2 font-semibold text-bosque-900">
             <CheckCircle2 size={18} className="text-emerald-600" aria-hidden="true" />
             {plural(resultado.creadas.length, "colmena creada", "colmenas creadas")} en {apiario}.
           </p>
           {resultado.detenido && <Alerta tipo="aviso">La carga se detuvo antes de terminar.</Alerta>}
           {resultado.omitidas.length > 0 && (
-            <p className="text-slate-600">
+            <p className="text-bosque-600">
               {plural(resultado.omitidas.length, "código omitido porque ya existía", "códigos omitidos porque ya existían")}:{" "}
               {resultado.omitidas.slice(0, 8).join(", ")}
               {resultado.omitidas.length > 8 ? "…" : ""}

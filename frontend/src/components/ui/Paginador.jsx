@@ -17,7 +17,7 @@ export default function Paginador({ pagina, totalPaginas, hayAnterior, haySiguie
       >
         Anterior
       </Boton>
-      <span className="text-sm text-slate-600" aria-live="polite">
+      <span className="text-sm text-bosque-600" aria-live="polite">
         Página {pagina}
         {totalPaginas ? ` de ${totalPaginas}` : ""}
       </span>

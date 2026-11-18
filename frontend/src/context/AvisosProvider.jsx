@@ -47,12 +47,12 @@ export function AvisosProvider({ children }) {
             ) : (
               <CheckCircle2 size={20} className="shrink-0 text-emerald-600" aria-hidden="true" />
             )}
-            <p className="flex-1 text-sm text-slate-800">{aviso.texto}</p>
+            <p className="flex-1 text-sm text-bosque-800">{aviso.texto}</p>
             <button
               type="button"
               onClick={() => cerrar(aviso.id)}
               aria-label="Cerrar aviso"
-              className="text-slate-400 hover:text-slate-700"
+              className="text-bosque-400 hover:text-bosque-700"
             >
               <X size={18} />
             </button>

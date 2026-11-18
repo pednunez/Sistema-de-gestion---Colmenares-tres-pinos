@@ -77,8 +77,8 @@ function Contenido() {
 
   if (verificando) {
     return (
-      <div className="flex min-h-screen items-center justify-center gap-3 bg-slate-100 text-slate-500" role="status">
-        <Loader2 size={24} className="animate-spin text-amber-500" aria-hidden="true" />
+      <div className="flex min-h-screen items-center justify-center gap-3 bg-bosque-100 text-bosque-500" role="status">
+        <Loader2 size={24} className="animate-spin text-miel-500" aria-hidden="true" />
         Verificando sesión...
       </div>
     );

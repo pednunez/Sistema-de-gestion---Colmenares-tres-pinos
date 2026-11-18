@@ -20,30 +20,30 @@ import { cajasDeInspeccion, transferenciasDeInspeccion } from "../../utils/inspe
 
 function Seccion({ titulo, children }) {
   return (
-    <section className="border-t border-slate-200 pt-5">
-      <h3 className="mb-3 font-semibold text-slate-900">{titulo}</h3>
+    <section className="border-t border-bosque-200 pt-5">
+      <h3 className="mb-3 font-semibold text-bosque-900">{titulo}</h3>
       {children}
     </section>
   );
 }
 
 function SinDatos({ children }) {
-  return <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-500">{children}</p>;
+  return <p className="rounded-xl bg-bosque-50 p-4 text-sm text-bosque-500">{children}</p>;
 }
 
 // Caja de 10 marcos en dos columnas: 1 a 5 a la izquierda y 6 a 10 a la derecha.
 function Caja({ caja, codigoColmena }) {
   return (
     <div>
-      <p className="mb-2 text-sm font-medium text-slate-700">{texto(UBICACION_MARCO, caja.ubicacion)}</p>
+      <p className="mb-2 text-sm font-medium text-bosque-700">{texto(UBICACION_MARCO, caja.ubicacion)}</p>
       <ol className="grid gap-2 sm:grid-flow-col sm:grid-cols-2 sm:grid-rows-[repeat(5,auto)]">
         {caja.marcos.map((marco) => (
           <li
             key={marco.numero}
-            className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 px-3 py-2 text-sm"
+            className="flex items-center justify-between gap-2 rounded-xl border border-bosque-200 px-3 py-2 text-sm"
           >
             <span>
-              <span className="mr-2 font-semibold text-slate-500">{marco.numero}</span>
+              <span className="mr-2 font-semibold text-bosque-500">{marco.numero}</span>
               {texto(CONTENIDO_MARCO, marco.contenido, "Sin registrar")}
             </span>
             {marco.transferido_a_colmena_id && (
@@ -131,7 +131,7 @@ export default function DetalleInspeccion({ inspeccion, puedeEditar, onEditar, o
               )}
             </dl>
           ) : (
-            <p className="text-sm text-slate-600">Sin signos de enfermedad.</p>
+            <p className="text-sm text-bosque-600">Sin signos de enfermedad.</p>
           )}
           {tratamientos.length > 0 && (
             <ul className="mt-3 grid gap-2 text-sm">
@@ -139,7 +139,7 @@ export default function DetalleInspeccion({ inspeccion, puedeEditar, onEditar, o
                 <li key={t.id} className="flex flex-wrap items-center gap-2">
                   <span className="font-medium">Tratamiento: {t.producto || t.tipo_tratamiento || `#${t.id}`}</span>
                   <InsigniaDe mapa={ESTADO_TRATAMIENTO} valor={t.estado} />
-                  {t.fecha_inicio && <span className="text-slate-500">desde {formatearFecha(t.fecha_inicio)}</span>}
+                  {t.fecha_inicio && <span className="text-bosque-500">desde {formatearFecha(t.fecha_inicio)}</span>}
                 </li>
               ))}
             </ul>
@@ -165,21 +165,21 @@ export default function DetalleInspeccion({ inspeccion, puedeEditar, onEditar, o
                 {transferencias.lista.map((t) => (
                   <li
                     key={t.id}
-                    className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 px-3 py-2"
+                    className="flex flex-wrap items-center gap-2 rounded-xl border border-bosque-200 px-3 py-2"
                   >
                     <span className="font-semibold">{codigoColmena(t.colmena_origen_id)}</span>
-                    <ArrowRight size={16} className="text-amber-500" aria-label="hacia" />
+                    <ArrowRight size={16} className="text-miel-500" aria-label="hacia" />
                     <span className="font-semibold">{codigoColmena(t.colmena_destino_id)}</span>
-                    <span className="text-slate-600">
+                    <span className="text-bosque-600">
                       · {t.cantidad_marcos} {t.cantidad_marcos === 1 ? "marco" : "marcos"} de{" "}
                       {texto(TIPO_MARCO, t.tipo_marco, "tipo sin indicar").toLowerCase()}
                     </span>
-                    {t.observaciones && <span className="basis-full text-slate-500">{t.observaciones}</span>}
+                    {t.observaciones && <span className="basis-full text-bosque-500">{t.observaciones}</span>}
                   </li>
                 ))}
               </ul>
               {transferencias.aproximada && (
-                <p className="mt-2 text-xs text-slate-500">
+                <p className="mt-2 text-xs text-bosque-500">
                   Transferencias que salieron de esta colmena el mismo día de la inspección.
                 </p>
               )}
@@ -191,7 +191,7 @@ export default function DetalleInspeccion({ inspeccion, puedeEditar, onEditar, o
 
         {inspeccion.observaciones && (
           <Seccion titulo="Observaciones">
-            <p className="whitespace-pre-line text-sm text-slate-700">{inspeccion.observaciones}</p>
+            <p className="whitespace-pre-line text-sm text-bosque-700">{inspeccion.observaciones}</p>
           </Seccion>
         )}
       </div>

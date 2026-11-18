@@ -39,7 +39,7 @@ export default function HistorialColmena({ colmenaId, consulta, onVerInspeccion 
 
   return (
     <section aria-labelledby="titulo-historial" className="mt-8">
-      <h3 id="titulo-historial" className="mb-3 font-semibold text-slate-900">
+      <h3 id="titulo-historial" className="mb-3 font-semibold text-bosque-900">
         Historial
       </h3>
 
@@ -55,10 +55,10 @@ export default function HistorialColmena({ colmenaId, consulta, onVerInspeccion 
                 role="radio"
                 aria-checked={activo}
                 onClick={() => setTipo(valor)}
-                className={`min-h-9 shrink-0 rounded-full border px-3 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${
+                className={`min-h-9 shrink-0 rounded-full border px-3 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-miel-400 ${
                   activo
-                    ? "border-amber-400 bg-amber-400 text-slate-950"
-                    : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                    ? "border-miel-400 bg-miel-400 text-bosque-950"
+                    : "border-bosque-300 bg-white text-bosque-700 hover:bg-bosque-50"
                 }`}
               >
                 {nombre} ({conteo[valor] ?? 0})
@@ -104,16 +104,16 @@ export default function HistorialColmena({ colmenaId, consulta, onVerInspeccion 
         <ErrorCarga mensaje={consulta.error} onReintentar={consulta.recargar} />
       )}
       {!consulta.cargando && eventos.length === 0 && !consulta.error && (
-        <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-500">
+        <p className="rounded-xl bg-bosque-50 p-4 text-sm text-bosque-500">
           Esta colmena todavía no tiene actividad registrada.
         </p>
       )}
       {eventos.length > 0 && visibles.length === 0 && (
-        <p className="rounded-xl bg-slate-50 p-4 text-sm text-slate-500">No hay eventos con estos filtros.</p>
+        <p className="rounded-xl bg-bosque-50 p-4 text-sm text-bosque-500">No hay eventos con estos filtros.</p>
       )}
 
       {visibles.length > 0 && (
-        <ol className="relative ml-3 border-l border-slate-200">
+        <ol className="relative ml-3 border-l border-bosque-200">
           {visibles.map((evento) => (
             <Evento
               key={evento.clave}
@@ -178,16 +178,16 @@ function Evento({ evento, existeInspeccion, onVerInspeccion }) {
 
   return (
     <li className="mb-5 ml-6">
-      <span className="absolute -left-3.5 flex h-7 w-7 items-center justify-center rounded-full bg-amber-100 text-amber-700 ring-4 ring-white">
+      <span className="absolute -left-3.5 flex h-7 w-7 items-center justify-center rounded-full bg-miel-100 text-miel-700 ring-4 ring-white">
         <Icono size={14} aria-hidden="true" />
       </span>
       <div className="flex flex-wrap items-center gap-2">
-        <p className="text-sm font-semibold text-slate-900">{titulo}</p>
+        <p className="text-sm font-semibold text-bosque-900">{titulo}</p>
         {insignia}
       </div>
-      <p className="text-xs text-slate-500">{formatearFechaHora(evento.fecha)}</p>
+      <p className="text-xs text-bosque-500">{formatearFechaHora(evento.fecha)}</p>
       {lineas.filter(Boolean).map((linea, i) => (
-        <p key={i} className="mt-1 text-sm text-slate-600">
+        <p key={i} className="mt-1 text-sm text-bosque-600">
           {linea}
         </p>
       ))}

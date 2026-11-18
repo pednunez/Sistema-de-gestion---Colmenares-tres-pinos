@@ -61,7 +61,7 @@ export default function QrPage() {
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)] print:block">
         <Panel className="print:hidden">
-          <div className="grid gap-3 border-b border-slate-200 p-4 sm:grid-cols-2">
+          <div className="grid gap-3 border-b border-bosque-200 p-4 sm:grid-cols-2">
             <Seleccion
               aria-label="Filtrar por apiario"
               value={filtroApiario}
@@ -72,23 +72,23 @@ export default function QrPage() {
             <Buscador valor={busqueda} onCambiar={setBusqueda} placeholder="Buscar código" etiqueta="Buscar colmena por código" />
           </div>
 
-          <label className="flex cursor-pointer items-center gap-3 border-b border-slate-100 bg-slate-50 px-4 py-3 text-sm font-medium">
-            <input type="checkbox" checked={todasVisiblesMarcadas} onChange={alternarVisibles} className="h-4 w-4 accent-amber-500" />
+          <label className="flex cursor-pointer items-center gap-3 border-b border-bosque-100 bg-bosque-50 px-4 py-3 text-sm font-medium">
+            <input type="checkbox" checked={todasVisiblesMarcadas} onChange={alternarVisibles} className="h-4 w-4 accent-miel-500" />
             Seleccionar las {visibles.length} colmenas de la lista
           </label>
 
-          <ul className="max-h-[60vh] divide-y divide-slate-100 overflow-y-auto">
+          <ul className="max-h-[60vh] divide-y divide-bosque-100 overflow-y-auto">
             {visibles.map((colmena) => (
               <li key={colmena.id}>
-                <label className="flex cursor-pointer items-center gap-3 px-4 py-3 hover:bg-slate-50">
+                <label className="flex cursor-pointer items-center gap-3 px-4 py-3 hover:bg-bosque-50">
                   <input
                     type="checkbox"
                     checked={seleccion.has(colmena.id)}
                     onChange={() => alternar(colmena.id)}
-                    className="h-4 w-4 accent-amber-500"
+                    className="h-4 w-4 accent-miel-500"
                   />
                   <span className="font-semibold">{colmena.codigo}</span>
-                  <span className="text-sm text-slate-500">{nombreApiario(colmena.apiario_id)}</span>
+                  <span className="text-sm text-bosque-500">{nombreApiario(colmena.apiario_id)}</span>
                 </label>
               </li>
             ))}
@@ -109,11 +109,11 @@ export default function QrPage() {
               {seleccionadas.map((colmena) => (
                 <div
                   key={colmena.id}
-                  className="flex break-inside-avoid flex-col items-center rounded-2xl border border-slate-200 bg-white p-4 text-center print:rounded-none print:border-dashed print:border-slate-400"
+                  className="flex break-inside-avoid flex-col items-center rounded-2xl border border-bosque-200 bg-white p-4 text-center print:rounded-none print:border-dashed print:border-bosque-400"
                 >
                   <ImagenQr colmena={colmena} className="w-36" />
                   <p className="mt-2 text-xl font-bold">{colmena.codigo}</p>
-                  <p className="text-sm text-slate-600">{nombreApiario(colmena.apiario_id)}</p>
+                  <p className="text-sm text-bosque-600">{nombreApiario(colmena.apiario_id)}</p>
                 </div>
               ))}
             </div>

@@ -74,16 +74,16 @@ export default function ApiariosPage() {
       ) : (
         <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
           {tarjetas.map(({ apiario, colmenas, alertas }) => (
-            <article key={apiario.id} className="flex flex-col rounded-2xl border border-slate-200 bg-white p-6">
+            <article key={apiario.id} className="flex flex-col rounded-2xl border border-bosque-200 bg-white p-6">
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0">
                   <h3 className="text-lg font-bold">{apiario.nombre}</h3>
-                  <p className="text-sm text-slate-500">{apiario.ubicacion || "Ubicación sin registrar"}</p>
+                  <p className="text-sm text-bosque-500">{apiario.ubicacion || "Ubicación sin registrar"}</p>
                 </div>
-                <MapPinned className="shrink-0 text-amber-500" aria-hidden="true" />
+                <MapPinned className="shrink-0 text-miel-500" aria-hidden="true" />
               </div>
 
-              {apiario.descripcion && <p className="mt-3 text-sm text-slate-600">{apiario.descripcion}</p>}
+              {apiario.descripcion && <p className="mt-3 text-sm text-bosque-600">{apiario.descripcion}</p>}
 
               <div className="mb-5 mt-4 flex flex-wrap gap-2">
                 <Insignia tono="gris">
@@ -92,7 +92,7 @@ export default function ApiariosPage() {
                 {alertas > 0 && <Insignia tono="ambar">{alertas} requieren atención</Insignia>}
               </div>
 
-              <div className="mt-auto flex flex-wrap gap-2 border-t border-slate-100 pt-4">
+              <div className="mt-auto flex flex-wrap gap-2 border-t border-bosque-100 pt-4">
                 <Boton variante="secundario" tamano="sm" onClick={() => navegar("colmenas", { apiario: apiario.id })}>
                   Ver colmenas
                 </Boton>

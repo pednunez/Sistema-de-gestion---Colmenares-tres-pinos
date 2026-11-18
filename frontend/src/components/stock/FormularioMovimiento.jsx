@@ -150,13 +150,13 @@ export default function FormularioMovimiento({ inventario, inicial = {}, onGuard
         )}
 
         {esExtraccion && !item?.pendienteServidor && (
-          <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          <p className="rounded-xl bg-miel-50 px-3 py-2 text-sm text-miel-800">
             Los marcos vaciados se restan de marcos con miel y se suman a marcos con cera untada.
           </p>
         )}
 
         {valores.tipo === "DANO" && item && !MATERIAL_STOCK[item.material].puedeDanarse && (
-          <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-800">
+          <p className="rounded-xl bg-miel-50 px-3 py-2 text-sm text-miel-800">
             Los marcos con cera o miel rotos se suman a los marcos rotos.
           </p>
         )}

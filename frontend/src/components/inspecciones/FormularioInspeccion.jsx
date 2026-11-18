@@ -268,7 +268,7 @@ export default function FormularioInspeccion({
             error={errores.estado_general}
           />
           {inspeccion?.estado_general in ESTADO_GENERAL_ANTERIOR && (
-            <p className="text-sm text-slate-500">
+            <p className="text-sm text-bosque-500">
               Esta inspección tenía el estado «{texto(ESTADO_GENERAL_ANTERIOR, inspeccion.estado_general)}». Elige el
               estado actual.
             </p>
@@ -355,8 +355,8 @@ export default function FormularioInspeccion({
         {!esEdicion && (
           <div className="grid gap-4">
             <div>
-              <h3 className="font-semibold text-slate-900">Revisión de marcos</h3>
-              <p className="text-sm text-slate-500">
+              <h3 className="font-semibold text-bosque-900">Revisión de marcos</h3>
+              <p className="text-sm text-bosque-500">
                 Indica qué contiene cada marco. Si mueves un marco a otra colmena del apiario o a bodega, márcalo con
                 «Transferir»: se guarda solo al registrar la inspección.
               </p>
@@ -395,7 +395,7 @@ export default function FormularioInspeccion({
             )}
 
             {marcosRegistrados !== null && (
-              <p className="rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-700" role="status">
+              <p className="rounded-xl bg-bosque-50 px-4 py-3 text-sm text-bosque-700" role="status">
                 Se registrarán{" "}
                 <strong>
                   {marcosRegistrados} {marcosRegistrados === 1 ? "marco" : "marcos"}

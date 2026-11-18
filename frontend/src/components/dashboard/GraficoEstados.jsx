@@ -21,7 +21,7 @@ export function DistribucionEstados({ conteo, total }) {
       <div
         role="img"
         aria-label={total ? `Colmenas por estado. ${descripcion}.` : "Sin colmenas en operación."}
-        className="flex h-4 w-full gap-0.5 overflow-hidden rounded bg-slate-100"
+        className="flex h-4 w-full gap-0.5 overflow-hidden rounded bg-bosque-100"
       >
         {conDatos.map((fila) => (
           <div
@@ -51,15 +51,15 @@ export function DistribucionEstados({ conteo, total }) {
               className={`rounded-lg transition-opacity ${resaltado && resaltado !== fila.clave ? "opacity-50" : ""}`}
             >
               <div className="flex items-center justify-between gap-3 text-sm">
-                <span className="flex items-center gap-2 text-slate-700">
+                <span className="flex items-center gap-2 text-bosque-700">
                   <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ backgroundColor: fila.color }} aria-hidden="true" />
                   {fila.texto}
                 </span>
-                <span className="font-semibold text-slate-900">
-                  {cantidad} <span className="font-normal text-slate-500">({porcentaje}%)</span>
+                <span className="font-semibold text-bosque-900">
+                  {cantidad} <span className="font-normal text-bosque-500">({porcentaje}%)</span>
                 </span>
               </div>
-              <div className="mt-1.5 h-2 rounded-full bg-slate-100">
+              <div className="mt-1.5 h-2 rounded-full bg-bosque-100">
                 <div className="h-full rounded-full" style={{ width: `${porcentaje}%`, backgroundColor: fila.color }} />
               </div>
             </li>
@@ -80,7 +80,7 @@ export function EstadosDeColmena({ inspecciones, onVer }) {
     .slice(-MAXIMO_INSPECCIONES);
 
   if (ultimas.length === 0) {
-    return <p className="px-5 py-10 text-sm text-slate-600">Esta colmena todavía no tiene inspecciones.</p>;
+    return <p className="px-5 py-10 text-sm text-bosque-600">Esta colmena todavía no tiene inspecciones.</p>;
   }
 
   const presentes = ESTADOS_GRAFICO.filter((e) =>
@@ -101,19 +101,19 @@ export function EstadosDeColmena({ inspecciones, onVer }) {
                   onClick={() => onVer(inspeccion)}
                   title={`${fecha}: ${estado}`}
                   aria-label={`Inspección del ${fecha}: ${estado}`}
-                  className="h-full w-full rounded transition hover:ring-2 hover:ring-slate-900/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400"
+                  className="h-full w-full rounded transition hover:ring-2 hover:ring-bosque-900/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-miel-400"
                   style={{ backgroundColor: colorDe(inspeccion.estado_general) }}
                 />
               </li>
             );
           })}
         </ol>
-        <div className="mt-1.5 flex justify-between text-xs text-slate-500" aria-hidden="true">
+        <div className="mt-1.5 flex justify-between text-xs text-bosque-500" aria-hidden="true">
           <span>{formatearFecha(ultimas[0].fecha_inspeccion)}</span>
           {ultimas.length > 1 && <span>{formatearFecha(ultimas.at(-1).fecha_inspeccion)}</span>}
         </div>
       </div>
-      <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600" aria-label="Leyenda">
+      <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-bosque-600" aria-label="Leyenda">
         {presentes.map((e) => (
           <li key={e.clave} className="flex items-center gap-1.5">
             <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: e.color }} aria-hidden="true" />

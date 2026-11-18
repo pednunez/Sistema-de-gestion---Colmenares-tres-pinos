@@ -35,7 +35,7 @@ export default function Confirmar({ titulo, children, textoConfirmar, variante =
         </>
       }
     >
-      <div className="grid gap-4 text-slate-600">
+      <div className="grid gap-4 text-bosque-600">
         {children}
         {error && <Alerta>{error}</Alerta>}
       </div>

@@ -1,10 +1,10 @@
 import { Loader2 } from "lucide-react";
 
 const VARIANTES = {
-  primario: "border-transparent bg-amber-400 text-slate-950 hover:bg-amber-500",
-  secundario: "border-slate-300 bg-white text-slate-800 hover:bg-slate-50",
+  primario: "border-transparent bg-miel-400 text-bosque-950 hover:bg-miel-500",
+  secundario: "border-bosque-300 bg-white text-bosque-800 hover:bg-bosque-50",
   peligro: "border-transparent bg-red-600 text-white hover:bg-red-700",
-  fantasma: "border-transparent bg-transparent text-slate-600 hover:bg-slate-100 hover:text-slate-900",
+  fantasma: "border-transparent bg-transparent text-bosque-600 hover:bg-bosque-100 hover:text-bosque-900",
 };
 
 const TAMANOS = {
@@ -28,7 +28,7 @@ export default function Boton({
     <button
       type={type}
       disabled={disabled || cargando}
-      className={`inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 ${VARIANTES[variante]} ${TAMANOS[tamano]} ${className}`}
+      className={`inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-miel-400 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60 ${VARIANTES[variante]} ${TAMANOS[tamano]} ${className}`}
       {...props}
     >
       {cargando ? (

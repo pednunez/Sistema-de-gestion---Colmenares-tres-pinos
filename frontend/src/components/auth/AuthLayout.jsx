@@ -1,5 +1,6 @@
 import { ShieldCheck, ChartNoAxesCombined, Hexagon } from "lucide-react";
 import "../../styles/auth.css";
+import LogoMarca from "../ui/LogoMarca";
 
 // Marco común de las pantallas sin sesión: login, recuperar y restablecer contraseña.
 export default function AuthLayout({ children }) {
@@ -8,7 +9,7 @@ export default function AuthLayout({ children }) {
       <aside className="brand-panel">
         <div className="brand">
           <div className="logo-auth">
-            <Hexagon size={25} />
+            <LogoMarca className="h-12 w-auto" />
           </div>
           <div>
             <div className="brand-name">Colmenares Tres Pinos</div>

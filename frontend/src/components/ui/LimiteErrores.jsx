@@ -31,19 +31,19 @@ export default class LimiteErrores extends Component {
     return (
       <div
         role="alert"
-        className={`flex items-center justify-center p-6 ${pantallaCompleta ? "min-h-screen bg-slate-100" : "py-16"}`}
+        className={`flex items-center justify-center p-6 ${pantallaCompleta ? "min-h-screen bg-bosque-100" : "py-16"}`}
       >
-        <div className="max-w-md rounded-2xl border border-slate-200 bg-white p-8 text-center">
-          <AlertTriangle size={36} className="mx-auto mb-3 text-amber-500" aria-hidden="true" />
-          <h2 className="text-lg font-semibold text-slate-900">Esta pantalla tuvo un problema</h2>
-          <p className="mt-2 text-sm text-slate-600">
+        <div className="max-w-md rounded-2xl border border-bosque-200 bg-white p-8 text-center">
+          <AlertTriangle size={36} className="mx-auto mb-3 text-miel-500" aria-hidden="true" />
+          <h2 className="text-lg font-semibold text-bosque-900">Esta pantalla tuvo un problema</h2>
+          <p className="mt-2 text-sm text-bosque-600">
             Vuelve a cargarla. Si el problema sigue, informa este código de seguimiento:{" "}
             <strong className="font-mono">{codigoCorto(this.state.codigo)}</strong>
           </p>
           <button
             type="button"
             onClick={() => window.location.reload()}
-            className="mt-6 inline-flex min-h-11 items-center gap-2 rounded-xl bg-amber-400 px-4 text-sm font-semibold text-slate-950 hover:bg-amber-500"
+            className="mt-6 inline-flex min-h-11 items-center gap-2 rounded-xl bg-miel-400 px-4 text-sm font-semibold text-bosque-950 hover:bg-miel-500"
           >
             <RotateCcw size={17} aria-hidden="true" />
             Volver a cargar

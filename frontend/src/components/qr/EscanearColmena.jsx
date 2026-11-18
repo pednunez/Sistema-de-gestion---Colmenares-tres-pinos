@@ -68,7 +68,7 @@ export default function EscanearColmena({ onEncontrada, onCerrar }) {
             <Alerta tipo="aviso">Esta etiqueta no está asociada a ninguna colmena activa.</Alerta>
             {esAdmin ? (
               <>
-                <p className="text-sm text-slate-600">
+                <p className="text-sm text-bosque-600">
                   Si es una etiqueta ya impresa, elige la colmena a la que pertenece y asóciala.
                 </p>
                 <SelectorColmena
@@ -87,7 +87,7 @@ export default function EscanearColmena({ onEncontrada, onCerrar }) {
               </>
             ) : (
               <>
-                <p className="text-sm text-slate-600">Pídele al administrador que asocie esta etiqueta a su colmena.</p>
+                <p className="text-sm text-bosque-600">Pídele al administrador que asocie esta etiqueta a su colmena.</p>
                 <Boton variante="secundario" onClick={() => setSinColmena(null)}>
                   Escanear otra
                 </Boton>

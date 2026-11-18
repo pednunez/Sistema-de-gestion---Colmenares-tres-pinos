@@ -1,7 +1,7 @@
 import { useId } from "react";
 
 export const claseControl =
-  "w-full min-h-11 rounded-xl border bg-white px-3 py-2 text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-amber-400 focus:ring-2 focus:ring-amber-400/40 disabled:bg-slate-100 disabled:text-slate-500";
+  "w-full min-h-11 rounded-xl border bg-white px-3 py-2 text-bosque-900 outline-none transition placeholder:text-bosque-400 focus:border-miel-400 focus:ring-2 focus:ring-miel-400/40 disabled:bg-bosque-100 disabled:text-bosque-500";
 
 // "error" puede ser un texto (se muestra bajo el campo) o true (solo marca el borde en rojo).
 function Envoltura({ id, etiqueta, error, ayuda, requerido, className = "", children }) {
@@ -9,7 +9,7 @@ function Envoltura({ id, etiqueta, error, ayuda, requerido, className = "", chil
   return (
     <div className={`grid content-start gap-1.5 ${className}`}>
       {etiqueta && (
-        <label htmlFor={id} className="text-sm font-medium text-slate-800">
+        <label htmlFor={id} className="text-sm font-medium text-bosque-800">
           {etiqueta}
           {requerido && (
             <span className="text-red-600" aria-hidden="true">
@@ -20,7 +20,7 @@ function Envoltura({ id, etiqueta, error, ayuda, requerido, className = "", chil
       )}
       {children}
       {(mensaje || ayuda) && (
-        <p id={`${id}-ayuda`} className={`text-sm ${mensaje ? "text-red-600" : "text-slate-500"}`}>
+        <p id={`${id}-ayuda`} className={`text-sm ${mensaje ? "text-red-600" : "text-bosque-500"}`}>
           {mensaje || ayuda}
         </p>
       )}
@@ -33,7 +33,7 @@ function atributosControl(id, error, ayuda) {
     id,
     "aria-invalid": Boolean(error),
     "aria-describedby": typeof error === "string" || ayuda ? `${id}-ayuda` : undefined,
-    className: `${claseControl} ${error ? "border-red-400" : "border-slate-300"}`,
+    className: `${claseControl} ${error ? "border-red-400" : "border-bosque-300"}`,
   };
 }
 
@@ -81,7 +81,7 @@ export function Segmentado({ etiqueta, opciones, valor, onCambiar, error, requer
       data-invalido={error ? "true" : undefined}
       className={`grid content-start gap-1.5 ${error ? "rounded-xl border border-red-400 bg-red-50/60 p-3" : ""} ${className}`}
     >
-      <span id={`${id}-etiqueta`} className="text-sm font-medium text-slate-800">
+      <span id={`${id}-etiqueta`} className="text-sm font-medium text-bosque-800">
         {etiqueta}
         {requerido && (
           <span className="text-red-600" aria-hidden="true">
@@ -99,10 +99,10 @@ export function Segmentado({ etiqueta, opciones, valor, onCambiar, error, requer
               role="radio"
               aria-checked={activo}
               onClick={() => onCambiar(opcion.valor)}
-              className={`min-h-11 min-w-[5.5rem] flex-1 rounded-xl border px-3 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400 ${
+              className={`min-h-11 min-w-[5.5rem] flex-1 rounded-xl border px-3 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-miel-400 ${
                 activo
-                  ? "border-amber-400 bg-amber-50 text-slate-950 ring-2 ring-amber-400/40"
-                  : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"
+                  ? "border-miel-400 bg-miel-50 text-bosque-950 ring-2 ring-miel-400/40"
+                  : "border-bosque-300 bg-white text-bosque-700 hover:bg-bosque-50"
               }`}
             >
               {opcion.texto}

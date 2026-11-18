@@ -94,10 +94,10 @@ export default function PorRevisarPage() {
           texto={`Todas las colmenas ${apiarioId ? `de ${nombreApiario(Number(apiarioId))} ` : ""}tienen una inspección en los últimos ${dias} días y ninguna quedó en «Requiere revisión».`}
         />
       ) : (
-        <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+        <div className="overflow-x-auto rounded-2xl border border-bosque-200 bg-white">
           <table className="w-full min-w-[760px] text-sm">
             <caption className="sr-only">Colmenas que requieren revisión</caption>
-            <thead className="border-b border-slate-200 bg-slate-50 text-left text-slate-500">
+            <thead className="border-b border-bosque-200 bg-bosque-50 text-left text-bosque-500">
               <tr>
                 <th className="p-4 font-medium">Colmena</th>
                 <th className="p-4 font-medium">Apiario</th>
@@ -110,12 +110,12 @@ export default function PorRevisarPage() {
             </thead>
             <tbody>
               {filas.map((fila) => (
-                <tr key={fila.colmena.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
+                <tr key={fila.colmena.id} className="border-b border-bosque-100 last:border-0 hover:bg-bosque-50">
                   <td className="p-4">
                     <button
                       type="button"
                       onClick={() => navegar("colmenas", { detalle: fila.colmena.id })}
-                      className="font-semibold text-slate-900 underline-offset-2 hover:underline"
+                      className="font-semibold text-bosque-900 underline-offset-2 hover:underline"
                     >
                       {fila.colmena.codigo}
                     </button>
@@ -143,7 +143,7 @@ export default function PorRevisarPage() {
                   </td>
                   <td className="p-4">
                     {fila.nunca ? (
-                      <span className="text-slate-500">Sin inspecciones</span>
+                      <span className="text-bosque-500">Sin inspecciones</span>
                     ) : (
                       <div className="flex flex-wrap items-center gap-2">
                         <span>{formatearFecha(fila.fechaUltima)}</span>

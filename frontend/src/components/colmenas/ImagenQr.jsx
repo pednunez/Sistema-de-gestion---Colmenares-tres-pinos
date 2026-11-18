@@ -16,16 +16,16 @@ export default function ImagenQr({ colmena, className = "w-48", conDescarga = fa
 
   if (cargando || (!url && !error)) {
     return (
-      <div className={`flex aspect-square items-center justify-center rounded-xl bg-slate-50 ${className}`}>
-        <Loader2 className="animate-spin text-slate-400" aria-label="Cargando código QR" />
+      <div className={`flex aspect-square items-center justify-center rounded-xl bg-bosque-50 ${className}`}>
+        <Loader2 className="animate-spin text-bosque-400" aria-label="Cargando código QR" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className={`flex aspect-square flex-col items-center justify-center gap-2 rounded-xl bg-slate-50 p-3 text-center text-xs text-slate-500 ${className}`}>
-        <QrCode className="text-slate-300" aria-hidden="true" />
+      <div className={`flex aspect-square flex-col items-center justify-center gap-2 rounded-xl bg-bosque-50 p-3 text-center text-xs text-bosque-500 ${className}`}>
+        <QrCode className="text-bosque-300" aria-hidden="true" />
         No se pudo cargar el QR
       </div>
     );
@@ -38,7 +38,7 @@ export default function ImagenQr({ colmena, className = "w-48", conDescarga = fa
         <a
           href={url}
           download={`QR_${colmena.codigo}.png`}
-          className="text-sm font-medium text-amber-700 underline-offset-2 hover:underline print:hidden"
+          className="text-sm font-medium text-miel-700 underline-offset-2 hover:underline print:hidden"
         >
           Descargar imagen
         </a>

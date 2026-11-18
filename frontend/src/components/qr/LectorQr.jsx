@@ -71,7 +71,7 @@ export default function LectorQr({ onLeido, ocupado = false }) {
   return (
     <div className="grid gap-4">
       {camara === "encendida" && (
-        <div className="overflow-hidden rounded-2xl bg-slate-900">
+        <div className="overflow-hidden rounded-2xl bg-bosque-900">
           <video
             ref={video}
             className="aspect-square w-full object-cover"
@@ -87,7 +87,7 @@ export default function LectorQr({ onLeido, ocupado = false }) {
         </Boton>
       )}
       {camara === "encendida" && (
-        <div className="flex items-center justify-between gap-3 text-sm text-slate-600">
+        <div className="flex items-center justify-between gap-3 text-sm text-bosque-600">
           <span>Apunta la cámara a la etiqueta QR de la caja.</span>
           <Boton variante="secundario" tamano="sm" icono={CameraOff} onClick={() => setCamara("apagada")}>
             Apagar
@@ -95,12 +95,12 @@ export default function LectorQr({ onLeido, ocupado = false }) {
         </div>
       )}
       {camara === "sin_permiso" && (
-        <p className="rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-800">
+        <p className="rounded-xl bg-miel-50 px-3 py-2 text-sm text-miel-800">
           No se pudo abrir la cámara. Revisa el permiso del navegador o escribe el código.
         </p>
       )}
       {camara === "no_disponible" && (
-        <p className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-600">
+        <p className="rounded-xl bg-bosque-50 px-3 py-2 text-sm text-bosque-600">
           Este navegador no lee QR con la cámara. Escanea la etiqueta con la cámara del celular o escribe el código.
         </p>
       )}

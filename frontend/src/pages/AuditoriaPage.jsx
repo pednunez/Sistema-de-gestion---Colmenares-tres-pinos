@@ -104,9 +104,9 @@ export default function AuditoriaPage() {
         />
       ) : (
         <>
-          <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+          <div className="overflow-x-auto rounded-2xl border border-bosque-200 bg-white">
             <table className="w-full min-w-[760px] text-sm">
-              <thead className="border-b border-slate-200 bg-slate-50 text-left text-slate-500">
+              <thead className="border-b border-bosque-200 bg-bosque-50 text-left text-bosque-500">
                 <tr>
                   <th className="p-4 font-medium">Fecha y hora</th>
                   <th className="p-4 font-medium">Usuario</th>
@@ -118,8 +118,8 @@ export default function AuditoriaPage() {
               </thead>
               <tbody>
                 {filtrados.slice(0, visibles).map((registro) => (
-                  <tr key={registro.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
-                    <td className="whitespace-nowrap p-4 text-slate-600">{formatearFechaHora(registro.fecha)}</td>
+                  <tr key={registro.id} className="border-b border-bosque-100 last:border-0 hover:bg-bosque-50">
+                    <td className="whitespace-nowrap p-4 text-bosque-600">{formatearFechaHora(registro.fecha)}</td>
                     <td className="p-4">{nombreUsuario(registro.usuario_id)}</td>
                     <td className="p-4">
                       <InsigniaDe mapa={ACCION_AUDITORIA} valor={registro.accion} />

@@ -53,7 +53,7 @@ export default function TransferenciasPage() {
       <FiltroApiario apiarios={apiariosOrdenados} valor={apiarioId} onCambiar={setApiarioId} />
 
       {apiarioElegido && (
-        <p className="mb-4 text-sm text-slate-600" role="status">
+        <p className="mb-4 text-sm text-bosque-600" role="status">
           {apiarioElegido.nombre}: {filtradas.length} {filtradas.length === 1 ? "transferencia" : "transferencias"} · {salidas}{" "}
           {salidas === 1 ? "salida" : "salidas"} de sus colmenas · {llegadas} {llegadas === 1 ? "llegada" : "llegadas"} a sus colmenas
         </p>
@@ -80,22 +80,22 @@ export default function TransferenciasPage() {
           {filtradas.map((t) => (
             <article
               key={t.id}
-              className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-5 md:flex-row md:flex-wrap md:items-center md:justify-between"
+              className="flex flex-col gap-4 rounded-2xl border border-bosque-200 bg-white p-5 md:flex-row md:flex-wrap md:items-center md:justify-between"
             >
               <div className="flex items-center gap-3 text-lg font-semibold">
                 <span>
-                  <span className="block text-xs font-normal text-slate-500">Salió de</span>
+                  <span className="block text-xs font-normal text-bosque-500">Salió de</span>
                   {codigoColmena(t.colmena_origen_id)}
-                  <span className="block text-xs font-normal text-slate-500">{nombreApiario(apiarioDe(t.colmena_origen_id))}</span>
+                  <span className="block text-xs font-normal text-bosque-500">{nombreApiario(apiarioDe(t.colmena_origen_id))}</span>
                 </span>
-                <ArrowRight className="text-amber-500" aria-hidden="true" />
+                <ArrowRight className="text-miel-500" aria-hidden="true" />
                 <span>
-                  <span className="block text-xs font-normal text-slate-500">Llegó a</span>
+                  <span className="block text-xs font-normal text-bosque-500">Llegó a</span>
                   {codigoColmena(t.colmena_destino_id)}
-                  <span className="block text-xs font-normal text-slate-500">{nombreApiario(apiarioDe(t.colmena_destino_id))}</span>
+                  <span className="block text-xs font-normal text-bosque-500">{nombreApiario(apiarioDe(t.colmena_destino_id))}</span>
                 </span>
               </div>
-              <div className="flex flex-wrap items-center gap-2 text-sm text-slate-600 md:justify-end">
+              <div className="flex flex-wrap items-center gap-2 text-sm text-bosque-600 md:justify-end">
                 <Insignia tono="ambar">
                   {t.cantidad_marcos} {t.cantidad_marcos === 1 ? "marco" : "marcos"} de{" "}
                   {texto(TIPO_MARCO, t.tipo_marco, "tipo sin indicar").toLowerCase()}
@@ -103,7 +103,7 @@ export default function TransferenciasPage() {
                 <span>{formatearFechaHora(t.fecha_transferencia)}</span>
                 <span>· {nombreUsuario(t.usuario_id)}</span>
               </div>
-              {t.observaciones && <p className="text-sm text-slate-600 md:basis-full">{t.observaciones}</p>}
+              {t.observaciones && <p className="text-sm text-bosque-600 md:basis-full">{t.observaciones}</p>}
             </article>
           ))}
         </div>

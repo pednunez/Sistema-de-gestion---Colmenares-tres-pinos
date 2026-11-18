@@ -93,7 +93,7 @@ export default function DetalleGrupo({ grupoId, gruposDelApiario, puedeEditar, o
         {consulta.error && <ErrorCarga mensaje={consulta.error} onReintentar={consulta.recargar} />}
         {grupo && (
           <div className="grid gap-4">
-            {grupo.descripcion && <p className="text-sm text-slate-600">{grupo.descripcion}</p>}
+            {grupo.descripcion && <p className="text-sm text-bosque-600">{grupo.descripcion}</p>}
             {grupo.colmenas.length === 0 ? (
               <EstadoVacio
                 icono={Boxes}
@@ -105,11 +105,11 @@ export default function DetalleGrupo({ grupoId, gruposDelApiario, puedeEditar, o
                 {grupo.colmenas.map((c) => (
                   <li
                     key={c.colmena_id}
-                    className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 px-3 py-2"
+                    className="flex items-center justify-between gap-2 rounded-xl border border-bosque-200 px-3 py-2"
                   >
                     <div className="min-w-0">
                       <p className="font-semibold">{c.codigo}</p>
-                      <p className="text-xs text-slate-500">Desde {formatearFecha(c.fecha_asignacion)}</p>
+                      <p className="text-xs text-bosque-500">Desde {formatearFecha(c.fecha_asignacion)}</p>
                     </div>
                     <div className="flex items-center gap-1">
                       <InsigniaDe mapa={ESTADO_COLMENA} valor={c.estado} />

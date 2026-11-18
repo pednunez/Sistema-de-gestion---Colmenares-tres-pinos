@@ -3,7 +3,7 @@ import { AlertCircle, AlertTriangle, Info } from "lucide-react";
 const ESTILOS = {
   error: { clase: "border-red-200 bg-red-50 text-red-800", Icono: AlertCircle },
   info: { clase: "border-sky-200 bg-sky-50 text-sky-900", Icono: Info },
-  aviso: { clase: "border-amber-300 bg-amber-50 text-amber-900", Icono: AlertTriangle },
+  aviso: { clase: "border-miel-300 bg-miel-50 text-miel-900", Icono: AlertTriangle },
 };
 
 export default function Alerta({ tipo = "error", children, accion }) {

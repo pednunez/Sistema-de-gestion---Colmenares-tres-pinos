@@ -48,7 +48,7 @@ export default function AsociarQr({ colmena, onCerrar }) {
         <Segmentado etiqueta="¿Qué quieres hacer?" opciones={MODOS} valor={modo} onCambiar={setModo} />
         {modo === "IMPRESA" ? (
           <>
-            <p className="flex items-start gap-2 text-sm text-slate-600">
+            <p className="flex items-start gap-2 text-sm text-bosque-600">
               <ScanLine size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
               Lee la etiqueta que ya está pegada en la caja. La etiqueta anterior de {colmena.codigo} deja de funcionar.
             </p>
@@ -56,7 +56,7 @@ export default function AsociarQr({ colmena, onCerrar }) {
           </>
         ) : (
           <>
-            <p className="text-sm text-slate-600">
+            <p className="text-sm text-bosque-600">
               Úsalo si la etiqueta se perdió o se dañó. La etiqueta anterior deja de funcionar y hay que imprimir una
               nueva.
             </p>

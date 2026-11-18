@@ -42,7 +42,7 @@ export default function HistorialMovimientos({ version }) {
 
   let contenido;
   if (noDisponible) {
-    contenido = <p className="px-5 py-6 text-sm text-slate-500">El historial todavía no está disponible en el servidor.</p>;
+    contenido = <p className="px-5 py-6 text-sm text-bosque-500">El historial todavía no está disponible en el servidor.</p>;
   } else if (error) {
     contenido = (
       <div className="p-5">
@@ -65,7 +65,7 @@ export default function HistorialMovimientos({ version }) {
     contenido = (
       <div className="overflow-x-auto">
         <table className="w-full min-w-[820px] text-sm">
-          <thead className="border-b border-slate-200 bg-slate-50 text-left text-slate-500">
+          <thead className="border-b border-bosque-200 bg-bosque-50 text-left text-bosque-500">
             <tr>
               <th className="p-4 font-medium">Fecha</th>
               <th className="p-4 font-medium">Movimiento</th>
@@ -80,19 +80,19 @@ export default function HistorialMovimientos({ version }) {
             {movimientos.map((m) => {
               const signo = TIPO_MOVIMIENTO_STOCK[m.tipo]?.signo ?? "";
               return (
-                <tr key={m.id} className="border-b border-slate-100 last:border-0">
-                  <td className="whitespace-nowrap p-4 text-slate-600">{formatearFechaHora(m.fecha)}</td>
+                <tr key={m.id} className="border-b border-bosque-100 last:border-0">
+                  <td className="whitespace-nowrap p-4 text-bosque-600">{formatearFechaHora(m.fecha)}</td>
                   <td className="p-4">
                     <Insignia tono={tono(TIPO_MOVIMIENTO_STOCK, m.tipo)}>{texto(TIPO_MOVIMIENTO_STOCK, m.tipo)}</Insignia>
                   </td>
                   <td className="p-4">{texto(MATERIAL_STOCK, m.material)}</td>
-                  <td className={`p-4 text-right font-semibold ${signo === "+" ? "text-emerald-700" : "text-slate-900"}`}>
+                  <td className={`p-4 text-right font-semibold ${signo === "+" ? "text-emerald-700" : "text-bosque-900"}`}>
                     {signo}
                     {m.cantidad}
                   </td>
                   <td className="p-4">{detalle(m)}</td>
-                  <td className="p-4 text-slate-600">{nombreUsuario(m.usuario_id)}</td>
-                  <td className="max-w-xs p-4 text-slate-600">{m.observaciones || "—"}</td>
+                  <td className="p-4 text-bosque-600">{nombreUsuario(m.usuario_id)}</td>
+                  <td className="max-w-xs p-4 text-bosque-600">{m.observaciones || "—"}</td>
                 </tr>
               );
             })}
@@ -105,7 +105,7 @@ export default function HistorialMovimientos({ version }) {
   return (
     <Panel titulo="Historial de movimientos" descripcion="Ingresos, salidas, daños, reparaciones y merma.">
       {!noDisponible && (
-        <div className="grid gap-3 border-b border-slate-200 p-5 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 border-b border-bosque-200 p-5 sm:grid-cols-2 lg:grid-cols-4">
           <Seleccion
             aria-label="Filtrar por material"
             value={filtros.material}

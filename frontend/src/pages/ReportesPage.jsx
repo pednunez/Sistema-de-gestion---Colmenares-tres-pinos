@@ -86,7 +86,7 @@ export default function ReportesPage() {
           onCambiar={(valor) => cambiar("tipo", valor)}
           className="lg:max-w-2xl"
         />
-        <p className="text-sm text-slate-500">{tipo.descripcion}</p>
+        <p className="text-sm text-bosque-500">{tipo.descripcion}</p>
       </div>
 
       <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5 lg:items-end">
@@ -144,7 +144,7 @@ export default function ReportesPage() {
         titulo={`Vista previa: ${tipo.titulo}`}
         descripcion={`${describirFiltros(filtros, buscar)} · ${reporte.filas.length} ${reporte.filas.length === 1 ? "fila" : "filas"}`}
       >
-        <div className="flex flex-col gap-2 border-b border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-2 border-b border-bosque-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-wrap gap-2" role="group" aria-label="Descargar reporte">
             {FORMATOS.map((formato) => (
               <Boton key={formato.id} variante="secundario" tamano="sm" icono={formato.icono}
@@ -154,7 +154,7 @@ export default function ReportesPage() {
               </Boton>
             ))}
           </div>
-          <p className="text-xs text-slate-500">El archivo incluye todas las filas que coinciden con los filtros al descargar.</p>
+          <p className="text-xs text-bosque-500">El archivo incluye todas las filas que coinciden con los filtros al descargar.</p>
         </div>
 
         {reporte.filas.length === 0 ? (
@@ -168,7 +168,7 @@ export default function ReportesPage() {
             <div className="overflow-x-auto">
               <table className="w-full min-w-[860px] text-sm">
                 <caption className="sr-only">{`Filas del reporte de ${tipo.titulo.toLowerCase()}`}</caption>
-                <thead className="bg-slate-50 text-left text-slate-500">
+                <thead className="bg-bosque-50 text-left text-bosque-500">
                   <tr>
                     {reporte.columnas.map((columna) => (
                       <th key={columna} className="whitespace-nowrap px-4 py-3 font-medium">
@@ -179,9 +179,9 @@ export default function ReportesPage() {
                 </thead>
                 <tbody>
                   {reporte.filas.slice(0, FILAS_VISTA_PREVIA).map((fila, i) => (
-                    <tr key={i} className="border-t border-slate-100">
+                    <tr key={i} className="border-t border-bosque-100">
                       {fila.map((valor, j) => (
-                        <td key={j} className={`px-4 py-2.5 ${j === 0 ? "whitespace-nowrap font-medium text-slate-900" : "text-slate-700"}`}>
+                        <td key={j} className={`px-4 py-2.5 ${j === 0 ? "whitespace-nowrap font-medium text-bosque-900" : "text-bosque-700"}`}>
                           {valor}
                         </td>
                       ))}
@@ -191,7 +191,7 @@ export default function ReportesPage() {
               </table>
             </div>
             {reporte.filas.length > FILAS_VISTA_PREVIA && (
-              <p className="border-t border-slate-100 px-5 py-3 text-sm text-slate-500">
+              <p className="border-t border-bosque-100 px-5 py-3 text-sm text-bosque-500">
                 Se muestran las primeras {FILAS_VISTA_PREVIA}. El archivo incluye las {reporte.filas.length} filas.
               </p>
             )}

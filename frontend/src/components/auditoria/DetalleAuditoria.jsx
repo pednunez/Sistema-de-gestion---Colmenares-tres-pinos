@@ -22,11 +22,11 @@ export default function DetalleAuditoria({ registro, onCerrar }) {
       </div>
 
       {cambios.length === 0 ? (
-        <p className="text-slate-500">No hay cambios de datos registrados para esta acción.</p>
+        <p className="text-bosque-500">No hay cambios de datos registrados para esta acción.</p>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-slate-200">
+        <div className="overflow-x-auto rounded-xl border border-bosque-200">
           <table className="w-full text-sm">
-            <thead className="bg-slate-50 text-left text-slate-500">
+            <thead className="bg-bosque-50 text-left text-bosque-500">
               <tr>
                 <th className="px-4 py-2 font-medium">Campo</th>
                 {!esCreacion && <th className="px-4 py-2 font-medium">Antes</th>}
@@ -35,10 +35,10 @@ export default function DetalleAuditoria({ registro, onCerrar }) {
             </thead>
             <tbody>
               {cambios.map(({ campo, antes, despues }) => (
-                <tr key={campo} className="border-t border-slate-100 align-top">
-                  <td className="px-4 py-2 font-medium text-slate-700">{nombreCampo(campo)}</td>
-                  {!esCreacion && <td className="px-4 py-2 text-slate-500 line-through decoration-slate-300">{valorLegible(campo, antes, buscar)}</td>}
-                  <td className="px-4 py-2 text-slate-900">{valorLegible(campo, despues, buscar)}</td>
+                <tr key={campo} className="border-t border-bosque-100 align-top">
+                  <td className="px-4 py-2 font-medium text-bosque-700">{nombreCampo(campo)}</td>
+                  {!esCreacion && <td className="px-4 py-2 text-bosque-500 line-through decoration-bosque-300">{valorLegible(campo, antes, buscar)}</td>}
+                  <td className="px-4 py-2 text-bosque-900">{valorLegible(campo, despues, buscar)}</td>
                 </tr>
               ))}
             </tbody>

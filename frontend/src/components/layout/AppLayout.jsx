@@ -69,13 +69,13 @@ export default function AppLayout({ paginas, sinAcceso: SinAcceso }) {
   };
 
   return (
-    <div className="flex min-h-screen bg-slate-100 text-slate-900 print:block print:bg-white">
+    <div className="flex min-h-screen bg-bosque-100 text-bosque-900 print:block print:bg-white">
       <aside className="sticky top-0 hidden h-screen w-72 shrink-0 lg:block print:hidden">
         <BarraLateral {...propsBarra} />
       </aside>
 
       {menuMovil && (
-        <div className="fixed inset-0 z-50 bg-slate-950/50 lg:hidden print:hidden" onClick={() => setMenuMovil(false)}>
+        <div className="fixed inset-0 z-50 bg-bosque-950/50 lg:hidden print:hidden" onClick={() => setMenuMovil(false)}>
           <div className="h-full w-72 max-w-[85vw]" onClick={(evento) => evento.stopPropagation()}>
             <BarraLateral {...propsBarra} onCerrar={() => setMenuMovil(false)} />
           </div>

@@ -98,11 +98,11 @@ export default function TratamientosPage() {
       ) : (
         <div className="grid grid-cols-1 gap-5 xl:grid-cols-2">
           {filtrados.map((t) => (
-            <article key={t.id} className="flex flex-col rounded-2xl border border-slate-200 bg-white p-5">
+            <article key={t.id} className="flex flex-col rounded-2xl border border-bosque-200 bg-white p-5">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <h3 className="text-lg font-bold">{humanizar(t.tipo_tratamiento)}</h3>
-                  <p className="text-sm text-slate-500">
+                  <p className="text-sm text-bosque-500">
                     {codigoColmena(t.colmena_id)} · {nombreUsuario(t.usuario_id)}
                   </p>
                 </div>
@@ -115,10 +115,10 @@ export default function TratamientosPage() {
                 <Dato nombre="Inicio">{formatearFecha(t.fecha_inicio)}</Dato>
                 <Dato nombre="Término">{formatearFecha(t.fecha_fin, "Sin definir")}</Dato>
               </dl>
-              {t.motivo && <p className="mb-4 text-sm text-slate-600">Motivo: {t.motivo}</p>}
+              {t.motivo && <p className="mb-4 text-sm text-bosque-600">Motivo: {t.motivo}</p>}
 
               {puedeGestionar(t) && (
-                <div className="mt-auto flex flex-wrap gap-2 border-t border-slate-100 pt-3">
+                <div className="mt-auto flex flex-wrap gap-2 border-t border-bosque-100 pt-3">
                   {abierto(t) && (
                     <Boton variante="secundario" tamano="sm" icono={CheckCircle2} onClick={() => setConfirmacion({ tipo: "finalizar", t })}>
                       Finalizar

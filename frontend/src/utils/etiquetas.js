@@ -4,10 +4,10 @@ import { humanizar } from "./formato";
 
 export const TONOS = {
   verde: "bg-emerald-50 text-emerald-700 ring-emerald-200",
-  ambar: "bg-amber-50 text-amber-800 ring-amber-200",
+  ambar: "bg-miel-50 text-miel-800 ring-miel-200",
   rojo: "bg-red-50 text-red-700 ring-red-200",
   azul: "bg-sky-50 text-sky-700 ring-sky-200",
-  gris: "bg-slate-100 text-slate-600 ring-slate-200",
+  gris: "bg-bosque-100 text-bosque-600 ring-bosque-200",
 };
 
 export const ESTADO_COLMENA = {

@@ -14,10 +14,10 @@ export default function TratamientosEnCurso({ tratamientos, seleccionados, onCam
       <div className="mb-3 flex items-start gap-3">
         <Pill size={20} className="mt-0.5 text-sky-700" aria-hidden="true" />
         <div>
-          <h3 className="font-semibold text-slate-900">
+          <h3 className="font-semibold text-bosque-900">
             {tratamientos.length === 1 ? "Esta colmena tiene un tratamiento en curso" : `Esta colmena tiene ${tratamientos.length} tratamientos en curso`}
           </h3>
-          <p className="text-sm text-slate-600">Si el tratamiento terminó, márcalo para finalizarlo con fecha de hoy al guardar la inspección.</p>
+          <p className="text-sm text-bosque-600">Si el tratamiento terminó, márcalo para finalizarlo con fecha de hoy al guardar la inspección.</p>
         </div>
       </div>
       <ul className="grid gap-2">
@@ -26,7 +26,7 @@ export default function TratamientosEnCurso({ tratamientos, seleccionados, onCam
           const marcado = seleccionados.includes(t.id);
           const nombre = [humanizar(t.tipo_tratamiento), t.producto].filter(Boolean).join(" · ");
           return (
-            <li key={t.id} className={`rounded-xl border bg-white p-3 ${marcado ? "border-emerald-400" : "border-slate-200"}`}>
+            <li key={t.id} className={`rounded-xl border bg-white p-3 ${marcado ? "border-emerald-400" : "border-bosque-200"}`}>
               <label className={`flex items-start gap-3 ${permitido ? "cursor-pointer" : "cursor-not-allowed opacity-70"}`}>
                 <input
                   type="checkbox"
@@ -37,12 +37,12 @@ export default function TratamientosEnCurso({ tratamientos, seleccionados, onCam
                   aria-label={`Finalizar ${nombre} en esta inspección`}
                 />
                 <span className="min-w-0 text-sm">
-                  <span className="block font-medium text-slate-900">{nombre}</span>
-                  <span className="block text-slate-500">
+                  <span className="block font-medium text-bosque-900">{nombre}</span>
+                  <span className="block text-bosque-500">
                     Desde {formatearFecha(t.fecha_inicio)}
                     {t.dosis && ` · Dosis: ${t.dosis}`}
                   </span>
-                  <span className={`mt-1 block ${marcado ? "font-medium text-emerald-700" : "text-slate-600"}`}>
+                  <span className={`mt-1 block ${marcado ? "font-medium text-emerald-700" : "text-bosque-600"}`}>
                     {!permitido
                       ? "Solo quien lo registró o un administrador puede finalizarlo."
                       : marcado

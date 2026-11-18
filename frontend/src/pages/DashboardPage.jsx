@@ -164,30 +164,30 @@ export default function DashboardPage() {
         >
           <div id="alertas" className="scroll-mt-24" />
           {resumen.alertas.length === 0 ? (
-            <div className="flex items-center gap-3 px-5 py-10 text-slate-600">
+            <div className="flex items-center gap-3 px-5 py-10 text-bosque-600">
               <CheckCircle2 className="text-emerald-500" aria-hidden="true" />
               {colmenaElegida ? `${colmenaElegida.codigo} está al día.` : "Todas las colmenas están al día."}
             </div>
           ) : (
-            <ul className="divide-y divide-slate-100">
+            <ul className="divide-y divide-bosque-100">
               {resumen.alertas.slice(0, 10).map(({ colmena, prioridad, detalles, ultima }) => (
                 <li key={colmena.id} className="flex flex-col gap-3 px-5 py-4 lg:flex-row lg:items-start lg:justify-between">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="font-semibold">{colmena.codigo}</p>
-                      <span className="text-sm text-slate-500">{nombreApiario(colmena.apiario_id)}</span>
+                      <span className="text-sm text-bosque-500">{nombreApiario(colmena.apiario_id)}</span>
                       <Insignia tono={prioridad === "alta" ? "rojo" : "ambar"}>
                         {prioridad === "alta" ? "Prioridad alta" : "Revisar"}
                       </Insignia>
                     </div>
-                    <ul className="mt-1 grid gap-0.5 text-sm text-slate-600">
+                    <ul className="mt-1 grid gap-0.5 text-sm text-bosque-600">
                       {detalles.map((detalle) => (
                         <li key={detalle.texto}>
                           {detalle.texto}
                           {detalle.origen === "INSPECCION" && ultima && (
-                            <span className="text-slate-400"> · inspección del {formatearFecha(ultima.fecha_inspeccion)}</span>
+                            <span className="text-bosque-400"> · inspección del {formatearFecha(ultima.fecha_inspeccion)}</span>
                           )}
-                          {detalle.origen === "COLMENA" && <span className="text-slate-400"> · estado de la colmena</span>}
+                          {detalle.origen === "COLMENA" && <span className="text-bosque-400"> · estado de la colmena</span>}
                         </li>
                       ))}
                     </ul>
@@ -231,7 +231,7 @@ export default function DashboardPage() {
             </ul>
           )}
           {resumen.alertas.length > 10 && (
-            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 px-5 py-3 text-sm text-slate-500">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-bosque-100 px-5 py-3 text-sm text-bosque-500">
               <span>Y {resumen.alertas.length - 10} colmenas más.</span>
               <Boton
                 variante="fantasma"
@@ -263,7 +263,7 @@ export default function DashboardPage() {
         <Panel titulo="Resumen por apiario" className="xl:col-span-3">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
-              <thead className="bg-slate-50 text-left text-slate-500">
+              <thead className="bg-bosque-50 text-left text-bosque-500">
                 <tr>
                   <th className="px-5 py-3 font-medium">Apiario</th>
                   <th className="px-5 py-3 font-medium">Ubicación</th>
@@ -276,13 +276,13 @@ export default function DashboardPage() {
                 {resumen.porApiario.map(({ apiario, colmenas, alertas }) => (
                   <tr
                     key={apiario.id}
-                    className={`border-t border-slate-100 ${String(apiario.id) === apiarioId ? "bg-amber-50" : ""}`}
+                    className={`border-t border-bosque-100 ${String(apiario.id) === apiarioId ? "bg-miel-50" : ""}`}
                   >
                     <td className="px-5 py-3 font-semibold">{apiario.nombre}</td>
-                    <td className="px-5 py-3 text-slate-600">{apiario.ubicacion || "Sin registrar"}</td>
+                    <td className="px-5 py-3 text-bosque-600">{apiario.ubicacion || "Sin registrar"}</td>
                     <td className="px-5 py-3">{colmenas}</td>
                     <td className="px-5 py-3">
-                      {alertas > 0 ? <Insignia tono="ambar">{alertas}</Insignia> : <span className="text-slate-400">0</span>}
+                      {alertas > 0 ? <Insignia tono="ambar">{alertas}</Insignia> : <span className="text-bosque-400">0</span>}
                     </td>
                     <td className="px-5 py-3 text-right">
                       <div className="flex justify-end gap-1">

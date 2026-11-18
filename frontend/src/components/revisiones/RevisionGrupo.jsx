@@ -180,24 +180,24 @@ export default function RevisionGrupo({ sesionId, onCambio, onCerrar }) {
 
           <div>
             <div className="flex flex-wrap items-baseline justify-between gap-2 text-sm">
-              <span className="font-medium text-slate-800">
+              <span className="font-medium text-bosque-800">
                 {revisadas + omitidas} de {total} colmenas
               </span>
-              <span className="text-slate-500">
+              <span className="text-bosque-500">
                 {revisadas} {revisadas === 1 ? "revisada" : "revisadas"} · {omitidas}{" "}
                 {omitidas === 1 ? "omitida" : "omitidas"} · {sesion.progreso.pendientes}{" "}
                 {sesion.progreso.pendientes === 1 ? "pendiente" : "pendientes"}
               </span>
             </div>
             <div
-              className="mt-2 h-2.5 rounded-full bg-slate-100"
+              className="mt-2 h-2.5 rounded-full bg-bosque-100"
               role="progressbar"
               aria-valuenow={avance}
               aria-valuemin={0}
               aria-valuemax={100}
               aria-label="Avance de la revisión"
             >
-              <div className="h-full rounded-full bg-amber-400" style={{ width: `${avance}%` }} />
+              <div className="h-full rounded-full bg-miel-400" style={{ width: `${avance}%` }} />
             </div>
           </div>
 
@@ -215,10 +215,10 @@ export default function RevisionGrupo({ sesionId, onCambio, onCerrar }) {
           )}
 
           {puedeTrabajar && siguiente && (
-            <div className="flex flex-col gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex flex-col gap-3 rounded-2xl border border-miel-300 bg-miel-50 p-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="text-sm text-amber-900">Siguiente colmena</p>
-                <p className="text-2xl font-bold text-slate-900">{siguiente.codigo}</p>
+                <p className="text-sm text-miel-900">Siguiente colmena</p>
+                <p className="text-2xl font-bold text-bosque-900">{siguiente.codigo}</p>
               </div>
               <div className="flex flex-wrap gap-2">
                 <Boton variante="secundario" icono={SkipForward} onClick={() => setOmitiendo(siguiente)}>
@@ -241,15 +241,15 @@ export default function RevisionGrupo({ sesionId, onCambio, onCerrar }) {
               <li
                 key={c.colmena_id}
                 className={`flex flex-wrap items-center justify-between gap-2 rounded-xl border px-3 py-2 ${
-                  c.colmena_id === sesion.siguiente_colmena_id && enCurso ? "border-amber-300" : "border-slate-200"
+                  c.colmena_id === sesion.siguiente_colmena_id && enCurso ? "border-miel-300" : "border-bosque-200"
                 }`}
               >
                 <div className="flex min-w-0 items-center gap-3">
-                  <span className="w-6 text-right text-sm font-semibold text-slate-400">{c.orden}</span>
+                  <span className="w-6 text-right text-sm font-semibold text-bosque-400">{c.orden}</span>
                   <span className="font-semibold">{c.codigo}</span>
                   <InsigniaDe mapa={ESTADO_FILA} valor={c.estado} />
                   {c.estado_general && <InsigniaDe mapa={ESTADO_GENERAL_TODOS} valor={c.estado_general} />}
-                  {c.motivo_omision && <span className="truncate text-sm text-slate-500">{c.motivo_omision}</span>}
+                  {c.motivo_omision && <span className="truncate text-sm text-bosque-500">{c.motivo_omision}</span>}
                 </div>
                 {puedeTrabajar && c.estado !== "REVISADA" && c.colmena_id !== sesion.siguiente_colmena_id && (
                   <Boton
@@ -267,7 +267,7 @@ export default function RevisionGrupo({ sesionId, onCambio, onCerrar }) {
 
           {Object.keys(sesion.resumen_estados).length > 0 && (
             <div className="flex flex-wrap items-center gap-2 text-sm">
-              <span className="text-slate-500">Resultado:</span>
+              <span className="text-bosque-500">Resultado:</span>
               {Object.entries(sesion.resumen_estados).map(([estado, cantidad]) => (
                 <Insignia key={estado} tono="gris">
                   {cantidad} · {ESTADO_GENERAL_TODOS[estado]?.texto ?? estado}
