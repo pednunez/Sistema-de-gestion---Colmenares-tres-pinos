@@ -6,7 +6,8 @@
 // - Proyecto "simulado": la inspección con transferencia, con un backend falso
 //   dentro de la prueba. No crea nada en la base de datos.
 // - Proyecto "real": login, Dashboard, alertas, Por revisar y Reportes contra el
-//   backend que esté corriendo. Solo lee. Necesita un usuario administrador en
+//   backend que esté corriendo. Las descargas generan auditoría: usar un entorno
+//   de pruebas autorizado. Necesita un usuario administrador en
 //   las variables E2E_CORREO y E2E_CLAVE (no se guardan en el repositorio).
 //
 // En Windows usa Brave si está instalado. E2E_NAVEGADOR permite la ruta de otro

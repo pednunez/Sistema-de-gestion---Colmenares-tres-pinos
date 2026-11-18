@@ -1,4 +1,7 @@
-from sqlalchemy import select
+from datetime import date, datetime, time, timezone
+from zoneinfo import ZoneInfo
+
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.auditoria import Auditoria
@@ -9,13 +12,35 @@ from app.schemas.auditoria import AuditoriaCreate
 # LISTAR REGISTROS DE AUDITORÍA
 # ==========================================================
 
-def listar_auditoria(db: Session):
+def listar_auditoria(
+    db: Session, *, entidad: str | None = None, accion: str | None = None,
+    usuario_id: int | None = None, desde: date | None = None,
+    hasta: date | None = None, offset: int = 0, limit: int | None = None,
+):
+    filtros = []
+    if entidad is not None:
+        filtros.append(func.lower(Auditoria.entidad) == entidad.lower())
+    if accion is not None:
+        filtros.append(Auditoria.accion == accion)
+    if usuario_id is not None:
+        filtros.append(Auditoria.usuario_id == usuario_id)
+    zona = ZoneInfo("America/Santiago")
+    if desde is not None:
+        filtros.append(Auditoria.fecha >= datetime.combine(
+            desde, time.min, tzinfo=zona).astimezone(timezone.utc))
+    if hasta is not None:
+        filtros.append(Auditoria.fecha <= datetime.combine(
+            hasta, time.max, tzinfo=zona).astimezone(timezone.utc))
+    total = db.scalar(select(func.count()).select_from(Auditoria).where(*filtros))
     consulta = (
         select(Auditoria)
-        .order_by(Auditoria.fecha.desc())
+        .where(*filtros)
+        .order_by(Auditoria.fecha.desc(), Auditoria.id.desc())
+        .offset(offset)
     )
-
-    return db.scalars(consulta).all()
+    if limit is not None:
+        consulta = consulta.limit(limit)
+    return db.scalars(consulta).all(), total
 
 
 # ==========================================================

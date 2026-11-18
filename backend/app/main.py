@@ -1,5 +1,7 @@
 
 from fastapi import Depends, FastAPI
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.dependencies import (
@@ -38,6 +40,7 @@ from app.routers.movil import router as movil_router
 from app.routers.revisiones import router as revisiones_router
 from app.routers.auditoria import router as auditoria_router
 from app.routers.auth import router as auth_router
+from app.routers.reportes import router as reportes_router
 
 # ==========================================================
 # INVENTARIO GENERAL
@@ -63,6 +66,16 @@ app = FastAPI(
 )
 
 
+@app.exception_handler(RequestValidationError)
+async def entrada_invalida(request, error):
+    # Pydantic incluye el valor recibido en "input". No devolver contraseñas,
+    # tokens ni cuerpos completos en errores de validación.
+    return JSONResponse(status_code=422, content={"detail": [
+        {"loc": list(item["loc"]), "msg": item["msg"], "type": item["type"]}
+        for item in error.errors()
+    ]})
+
+
 # ==========================================================
 # CORS
 # ==========================================================
@@ -73,7 +86,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
-    expose_headers=[CORRELATION_HEADER, COLMENAS_TOTAL_HEADER],
+    expose_headers=[CORRELATION_HEADER, COLMENAS_TOTAL_HEADER, "Content-Disposition"],
 )
 
 
@@ -139,6 +152,7 @@ app.include_router(
 )
 
 app.include_router(auditoria_router)
+app.include_router(reportes_router)
 
 
 # ==========================================================

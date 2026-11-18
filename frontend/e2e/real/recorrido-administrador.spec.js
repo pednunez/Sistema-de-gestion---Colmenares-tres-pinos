@@ -1,5 +1,6 @@
 // E2E contra el backend real: recorrido del administrador.
-// Solo lee: no crea, edita ni borra registros. Necesita E2E_CORREO y E2E_CLAVE
+// La descarga crea un evento de auditoría. Usar solo un entorno de pruebas autorizado.
+// Necesita E2E_CORREO y E2E_CLAVE
 // de un usuario ADMIN; sin ellas, estas pruebas se saltan.
 import { expect, test } from "@playwright/test";
 import { cerrarDialogo, irA, registrarErrores } from "../apoyo";
@@ -92,10 +93,14 @@ test("reporte: muestra la vista previa de cada reporte", async () => {
   await expect(page.getByText("Vista previa: Estado de las colmenas")).toBeVisible();
   await expect(page.getByLabel("Desde")).toHaveCount(0);
 
-  // Las descargas siguen deshabilitadas hasta definir quién genera los archivos.
+  // El backend genera y audita cada archivo.
   const descargas = page.getByRole("group", { name: "Descargar reporte" });
-  for (const nombre of ["PDF", "Excel (XLSX)", "CSV"]) {
-    await expect(descargas.getByRole("button", { name: nombre })).toBeDisabled();
+  for (const [nombre, extension] of [["PDF", "pdf"], ["Excel (XLSX)", "xlsx"], ["CSV", "csv"]]) {
+    const pendiente = page.waitForEvent("download");
+    await descargas.getByRole("button", { name: nombre }).click();
+    const archivo = await pendiente;
+    expect(archivo.suggestedFilename()).toBe(`reporte-colmenas.${extension}`);
+    expect(await archivo.failure()).toBeNull();
   }
 });
 

@@ -11,6 +11,9 @@
     "test": "npm run test:unit && npm run test:ui",
     "test:unit": "node --test \"tests/*.test.mjs\"",
     "test:ui": "vitest run",
+    "test:ui:isolated": "vitest run --config vitest.isolated.config.js",
+    "test:e2e:isolated": "playwright test --config playwright.isolated.config.js --reporter=list",
+    "build:isolated": "vite build --config vite.isolated.config.js",
     "test:e2e": "playwright test",
     "test:e2e:ver": "playwright test --headed"
   },

@@ -5,6 +5,8 @@ import { Entrada, Seleccion, Segmentado } from "../components/ui/Campo";
 import { Cargando, EstadoVacio } from "../components/ui/Estados";
 import { EncabezadoModulo, Panel } from "../components/ui/Estructura";
 import { useDatos } from "../hooks/useDatos";
+import { useAvisos } from "../hooks/useAvisos";
+import { descargarReporte } from "../services/reportesService";
 import { colmenaOperativa } from "../utils/alertas";
 import { opciones } from "../utils/etiquetas";
 import { hoyISO } from "../utils/formato";
@@ -13,8 +15,7 @@ import { FILTROS_REPORTE, TIPO_REPORTE, armarReporte, describirFiltros } from ".
 const FILAS_VISTA_PREVIA = 25;
 const OPCIONES_TIPO = Object.entries(TIPO_REPORTE).map(([valor, info]) => ({ valor, texto: info.texto }));
 
-// Descargas. Se habilitan cuando se defina con José si los archivos los genera
-// el backend (S4-T07 a S4-T09) o el frontend con estas mismas filas.
+// Los archivos se generan en el backend y la descarga queda auditada.
 const FORMATOS = [
   { id: "PDF", texto: "PDF", icono: FileText },
   { id: "XLSX", texto: "Excel (XLSX)", icono: FileSpreadsheet },
@@ -25,6 +26,8 @@ const FORMATOS = [
 export default function ReportesPage() {
   const { datos, cargado, codigoColmena, nombreApiario, nombreUsuario } = useDatos();
   const [filtros, setFiltros] = useState(FILTROS_REPORTE);
+  const [descargando, setDescargando] = useState(null);
+  const avisos = useAvisos();
   const buscar = useMemo(() => ({ codigoColmena, nombreApiario, nombreUsuario }), [codigoColmena, nombreApiario, nombreUsuario]);
 
   const tipo = TIPO_REPORTE[filtros.tipo];
@@ -55,7 +58,19 @@ export default function ReportesPage() {
 
   const reporte = useMemo(() => armarReporte(filtros, datos, buscar), [filtros, datos, buscar]);
   const hayFiltros = Object.entries(filtros).some(([campo, valor]) => campo !== "tipo" && valor);
-  const fechasInvertidas = filtros.desde && filtros.hasta && filtros.desde > filtros.hasta;
+  const fechasInvertidas = tipo.conPeriodo && filtros.desde && filtros.hasta && filtros.desde > filtros.hasta;
+  const descargar = async (formato) => {
+    if (descargando || fechasInvertidas) return;
+    setDescargando(formato);
+    try {
+      await descargarReporte({ ...filtros }, formato);
+      avisos.exito("Archivo preparado. Revisa las descargas del navegador.");
+    } catch (error) {
+      avisos.error(error.message || "No se pudo descargar el reporte.");
+    } finally {
+      setDescargando(null);
+    }
+  };
 
   if (!cargado) return <Cargando texto="Cargando datos..." />;
 
@@ -132,12 +147,14 @@ export default function ReportesPage() {
         <div className="flex flex-col gap-2 border-b border-slate-200 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex flex-wrap gap-2" role="group" aria-label="Descargar reporte">
             {FORMATOS.map((formato) => (
-              <Boton key={formato.id} variante="secundario" tamano="sm" icono={formato.icono} disabled>
+              <Boton key={formato.id} variante="secundario" tamano="sm" icono={formato.icono}
+                disabled={Boolean(descargando || fechasInvertidas)} cargando={descargando === formato.id}
+                onClick={() => descargar(formato.id)}>
                 {formato.texto}
               </Boton>
             ))}
           </div>
-          <p className="text-xs text-slate-500">La descarga se habilita cuando se defina con el backend cómo se generan los archivos.</p>
+          <p className="text-xs text-slate-500">El archivo incluye todas las filas que coinciden con los filtros al descargar.</p>
         </div>
 
         {reporte.filas.length === 0 ? (

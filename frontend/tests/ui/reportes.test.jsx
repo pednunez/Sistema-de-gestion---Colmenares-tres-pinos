@@ -1,6 +1,6 @@
 // S4-T10: reportes con filtros y vista previa.
-import { afterEach, expect, it } from "vitest";
-import { cleanup, fireEvent, screen, within } from "@testing-library/react";
+import { afterEach, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, screen, within, waitFor } from "@testing-library/react";
 import { ADMIN, irA, montarApp, simularBackend } from "./apoyo";
 
 afterEach(cleanup);
@@ -69,10 +69,44 @@ it("tratamientos y estado de las colmenas tienen sus propias columnas y estados"
   expect(celdas(filas()[1])).toMatchObject({ 4: "Requiere revisión", 6: "1" });
 });
 
-it("las descargas quedan visibles pero deshabilitadas hasta definir quién genera los archivos", async () => {
+it("habilita descargas y bloquea períodos invertidos", async () => {
   await abrir();
   const descargas = screen.getByRole("group", { name: "Descargar reporte" });
   for (const nombre of ["PDF", "Excel (XLSX)", "CSV"]) {
-    expect(within(descargas).getByRole("button", { name: nombre }).disabled).toBe(true);
+    expect(within(descargas).getByRole("button", { name: nombre }).disabled).toBe(false);
   }
+  fireEvent.change(screen.getByLabelText("Desde"), { target: { value: "2026-11-10" } });
+  fireEvent.change(screen.getByLabelText("Hasta"), { target: { value: "2026-11-01" } });
+  expect(within(descargas).getByRole("button", { name: "PDF" }).disabled).toBe(true);
+  fireEvent.click(screen.getByRole("radio", { name: "Colmenas" }));
+  expect(within(descargas).getByRole("button", { name: "PDF" }).disabled).toBe(false);
+});
+
+it("descarga con filtros y evita solicitudes duplicadas mientras espera", async () => {
+  let completar;
+  const llamadas = simularBackend({ usuario: ADMIN, datos, respuestas: {
+    "GET /reportes/inspecciones": () => new Promise((resolve) => { completar = resolve; }),
+  } });
+  const crear = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:prueba");
+  vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+  await montarApp(); await irA("Reportes");
+  fireEvent.change(screen.getByLabelText("Apiario"), { target: { value: "1" } });
+  fireEvent.click(screen.getByRole("button", { name: "PDF" }));
+  expect(screen.getByRole("button", { name: "CSV" }).disabled).toBe(true);
+  completar(new Response("%PDF-test", { headers: { "Content-Type": "application/pdf" } }));
+  await screen.findByText("Archivo preparado. Revisa las descargas del navegador.");
+  expect(crear).toHaveBeenCalledOnce();
+  expect(llamadas.filter((l) => l.ruta.startsWith("/reportes"))).toMatchObject([
+    { params: { formato: "pdf", apiario_id: "1" } },
+  ]);
+});
+
+it("muestra el rechazo del servidor y permite reintentar", async () => {
+  simularBackend({ usuario: ADMIN, datos, respuestas: {
+    "GET /reportes/inspecciones": (_, json) => json({ detail: "Sin permiso para descargar" }, 403),
+  } });
+  await montarApp(); await irA("Reportes");
+  fireEvent.click(screen.getByRole("button", { name: "PDF" }));
+  await screen.findByText("Sin permiso para descargar");
+  await waitFor(() => expect(screen.getByRole("button", { name: "PDF" }).disabled).toBe(false));
 });

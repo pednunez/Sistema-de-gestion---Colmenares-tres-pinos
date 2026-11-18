@@ -205,6 +205,10 @@ async function solicitar(ruta, { metodo = "GET", cuerpo, tipoRespuesta = "json",
   }
 
   if (respuesta.status === 204) return null;
+  if (tipoRespuesta === "archivo") return {
+    blob: await respuesta.blob(),
+    disposition: respuesta.headers.get("Content-Disposition"),
+  };
   if (tipoRespuesta === "blob") return respuesta.blob();
   return respuesta.json();
 }
@@ -216,6 +220,7 @@ export const api = {
   put: (ruta, cuerpo) => solicitar(ruta, { metodo: "PUT", cuerpo }),
   delete: (ruta) => solicitar(ruta, { metodo: "DELETE" }),
   blob: (ruta) => solicitar(ruta, { tipoRespuesta: "blob" }),
+  archivo: (ruta) => solicitar(ruta, { tipoRespuesta: "archivo" }),
   // Consulta que no deja registro si no hay conexión (estado del servidor).
   sondear: (ruta) => solicitar(ruta, { silencioso: true }),
 };

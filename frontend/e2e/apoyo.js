@@ -13,7 +13,7 @@ export async function simularBackend(page, { baseURL, usuario, datos = {}, respu
       const u = new URL(pedido.url());
       const metodo = pedido.method();
       const cuerpo = pedido.postData() ? JSON.parse(pedido.postData()) : null;
-      llamadas.push({ ruta: u.pathname, metodo, cuerpo });
+      llamadas.push({ ruta: u.pathname, metodo, cuerpo, params: Object.fromEntries(u.searchParams) });
       const cabeceras = {
         "access-control-allow-origin": origenApp,
         "access-control-allow-credentials": "true",
@@ -24,7 +24,10 @@ export async function simularBackend(page, { baseURL, usuario, datos = {}, respu
         route.fulfill({ status, headers: cabeceras, contentType: "application/json", body: JSON.stringify(body) });
       if (metodo === "OPTIONS") return route.fulfill({ status: 204, headers: cabeceras });
       const clave = `${metodo} ${u.pathname}`;
-      if (respuestas[clave]) return respuestas[clave]({ ruta: u.pathname, metodo, cuerpo }, json);
+      const archivo = (body, contentType, filename) => route.fulfill({ status: 200,
+        headers: { ...cabeceras, "access-control-expose-headers": "Content-Disposition",
+          "content-disposition": `attachment; filename="${filename}"` }, contentType, body });
+      if (respuestas[clave]) return respuestas[clave](llamadas.at(-1), json, archivo);
       if (u.pathname === "/auth/me") return json(usuario);
       if (u.pathname === "/auth/csrf") return json({ csrf_token: "csrf-e2e" });
       if (u.pathname === "/health") return json({ status: "ok" });
