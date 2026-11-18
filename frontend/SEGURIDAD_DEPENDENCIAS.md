@@ -7,7 +7,7 @@ Registro de los avisos de `npm audit` del frontend y de cómo se resolvió cada 
 | Dónde | Avisos | Estado |
 |---|---|---|
 | Código que se publica (lo que llega al navegador) | 0 | Sin avisos |
-| Herramientas de desarrollo (compilación, pruebas y revisión de código) | 6 altos | Riesgo aceptado, ver RA-01 |
+| Herramientas de desarrollo (compilación, pruebas y revisión de código) | 0 | `npm audit` ya no informa avisos, pero RA-01 sigue abierto (ver abajo) |
 
 Comando para revisarlo: `npm.cmd audit` (Windows) o `npm audit`, dentro de `frontend`.
 
@@ -34,3 +34,4 @@ Comando para revisarlo: `npm.cmd audit` (Windows) o `npm audit`, dentro de `fron
   - Forzar con `overrides` el código sin publicar del pull request: incorpora código que nadie ha revisado ni publicado.
 - **Cuándo se cierra:** apenas se publique `picomatch` 4.0.8 o superior. Se actualiza con `npm.cmd update picomatch`, se verifica con `npm.cmd audit`, `npm.cmd run lint`, `npm.cmd test` y `npm.cmd run build`, y se hace commit del `package-lock.json`.
 - **Aceptado por:** Pedro Núñez (Product Owner y frontend), 18-11-2026.
+- **Seguimiento 18-11-2026 (noche):** `npm audit` pasó a informar 0 avisos sin que cambiara ninguna dependencia: el proyecto sigue usando `picomatch` 4.0.7 y no existe una versión 4.0.8. El aviso sigue publicado, pero GitHub lo tiene como «no revisado» y sin rango de versiones afectadas, por eso `npm audit` dejó de detectarlo. **El riesgo no está corregido**: RA-01 sigue abierto y se cierra solo cuando se publique `picomatch` 4.0.8 o superior y se actualice como se indica arriba. Mientras tanto, revisar en cada sprint la página del aviso y `npm view picomatch version`.
