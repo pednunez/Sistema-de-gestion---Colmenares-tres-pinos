@@ -1,8 +1,11 @@
 
 import React, { useState } from 'react';
 
+import { COLORS } from './theme';
+
 import {
   ActivityIndicator,
+  Image,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -122,7 +125,7 @@ export default function Login({
           : undefined
       }
     >
-      <StatusBar barStyle="light-content" />
+      <StatusBar barStyle="dark-content" />
 
       <ScrollView
         contentContainerStyle={styles.contenido}
@@ -133,15 +136,12 @@ export default function Login({
 
         <View style={styles.cabecera}>
 
-          <View style={styles.logo}>
-            <Text style={styles.logoTexto}>
-              CP
-            </Text>
-          </View>
-
-          <Text style={styles.nombreSistema}>
-            Colmenares Tres Pinos
-          </Text>
+          <Image
+            source={require('./assets/colmenares-logo-horizontal.png')}
+            style={styles.logoHorizontal}
+            resizeMode="contain"
+            accessibilityLabel="Colmenares Tres Pinos"
+          />
 
           <Text style={styles.subtitulo}>
             Sistema de Gestión de Colmenas
@@ -178,7 +178,7 @@ export default function Login({
             value={email}
             onChangeText={setEmail}
             placeholder="correo@ejemplo.cl"
-            placeholderTextColor="#94A3B8"
+            placeholderTextColor={COLORS.textMuted}
             keyboardType="email-address"
             autoCapitalize="none"
             autoCorrect={false}
@@ -203,7 +203,7 @@ export default function Login({
               value={password}
               onChangeText={setPassword}
               placeholder="Ingresa tu contraseña"
-              placeholderTextColor="#94A3B8"
+              placeholderTextColor={COLORS.textMuted}
               secureTextEntry={!mostrarPassword}
               autoCapitalize="none"
               autoCorrect={false}
@@ -276,7 +276,7 @@ export default function Login({
 
               <ActivityIndicator
                 size="small"
-                color="#FFFFFF"
+                color={COLORS.surface}
               />
 
             ) : (
@@ -322,7 +322,7 @@ const styles = StyleSheet.create({
 
   pantalla: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: COLORS.backgroundSoft,
   },
 
   contenido: {
@@ -338,60 +338,43 @@ const styles = StyleSheet.create({
     marginBottom: 30,
   },
 
-  logo: {
-    width: 72,
-    height: 72,
-    borderRadius: 20,
-    backgroundColor: '#FBBF24',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-
-  logoTexto: {
-    fontSize: 27,
-    fontWeight: '900',
-    color: '#0F172A',
-  },
-
-  nombreSistema: {
-    fontSize: 25,
-    fontWeight: '800',
-    color: '#0F172A',
-    textAlign: 'center',
-    marginTop: 17,
+  logoHorizontal: {
+    width: '100%',
+    maxWidth: 310,
+    height: 104,
   },
 
   subtitulo: {
     fontSize: 14,
-    color: '#64748B',
+    color: COLORS.textSecondary,
     textAlign: 'center',
     marginTop: 5,
   },
 
   modulo: {
     fontSize: 13,
-    color: '#92400E',
+    color: COLORS.goldText,
     fontWeight: '700',
     marginTop: 10,
   },
 
   tarjeta: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
     borderRadius: 18,
     padding: 23,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: COLORS.border,
   },
 
   titulo: {
     fontSize: 24,
     fontWeight: '800',
-    color: '#0F172A',
+    color: COLORS.forest,
   },
 
   descripcion: {
     fontSize: 14,
-    color: '#64748B',
+    color: COLORS.textSecondary,
     lineHeight: 21,
     marginTop: 9,
     marginBottom: 20,
@@ -400,35 +383,35 @@ const styles = StyleSheet.create({
   etiqueta: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#334155',
+    color: COLORS.text,
     marginTop: 13,
     marginBottom: 9,
   },
 
   entrada: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: COLORS.borderStrong,
     borderRadius: 11,
     paddingHorizontal: 15,
     paddingVertical: 14,
     fontSize: 16,
-    color: '#0F172A',
+    color: COLORS.forest,
   },
 
   contenedorPassword: {
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: COLORS.borderStrong,
     borderRadius: 11,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
   },
 
   entradaPassword: {
     flex: 1,
     fontSize: 16,
-    color: '#0F172A',
+    color: COLORS.forest,
     paddingHorizontal: 15,
     paddingVertical: 14,
   },
@@ -439,7 +422,7 @@ const styles = StyleSheet.create({
   },
 
   textoMostrar: {
-    color: '#92400E',
+    color: COLORS.goldText,
     fontSize: 13,
     fontWeight: '700',
   },
@@ -447,18 +430,18 @@ const styles = StyleSheet.create({
   contenedorError: {
     marginTop: 17,
     borderRadius: 10,
-    backgroundColor: '#FEF2F2',
+    backgroundColor: COLORS.dangerBg,
     padding: 12,
   },
 
   textoError: {
-    color: '#B91C1C',
+    color: COLORS.danger,
     fontSize: 13,
     lineHeight: 20,
   },
 
   botonIngresar: {
-    backgroundColor: '#D99A24',
+    backgroundColor: COLORS.gold,
     borderRadius: 12,
     minHeight: 54,
     justifyContent: 'center',
@@ -471,7 +454,7 @@ const styles = StyleSheet.create({
   },
 
   textoIngresar: {
-    color: '#FFFFFF',
+    color: COLORS.forest,
     fontSize: 17,
     fontWeight: '800',
   },
@@ -482,14 +465,14 @@ const styles = StyleSheet.create({
   },
 
   textoInformacion: {
-    color: '#475569',
+    color: COLORS.textSecondary,
     textAlign: 'center',
     fontSize: 12,
     lineHeight: 19,
   },
 
   textoSecundario: {
-    color: '#94A3B8',
+    color: COLORS.textMuted,
     textAlign: 'center',
     fontSize: 12,
     lineHeight: 19,

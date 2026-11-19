@@ -6,6 +6,8 @@ import React, {
   useState,
 } from 'react';
 
+import { COLORS } from './theme';
+
 import {
   ActivityIndicator,
   Pressable,
@@ -485,7 +487,7 @@ export default function ColmenasLocales({
         value={busqueda}
         onChangeText={setBusqueda}
         placeholder="Buscar por código QR"
-        placeholderTextColor="#94A3B8"
+        placeholderTextColor={COLORS.textMuted}
         autoCapitalize="none"
       />
 
@@ -542,7 +544,7 @@ export default function ColmenasLocales({
       {cargando ? (
         <ActivityIndicator
           size="large"
-          color="#D99A24"
+          color={COLORS.gold}
           style={styles.cargando}
         />
       ) : error ? (
@@ -633,7 +635,7 @@ export default function ColmenasLocales({
 const styles = StyleSheet.create({
   pantalla: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: COLORS.backgroundSoft,
   },
 
   contenido: {
@@ -648,19 +650,19 @@ const styles = StyleSheet.create({
   },
 
   volverTexto: {
-    color: '#92400E',
+    color: COLORS.goldText,
     fontSize: 15,
     fontWeight: '700',
   },
 
   titulo: {
-    color: '#0F172A',
+    color: COLORS.forest,
     fontSize: 28,
     fontWeight: '800',
   },
 
   tituloCentrado: {
-    color: '#0F172A',
+    color: COLORS.forest,
     fontSize: 24,
     fontWeight: '800',
     textAlign: 'center',
@@ -675,7 +677,7 @@ const styles = StyleSheet.create({
 
   subtitulo: {
     fontSize: 14,
-    color: '#475569',
+    color: COLORS.textSecondary,
     lineHeight: 21,
     marginTop: 8,
   },
@@ -683,11 +685,11 @@ const styles = StyleSheet.create({
   resumen: {
     flexDirection: 'row',
     borderRadius: 16,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
     padding: 22,
     marginTop: 22,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: COLORS.border,
   },
 
   resumenItem: {
@@ -698,18 +700,18 @@ const styles = StyleSheet.create({
   numero: {
     fontSize: 28,
     fontWeight: '800',
-    color: '#92400E',
+    color: COLORS.goldText,
   },
 
   resumenTexto: {
     fontSize: 12,
-    color: '#64748B',
+    color: COLORS.textSecondary,
     marginTop: 5,
     textAlign: 'center',
   },
 
   seccion: {
-    color: '#0F172A',
+    color: COLORS.forest,
     fontSize: 19,
     fontWeight: '800',
     marginTop: 26,
@@ -717,12 +719,12 @@ const styles = StyleSheet.create({
   },
 
   buscador: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: COLORS.borderStrong,
     borderRadius: 12,
     padding: 16,
-    color: '#0F172A',
+    color: COLORS.forest,
     fontSize: 15,
   },
 
@@ -734,27 +736,27 @@ const styles = StyleSheet.create({
 
   filtro: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: COLORS.borderStrong,
     paddingVertical: 13,
     alignItems: 'center',
     borderRadius: 10,
   },
 
   filtroActivo: {
-    backgroundColor: '#FEF3C7',
-    borderColor: '#D99A24',
+    backgroundColor: COLORS.goldSoft,
+    borderColor: COLORS.gold,
   },
 
   filtroTexto: {
-    color: '#475569',
+    color: COLORS.textSecondary,
     fontWeight: '700',
     fontSize: 13,
   },
 
   filtroTextoActivo: {
-    color: '#92400E',
+    color: COLORS.goldText,
   },
 
   actualizar: {
@@ -763,7 +765,7 @@ const styles = StyleSheet.create({
   },
 
   actualizarTexto: {
-    color: '#92400E',
+    color: COLORS.goldText,
     fontWeight: '700',
   },
 
@@ -772,16 +774,16 @@ const styles = StyleSheet.create({
   },
 
   tarjeta: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: COLORS.border,
     borderRadius: 16,
     padding: 20,
     marginBottom: 15,
   },
 
   tarjetaTitulo: {
-    color: '#0F172A',
+    color: COLORS.forest,
     fontSize: 18,
     fontWeight: '800',
     marginBottom: 8,
@@ -789,18 +791,18 @@ const styles = StyleSheet.create({
 
   etiqueta: {
     fontSize: 13,
-    color: '#64748B',
+    color: COLORS.textSecondary,
     marginBottom: 5,
   },
 
   codigoGrande: {
     fontSize: 22,
     fontWeight: '800',
-    color: '#0F172A',
+    color: COLORS.forest,
   },
 
   insignia: {
-    backgroundColor: '#FEF3C7',
+    backgroundColor: COLORS.goldSoft,
     alignSelf: 'flex-start',
     paddingVertical: 7,
     paddingHorizontal: 10,
@@ -810,46 +812,46 @@ const styles = StyleSheet.create({
   },
 
   insigniaTexto: {
-    color: '#92400E',
+    color: COLORS.goldText,
     fontWeight: '700',
     fontSize: 12,
   },
 
   dato: {
     fontSize: 14,
-    color: '#475569',
+    color: COLORS.textSecondary,
     lineHeight: 22,
     marginTop: 6,
   },
 
   fecha: {
     fontSize: 13,
-    color: '#94A3B8',
+    color: COLORS.textMuted,
     marginBottom: 12,
   },
 
   divisor: {
     height: 1,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: COLORS.border,
     marginVertical: 15,
   },
 
   aviso: {
-    backgroundColor: '#FEF3C7',
+    backgroundColor: COLORS.goldSoft,
     borderRadius: 12,
     padding: 16,
     marginTop: 5,
   },
 
   avisoTitulo: {
-    color: '#78350F',
+    color: COLORS.goldText,
     fontWeight: '800',
     fontSize: 14,
     marginBottom: 7,
   },
 
   avisoTexto: {
-    color: '#78350F',
+    color: COLORS.goldText,
     fontSize: 13,
     lineHeight: 20,
   },
@@ -863,23 +865,23 @@ const styles = StyleSheet.create({
   },
 
   estadoPendiente: {
-    backgroundColor: '#FEF3C7',
+    backgroundColor: COLORS.goldSoft,
   },
 
   estadoSincronizado: {
-    backgroundColor: '#DCFCE7',
+    backgroundColor: COLORS.successBg,
   },
 
   estadoTexto: {
-    color: '#78350F',
+    color: COLORS.goldText,
     fontWeight: '700',
     fontSize: 12,
   },
 
   botonFicha: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
-    borderColor: '#D99A24',
+    borderColor: COLORS.gold,
     borderRadius: 10,
     padding: 14,
     marginTop: 17,
@@ -887,13 +889,13 @@ const styles = StyleSheet.create({
   },
 
   botonFichaTexto: {
-    color: '#92400E',
+    color: COLORS.goldText,
     fontWeight: '700',
     fontSize: 15,
   },
 
   botonPrincipal: {
-    backgroundColor: '#D99A24',
+    backgroundColor: COLORS.gold,
     borderRadius: 12,
     padding: 18,
     alignItems: 'center',
@@ -901,15 +903,15 @@ const styles = StyleSheet.create({
   },
 
   botonPrincipalTexto: {
-    color: '#FFFFFF',
+    color: COLORS.surface,
     fontWeight: '800',
     fontSize: 16,
   },
 
   botonSecundario: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
-    borderColor: '#D99A24',
+    borderColor: COLORS.gold,
     borderRadius: 12,
     padding: 17,
     alignItems: 'center',
@@ -917,20 +919,20 @@ const styles = StyleSheet.create({
   },
 
   botonSecundarioTexto: {
-    color: '#92400E',
+    color: COLORS.goldText,
     fontWeight: '700',
     fontSize: 15,
   },
 
   error: {
-    color: '#B91C1C',
+    color: COLORS.danger,
     fontSize: 14,
   },
 
   pie: {
     textAlign: 'center',
     fontSize: 12,
-    color: '#94A3B8',
+    color: COLORS.textMuted,
     lineHeight: 18,
     marginTop: 24,
   },

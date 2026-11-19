@@ -6,6 +6,8 @@ import React, {
   useState,
 } from 'react';
 
+import { COLORS } from './theme';
+
 import {
   ActivityIndicator,
   Alert,
@@ -188,7 +190,7 @@ function PanelDiagnostico({
 
       {cargando && (
         <ActivityIndicator
-          color="#D99A24"
+          color={COLORS.gold}
           style={styles.cargando}
         />
       )}
@@ -855,7 +857,7 @@ export default function RevisionesGrupos({
 
         {cargando ? (
           <ActivityIndicator
-            color="#D99A24"
+            color={COLORS.gold}
             size="large"
           />
         ) : error ? (
@@ -1146,7 +1148,7 @@ export default function RevisionesGrupos({
       {cargando ? (
         <ActivityIndicator
           size="large"
-          color="#D99A24"
+          color={COLORS.gold}
         />
       ) : (
         <>
@@ -1336,7 +1338,7 @@ export default function RevisionesGrupos({
 const styles = StyleSheet.create({
   pantalla: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: COLORS.backgroundSoft,
   },
 
   contenido: {
@@ -1348,12 +1350,12 @@ const styles = StyleSheet.create({
   titulo: {
     fontSize: 25,
     fontWeight: '800',
-    color: '#172337',
+    color: COLORS.forestDeep,
     marginBottom: 12,
   },
 
   subtitulo: {
-    color: '#64748B',
+    color: COLORS.textSecondary,
     fontSize: 14,
     lineHeight: 21,
     marginTop: 8,
@@ -1363,42 +1365,42 @@ const styles = StyleSheet.create({
   seccion: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#172337',
+    color: COLORS.forestDeep,
     marginTop: 22,
     marginBottom: 12,
   },
 
   enlace: {
-    color: '#92400E',
+    color: COLORS.goldText,
     fontSize: 15,
     fontWeight: '700',
     marginBottom: 20,
   },
 
   tarjeta: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
     padding: 17,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: COLORS.border,
     marginBottom: 13,
   },
 
   tarjetaInterna: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
     padding: 14,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: COLORS.border,
     marginTop: 13,
   },
 
   panel: {
-    backgroundColor: '#FFFBEB',
+    backgroundColor: COLORS.goldSoft,
     padding: 15,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#F4D393',
+    borderColor: COLORS.goldBorder,
     marginTop: 12,
     marginBottom: 10,
   },
@@ -1406,20 +1408,20 @@ const styles = StyleSheet.create({
   tituloTarjeta: {
     fontSize: 17,
     fontWeight: '800',
-    color: '#172337',
+    color: COLORS.forestDeep,
     marginBottom: 10,
   },
 
   detalle: {
     fontSize: 14,
-    color: '#475569',
+    color: COLORS.textSecondary,
     lineHeight: 21,
     marginBottom: 7,
   },
 
   avisoCaja: {
-    backgroundColor: '#FFF7E6',
-    borderColor: '#F4D393',
+    backgroundColor: COLORS.goldSoft,
+    borderColor: COLORS.goldBorder,
     borderWidth: 1,
     borderRadius: 13,
     padding: 17,
@@ -1427,8 +1429,8 @@ const styles = StyleSheet.create({
   },
 
   aviso: {
-    color: '#92400E',
-    backgroundColor: '#FEF3C7',
+    color: COLORS.goldText,
+    backgroundColor: COLORS.goldSoft,
     padding: 12,
     borderRadius: 10,
     fontSize: 13,
@@ -1438,7 +1440,7 @@ const styles = StyleSheet.create({
   },
 
   nota: {
-    color: '#64748B',
+    color: COLORS.textSecondary,
     fontSize: 13,
     lineHeight: 20,
     marginVertical: 15,
@@ -1457,13 +1459,13 @@ const styles = StyleSheet.create({
   },
 
   cifra: {
-    color: '#92400E',
+    color: COLORS.goldText,
     fontSize: 23,
     fontWeight: '800',
   },
 
   etiqueta: {
-    color: '#64748B',
+    color: COLORS.textSecondary,
     fontSize: 11,
     textAlign: 'center',
   },
@@ -1474,11 +1476,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 13,
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    borderBottomColor: COLORS.border,
   },
 
   texto: {
-    color: '#172337',
+    color: COLORS.forestDeep,
     fontSize: 14,
     fontWeight: '600',
   },
@@ -1495,27 +1497,27 @@ const styles = StyleSheet.create({
   },
 
   verde: {
-    color: '#166534',
-    backgroundColor: '#DCFCE7',
+    color: COLORS.successDeep,
+    backgroundColor: COLORS.successBg,
   },
 
   naranja: {
-    color: '#92400E',
-    backgroundColor: '#FEF3C7',
+    color: COLORS.goldText,
+    backgroundColor: COLORS.goldSoft,
   },
 
   gris: {
-    color: '#475569',
-    backgroundColor: '#E2E8F0',
+    color: COLORS.textSecondary,
+    backgroundColor: COLORS.border,
   },
 
   rojo: {
-    color: '#991B1B',
-    backgroundColor: '#FEE2E2',
+    color: COLORS.danger,
+    backgroundColor: COLORS.dangerBg,
   },
 
   boton: {
-    backgroundColor: '#D99A24',
+    backgroundColor: COLORS.gold,
     padding: 14,
     borderRadius: 10,
     alignItems: 'center',
@@ -1523,23 +1525,23 @@ const styles = StyleSheet.create({
   },
 
   botonBorde: {
-    borderColor: '#D99A24',
+    borderColor: COLORS.gold,
     borderWidth: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
   },
 
   botonPeligro: {
-    backgroundColor: '#9F3131',
+    backgroundColor: COLORS.danger,
   },
 
   textoBoton: {
-    color: '#FFFFFF',
+    color: COLORS.surface,
     fontWeight: '800',
     fontSize: 14,
   },
 
   textoBorde: {
-    color: '#92400E',
+    color: COLORS.goldText,
   },
 
   deshabilitado: {
@@ -1547,7 +1549,7 @@ const styles = StyleSheet.create({
   },
 
   label: {
-    color: '#334155',
+    color: COLORS.text,
     fontSize: 13,
     fontWeight: '700',
     marginTop: 12,
@@ -1555,18 +1557,18 @@ const styles = StyleSheet.create({
   },
 
   input: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: COLORS.borderStrong,
     borderRadius: 10,
     padding: 13,
     fontSize: 14,
-    color: '#172337',
+    color: COLORS.forestDeep,
     minHeight: 55,
   },
 
   error: {
-    color: '#B91C1C',
+    color: COLORS.danger,
     fontSize: 13,
     marginVertical: 8,
   },
@@ -1574,11 +1576,11 @@ const styles = StyleSheet.create({
   paso: {
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    borderBottomColor: COLORS.border,
   },
 
   pasoTitulo: {
-    color: '#334155',
+    color: COLORS.text,
     fontSize: 13,
     fontWeight: '800',
     marginBottom: 5,

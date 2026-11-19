@@ -5,6 +5,8 @@ import React, {
   useState,
 } from 'react';
 
+import { COLORS } from './theme';
+
 import {
   View,
   Text,
@@ -156,7 +158,7 @@ export default function MisInspecciones({
       {cargando ? (
         <ActivityIndicator
           size="large"
-          color="#D99A24"
+          color={COLORS.gold}
           style={styles.loading}
         />
       ) : error ? (
@@ -279,7 +281,7 @@ const styles = StyleSheet.create({
 
   container: {
     flex: 1,
-    backgroundColor: '#FFF9EC',
+    backgroundColor: COLORS.goldSoft,
   },
 
   content: {
@@ -296,7 +298,7 @@ const styles = StyleSheet.create({
   },
 
   textoVolver: {
-    color: '#9A430D',
+    color: COLORS.goldText,
     fontWeight: 'bold',
     fontSize: 22,
   },
@@ -310,13 +312,13 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 27,
     fontWeight: 'bold',
-    color: '#3D321B',
+    color: COLORS.text,
     textAlign: 'center',
   },
 
   subtitle: {
     fontSize: 14,
-    color: '#766B52',
+    color: COLORS.textMuted,
     textAlign: 'center',
     marginTop: 8,
     marginBottom: 25,
@@ -324,7 +326,7 @@ const styles = StyleSheet.create({
 
   resumen: {
     flexDirection: 'row',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
     borderRadius: 16,
     padding: 20,
     marginBottom: 15,
@@ -338,12 +340,12 @@ const styles = StyleSheet.create({
   numero: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: '#956513',
+    color: COLORS.goldText,
   },
 
   resumenLabel: {
     fontSize: 13,
-    color: '#766B52',
+    color: COLORS.textMuted,
     marginTop: 5,
   },
 
@@ -354,7 +356,7 @@ const styles = StyleSheet.create({
   },
 
   actualizarTexto: {
-    color: '#956513',
+    color: COLORS.goldText,
     fontWeight: 'bold',
   },
 
@@ -363,7 +365,7 @@ const styles = StyleSheet.create({
   },
 
   card: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
     borderRadius: 16,
     padding: 20,
     marginBottom: 16,
@@ -372,19 +374,19 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 19,
     fontWeight: 'bold',
-    color: '#3D321B',
+    color: COLORS.text,
   },
 
   codigo: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#956513',
+    color: COLORS.goldText,
     marginTop: 10,
   },
 
   fecha: {
     fontSize: 13,
-    color: '#938972',
+    color: COLORS.textSecondary,
     marginTop: 6,
     marginBottom: 12,
   },
@@ -397,29 +399,29 @@ const styles = StyleSheet.create({
   },
 
   pendiente: {
-    backgroundColor: '#FFF0CC',
+    backgroundColor: COLORS.goldSoft,
   },
 
   sincronizado: {
-    backgroundColor: '#DAF4E0',
+    backgroundColor: COLORS.successBg,
   },
 
   estadoTexto: {
     fontSize: 13,
     fontWeight: 'bold',
-    color: '#775315',
+    color: COLORS.goldText,
   },
 
   detalles: {
     gap: 8,
     borderTopWidth: 1,
-    borderColor: '#F0E6D3',
+    borderColor: COLORS.goldSoft,
     paddingTop: 14,
   },
 
   detalle: {
     fontSize: 14,
-    color: '#594D36',
+    color: COLORS.textSecondary,
     lineHeight: 21,
   },
 
@@ -429,23 +431,23 @@ const styles = StyleSheet.create({
 
   observacionesTitulo: {
     fontWeight: 'bold',
-    color: '#3D321B',
+    color: COLORS.text,
     marginBottom: 7,
   },
 
   emptyTitle: {
     fontWeight: 'bold',
-    color: '#3D321B',
+    color: COLORS.text,
     marginBottom: 8,
   },
 
   error: {
-    color: '#B42318',
+    color: COLORS.danger,
   },
 
   footer: {
     fontSize: 12,
-    color: '#938972',
+    color: COLORS.textSecondary,
     textAlign: 'center',
     marginTop: 25,
     lineHeight: 19,

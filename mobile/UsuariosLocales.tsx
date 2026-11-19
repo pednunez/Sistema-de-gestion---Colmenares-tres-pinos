@@ -6,6 +6,8 @@ import React, {
   useState,
 } from 'react';
 
+import { COLORS } from './theme';
+
 import {
   ActivityIndicator,
   Alert,
@@ -648,7 +650,7 @@ export default function UsuariosLocales({
 
         <ActivityIndicator
           size="large"
-          color="#D99A16"
+          color={COLORS.gold}
         />
 
         <Text style={styles.estadoTexto}>
@@ -674,7 +676,7 @@ export default function UsuariosLocales({
           <RefreshControl
             refreshing={actualizando}
             onRefresh={refrescar}
-            colors={['#D99A16']}
+            colors={[COLORS.gold]}
           />
         }
         keyboardShouldPersistTaps="handled"
@@ -767,7 +769,7 @@ export default function UsuariosLocales({
           <View style={styles.resumenCard}>
             <Text style={[
               styles.resumenNumero,
-              { color: '#1D4ED8' },
+              { color: COLORS.info },
             ]}>
               {totalAdmin}
             </Text>
@@ -779,7 +781,7 @@ export default function UsuariosLocales({
           <View style={styles.resumenCard}>
             <Text style={[
               styles.resumenNumero,
-              { color: '#15803D' },
+              { color: COLORS.success },
             ]}>
               {totalApicultores}
             </Text>
@@ -814,7 +816,7 @@ export default function UsuariosLocales({
         <TextInput
           style={styles.busqueda}
           placeholder="Buscar por nombre, correo o ID..."
-          placeholderTextColor="#94A3B8"
+          placeholderTextColor={COLORS.textMuted}
           value={busqueda}
           onChangeText={setBusqueda}
           autoCapitalize="none"
@@ -891,7 +893,7 @@ export default function UsuariosLocales({
             {detalleCargando ? (
 
               <ActivityIndicator
-                color="#D99A16"
+                color={COLORS.gold}
                 style={{ marginVertical: 18 }}
               />
 
@@ -1134,7 +1136,7 @@ export default function UsuariosLocales({
               <TextInput
                 style={styles.formInput}
                 placeholder="Nombre"
-                placeholderTextColor="#94A3B8"
+                placeholderTextColor={COLORS.textMuted}
                 value={nombre}
                 onChangeText={setNombre}
                 maxLength={100}
@@ -1149,7 +1151,7 @@ export default function UsuariosLocales({
               <TextInput
                 style={styles.formInput}
                 placeholder="Apellido"
-                placeholderTextColor="#94A3B8"
+                placeholderTextColor={COLORS.textMuted}
                 value={apellido}
                 onChangeText={setApellido}
                 maxLength={100}
@@ -1164,7 +1166,7 @@ export default function UsuariosLocales({
               <TextInput
                 style={styles.formInput}
                 placeholder="correo@ejemplo.cl"
-                placeholderTextColor="#94A3B8"
+                placeholderTextColor={COLORS.textMuted}
                 value={email}
                 onChangeText={setEmail}
                 keyboardType="email-address"
@@ -1185,7 +1187,7 @@ export default function UsuariosLocales({
                   <TextInput
                     style={styles.formInput}
                     placeholder="Mínimo 8 caracteres"
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor={COLORS.textMuted}
                     value={password}
                     onChangeText={setPassword}
                     secureTextEntry
@@ -1261,7 +1263,7 @@ export default function UsuariosLocales({
 
                   {guardando ? (
 
-                    <ActivityIndicator color="#FFFFFF" />
+                    <ActivityIndicator color={COLORS.surface} />
 
                   ) : (
 
@@ -1299,7 +1301,7 @@ const styles = StyleSheet.create({
 
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: COLORS.backgroundSoft,
   },
 
   contenido: {
@@ -1321,27 +1323,27 @@ const styles = StyleSheet.create({
   botonVolver: {
     paddingVertical: 9,
     paddingHorizontal: 13,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: COLORS.border,
   },
 
   botonVolverTexto: {
-    color: '#334155',
+    color: COLORS.text,
     fontSize: 14,
     fontWeight: '700',
   },
 
   adminChip: {
-    backgroundColor: '#FEF3C7',
+    backgroundColor: COLORS.goldSoft,
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: 20,
   },
 
   adminChipTexto: {
-    color: '#92400E',
+    color: COLORS.goldText,
     fontSize: 10,
     fontWeight: '800',
   },
@@ -1349,12 +1351,12 @@ const styles = StyleSheet.create({
   titulo: {
     fontSize: 28,
     fontWeight: '900',
-    color: '#0F172A',
+    color: COLORS.forest,
   },
 
   subtitulo: {
     fontSize: 14,
-    color: '#64748B',
+    color: COLORS.textSecondary,
     marginTop: 7,
     lineHeight: 21,
   },
@@ -1362,7 +1364,7 @@ const styles = StyleSheet.create({
   seccionTitulo: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#0F172A',
+    color: COLORS.forest,
     marginBottom: 14,
   },
 
@@ -1376,11 +1378,11 @@ const styles = StyleSheet.create({
   resumenCard: {
     flex: 1,
     minWidth: '28%',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
     borderRadius: 14,
     padding: 14,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: COLORS.border,
     minHeight: 90,
     justifyContent: 'center',
   },
@@ -1388,12 +1390,12 @@ const styles = StyleSheet.create({
   resumenNumero: {
     fontSize: 27,
     fontWeight: '900',
-    color: '#0F172A',
+    color: COLORS.forest,
   },
 
   resumenEtiqueta: {
     fontSize: 11,
-    color: '#64748B',
+    color: COLORS.textSecondary,
     marginTop: 4,
     fontWeight: '600',
   },
@@ -1408,34 +1410,34 @@ const styles = StyleSheet.create({
   },
 
   botonNuevo: {
-    backgroundColor: '#172554',
+    backgroundColor: COLORS.forestMid,
     paddingHorizontal: 14,
     paddingVertical: 11,
     borderRadius: 10,
   },
 
   botonNuevoTexto: {
-    color: '#FFFFFF',
+    color: COLORS.surface,
     fontSize: 12,
     fontWeight: '800',
   },
 
   busqueda: {
     height: 48,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
     borderRadius: 12,
     paddingHorizontal: 14,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: COLORS.border,
     fontSize: 13,
-    color: '#0F172A',
+    color: COLORS.forest,
     marginBottom: 17,
   },
 
   filtroTitulo: {
     fontSize: 12,
     fontWeight: '800',
-    color: '#475569',
+    color: COLORS.textSecondary,
     marginBottom: 10,
   },
 
@@ -1449,30 +1451,30 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    backgroundColor: '#FFFFFF',
+    borderColor: COLORS.borderStrong,
+    backgroundColor: COLORS.surface,
   },
 
   filtroActivo: {
-    backgroundColor: '#172554',
-    borderColor: '#172554',
+    backgroundColor: COLORS.forestMid,
+    borderColor: COLORS.forestMid,
   },
 
   filtroTexto: {
-    color: '#475569',
+    color: COLORS.textSecondary,
     fontSize: 11,
     fontWeight: '700',
   },
 
   filtroTextoActivo: {
-    color: '#FFFFFF',
+    color: COLORS.surface,
   },
 
   usuarioCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: COLORS.border,
     padding: 15,
     marginBottom: 11,
   },
@@ -1485,13 +1487,13 @@ const styles = StyleSheet.create({
   },
 
   usuarioNombre: {
-    color: '#0F172A',
+    color: COLORS.forest,
     fontSize: 15,
     fontWeight: '900',
   },
 
   usuarioEmail: {
-    color: '#64748B',
+    color: COLORS.textSecondary,
     fontSize: 12,
     marginTop: 6,
   },
@@ -1503,16 +1505,16 @@ const styles = StyleSheet.create({
   },
 
   rolBadgeAdmin: {
-    backgroundColor: '#DBEAFE',
+    backgroundColor: COLORS.infoBg,
   },
 
   rolBadgeApicultor: {
-    backgroundColor: '#DCFCE7',
+    backgroundColor: COLORS.successBg,
   },
 
   rolTexto: {
     fontSize: 10,
-    color: '#334155',
+    color: COLORS.text,
     fontWeight: '900',
   },
 
@@ -1526,21 +1528,21 @@ const styles = StyleSheet.create({
 
   usuarioMetaTexto: {
     fontSize: 10,
-    color: '#64748B',
+    color: COLORS.textSecondary,
   },
 
   verDetalle: {
     fontSize: 12,
-    color: '#B7791F',
+    color: COLORS.goldText,
     fontWeight: '800',
     marginTop: 13,
   },
 
   detalleCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
     borderRadius: 15,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: COLORS.borderStrong,
     padding: 16,
     marginBottom: 20,
   },
@@ -1555,7 +1557,7 @@ const styles = StyleSheet.create({
   detalleTitulo: {
     fontSize: 17,
     fontWeight: '900',
-    color: '#0F172A',
+    color: COLORS.forest,
     flex: 1,
   },
 
@@ -1563,27 +1565,27 @@ const styles = StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: 9,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: COLORS.background,
     alignItems: 'center',
     justifyContent: 'center',
   },
 
   cerrarDetalleTexto: {
     fontSize: 15,
-    color: '#475569',
+    color: COLORS.textSecondary,
     fontWeight: '800',
   },
 
   detalleDato: {
     fontSize: 11,
-    color: '#64748B',
+    color: COLORS.textSecondary,
     fontWeight: '800',
     marginTop: 12,
   },
 
   detalleValor: {
     fontSize: 13,
-    color: '#0F172A',
+    color: COLORS.forest,
     fontWeight: '600',
     marginTop: 4,
   },
@@ -1597,39 +1599,39 @@ const styles = StyleSheet.create({
 
   botonEditar: {
     flex: 1,
-    backgroundColor: '#172554',
+    backgroundColor: COLORS.forestMid,
     padding: 12,
     borderRadius: 10,
     alignItems: 'center',
   },
 
   botonEditarTexto: {
-    color: '#FFFFFF',
+    color: COLORS.surface,
     fontWeight: '800',
     fontSize: 12,
   },
 
   botonDesactivar: {
     flex: 1,
-    backgroundColor: '#FEE2E2',
+    backgroundColor: COLORS.dangerBg,
     padding: 12,
     borderRadius: 10,
     alignItems: 'center',
   },
 
   botonDesactivarTexto: {
-    color: '#B91C1C',
+    color: COLORS.danger,
     fontWeight: '800',
     fontSize: 12,
   },
 
   vacioCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
     borderRadius: 14,
     padding: 28,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: COLORS.border,
   },
 
   vacioIcono: {
@@ -1640,11 +1642,11 @@ const styles = StyleSheet.create({
   vacioTitulo: {
     fontSize: 16,
     fontWeight: '900',
-    color: '#0F172A',
+    color: COLORS.forest,
   },
 
   vacioTexto: {
-    color: '#64748B',
+    color: COLORS.textSecondary,
     fontSize: 12,
     textAlign: 'center',
     marginTop: 8,
@@ -1655,39 +1657,39 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: COLORS.backgroundSoft,
     gap: 15,
   },
 
   estadoTexto: {
-    color: '#64748B',
+    color: COLORS.textSecondary,
     fontSize: 13,
   },
 
   errorCard: {
     padding: 20,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#FECACA',
+    borderColor: COLORS.dangerBg,
     marginBottom: 20,
   },
 
   errorTitulo: {
-    color: '#B91C1C',
+    color: COLORS.danger,
     fontSize: 16,
     fontWeight: '900',
   },
 
   errorTexto: {
-    color: '#64748B',
+    color: COLORS.textSecondary,
     fontSize: 12,
     marginTop: 9,
     lineHeight: 19,
   },
 
   botonReintentar: {
-    backgroundColor: '#172554',
+    backgroundColor: COLORS.forestMid,
     padding: 13,
     borderRadius: 10,
     alignItems: 'center',
@@ -1695,7 +1697,7 @@ const styles = StyleSheet.create({
   },
 
   botonReintentarTexto: {
-    color: '#FFFFFF',
+    color: COLORS.surface,
     fontWeight: '800',
     fontSize: 13,
   },
@@ -1706,7 +1708,7 @@ const styles = StyleSheet.create({
   },
 
   pieTexto: {
-    color: '#94A3B8',
+    color: COLORS.textMuted,
     fontSize: 10,
   },
 
@@ -1722,7 +1724,7 @@ const styles = StyleSheet.create({
   },
 
   modalCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
     borderRadius: 18,
     padding: 20,
     maxHeight: '90%',
@@ -1730,12 +1732,12 @@ const styles = StyleSheet.create({
 
   modalTitulo: {
     fontSize: 22,
-    color: '#0F172A',
+    color: COLORS.forest,
     fontWeight: '900',
   },
 
   modalSubtitulo: {
-    color: '#64748B',
+    color: COLORS.textSecondary,
     fontSize: 12,
     lineHeight: 19,
     marginTop: 7,
@@ -1743,7 +1745,7 @@ const styles = StyleSheet.create({
   },
 
   formLabel: {
-    color: '#334155',
+    color: COLORS.text,
     fontSize: 12,
     fontWeight: '800',
     marginBottom: 7,
@@ -1753,11 +1755,11 @@ const styles = StyleSheet.create({
   formInput: {
     height: 47,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: COLORS.borderStrong,
     borderRadius: 10,
     paddingHorizontal: 12,
-    color: '#0F172A',
-    backgroundColor: '#FFFFFF',
+    color: COLORS.forest,
+    backgroundColor: COLORS.surface,
     fontSize: 13,
   },
 
@@ -1769,25 +1771,25 @@ const styles = StyleSheet.create({
   rolOpcion: {
     flex: 1,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: COLORS.borderStrong,
     paddingVertical: 13,
     borderRadius: 10,
     alignItems: 'center',
   },
 
   rolOpcionActivo: {
-    backgroundColor: '#172554',
-    borderColor: '#172554',
+    backgroundColor: COLORS.forestMid,
+    borderColor: COLORS.forestMid,
   },
 
   rolOpcionTexto: {
-    color: '#475569',
+    color: COLORS.textSecondary,
     fontSize: 11,
     fontWeight: '800',
   },
 
   rolOpcionTextoActivo: {
-    color: '#FFFFFF',
+    color: COLORS.surface,
   },
 
   modalFooter: {
@@ -1801,12 +1803,12 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 13,
     borderRadius: 10,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: COLORS.background,
     alignItems: 'center',
   },
 
   botonCancelarTexto: {
-    color: '#475569',
+    color: COLORS.textSecondary,
     fontWeight: '800',
     fontSize: 12,
   },
@@ -1815,13 +1817,13 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 13,
     borderRadius: 10,
-    backgroundColor: '#172554',
+    backgroundColor: COLORS.forestMid,
     alignItems: 'center',
     justifyContent: 'center',
   },
 
   botonGuardarTexto: {
-    color: '#FFFFFF',
+    color: COLORS.surface,
     fontWeight: '800',
     fontSize: 12,
   },

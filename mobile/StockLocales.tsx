@@ -5,6 +5,8 @@ import React, {
   useState,
 } from 'react';
 
+import { COLORS } from './theme';
+
 import {
   ActivityIndicator,
   Alert,
@@ -1142,7 +1144,7 @@ export default function StockLocales({
 
         <ActivityIndicator
           size="large"
-          color="#D99A16"
+          color={COLORS.gold}
         />
 
         <Text style={styles.secundario}>
@@ -1177,7 +1179,7 @@ export default function StockLocales({
 
             onRefresh={recargarTodo}
 
-            colors={['#D99A16']}
+            colors={[COLORS.gold]}
 
           />
 
@@ -1322,7 +1324,7 @@ export default function StockLocales({
 
           placeholder="Buscar material..."
 
-          placeholderTextColor="#94A3B8"
+          placeholderTextColor={COLORS.textMuted}
 
           value={busqueda}
 
@@ -1701,7 +1703,7 @@ export default function StockLocales({
                   value={filtroDesde}
                   onChangeText={setFiltroDesde}
                   placeholder="AAAA-MM-DD"
-                  placeholderTextColor="#94A3B8"
+                  placeholderTextColor={COLORS.textMuted}
                   maxLength={10}
                   autoCapitalize="none"
                 />
@@ -1719,7 +1721,7 @@ export default function StockLocales({
                   value={filtroHasta}
                   onChangeText={setFiltroHasta}
                   placeholder="AAAA-MM-DD"
-                  placeholderTextColor="#94A3B8"
+                  placeholderTextColor={COLORS.textMuted}
                   maxLength={10}
                   autoCapitalize="none"
                 />
@@ -1759,7 +1761,7 @@ export default function StockLocales({
             {historialCargando ? (
 
               <ActivityIndicator
-                color="#D99A16"
+                color={COLORS.gold}
                 size="small"
                 style={styles.cargandoHistorial}
               />
@@ -2071,7 +2073,7 @@ export default function StockLocales({
                     value={cantidad}
                     onChangeText={setCantidad}
                     placeholder="Ej. 10"
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor={COLORS.textMuted}
                     keyboardType="number-pad"
                     maxLength={5}
                   />
@@ -2091,7 +2093,7 @@ export default function StockLocales({
                         value={apiarioId}
                         onChangeText={setApiarioId}
                         placeholder="ID del apiario"
-                        placeholderTextColor="#94A3B8"
+                        placeholderTextColor={COLORS.textMuted}
                         keyboardType="number-pad"
                       />
 
@@ -2104,7 +2106,7 @@ export default function StockLocales({
                         value={colmenaId}
                         onChangeText={setColmenaId}
                         placeholder="ID de la colmena"
-                        placeholderTextColor="#94A3B8"
+                        placeholderTextColor={COLORS.textMuted}
                         keyboardType="number-pad"
                       />
 
@@ -2188,7 +2190,7 @@ export default function StockLocales({
                     value={observaciones}
                     onChangeText={setObservaciones}
                     placeholder="Información adicional..."
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor={COLORS.textMuted}
                     multiline
                     maxLength={500}
                   />
@@ -2220,7 +2222,7 @@ export default function StockLocales({
                     value={minimoTexto}
                     onChangeText={setMinimoTexto}
                     placeholder="Ej. 20"
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor={COLORS.textMuted}
                     keyboardType="number-pad"
                     maxLength={5}
                   />
@@ -2268,7 +2270,7 @@ export default function StockLocales({
                   {guardando ? (
 
                     <ActivityIndicator
-                      color="#172033"
+                      color={COLORS.forest}
                     />
 
                   ) : (
@@ -2303,7 +2305,7 @@ const styles = StyleSheet.create({
 
   contenedor: {
     flex: 1,
-    backgroundColor: '#F1F4FA',
+    backgroundColor: COLORS.background,
   },
 
   contenido: {
@@ -2315,11 +2317,11 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F1F4FA',
+    backgroundColor: COLORS.background,
   },
 
   secundario: {
-    color: '#64748B',
+    color: COLORS.textSecondary,
     fontSize: 13,
     marginTop: 7,
     textAlign: 'center',
@@ -2328,7 +2330,7 @@ const styles = StyleSheet.create({
 
   volver: {
     alignSelf: 'flex-start',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
     paddingHorizontal: 13,
     paddingVertical: 9,
     borderRadius: 9,
@@ -2336,19 +2338,19 @@ const styles = StyleSheet.create({
   },
 
   volverTexto: {
-    color: '#334155',
+    color: COLORS.text,
     fontWeight: '700',
   },
 
   titulo: {
     fontSize: 27,
     fontWeight: '800',
-    color: '#172033',
+    color: COLORS.forest,
   },
 
   subtitulo: {
     fontSize: 14,
-    color: '#64748B',
+    color: COLORS.textSecondary,
     marginTop: 5,
   },
 
@@ -2363,62 +2365,62 @@ const styles = StyleSheet.create({
   resumenCard: {
     flex: 1,
     minWidth: '45%',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
     borderRadius: 13,
     padding: 14,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: COLORS.border,
   },
 
   numero: {
     fontSize: 24,
     fontWeight: '800',
-    color: '#172033',
+    color: COLORS.forest,
   },
 
   resumenTexto: {
     fontSize: 12,
-    color: '#64748B',
+    color: COLORS.textSecondary,
     marginTop: 5,
   },
 
   rojo: {
-    color: '#B91C1C',
+    color: COLORS.danger,
   },
 
   naranja: {
-    color: '#B45309',
+    color: COLORS.warning,
   },
 
   gris: {
-    color: '#64748B',
+    color: COLORS.textSecondary,
   },
 
   alerta: {
-    backgroundColor: '#FFF7ED',
+    backgroundColor: COLORS.goldSoft,
     borderWidth: 1,
-    borderColor: '#FED7AA',
+    borderColor: COLORS.warningBg,
     borderRadius: 12,
     padding: 14,
     marginTop: 12,
   },
 
   alertaTitulo: {
-    color: '#9A3412',
+    color: COLORS.goldText,
     fontSize: 14,
     fontWeight: '900',
     marginBottom: 7,
   },
 
   alertaTexto: {
-    color: '#9A3412',
+    color: COLORS.goldText,
     fontSize: 12,
     lineHeight: 19,
     marginTop: 3,
   },
 
   botonNuevo: {
-    backgroundColor: '#D99A16',
+    backgroundColor: COLORS.gold,
     borderRadius: 11,
     padding: 15,
     alignItems: 'center',
@@ -2426,18 +2428,18 @@ const styles = StyleSheet.create({
   },
 
   botonNuevoTexto: {
-    color: '#172033',
+    color: COLORS.forest,
     fontWeight: '800',
     fontSize: 14,
   },
 
   buscador: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
-    borderColor: '#DCE3EC',
+    borderColor: COLORS.border,
     borderRadius: 11,
     padding: 13,
-    color: '#172033',
+    color: COLORS.forest,
     fontSize: 14,
     marginTop: 15,
   },
@@ -2445,21 +2447,21 @@ const styles = StyleSheet.create({
   seccion: {
     fontSize: 19,
     fontWeight: '800',
-    color: '#172033',
+    color: COLORS.forest,
     marginTop: 22,
     marginBottom: 8,
   },
 
   descripcionSeccion: {
     fontSize: 12,
-    color: '#64748B',
+    color: COLORS.textSecondary,
     marginBottom: 12,
   },
 
   tarjeta: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: COLORS.border,
     borderRadius: 15,
     padding: 15,
     marginTop: 11,
@@ -2474,7 +2476,7 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 11,
-    backgroundColor: '#FEF3C7',
+    backgroundColor: COLORS.goldSoft,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10,
@@ -2492,24 +2494,24 @@ const styles = StyleSheet.create({
   nombreMaterial: {
     fontSize: 15,
     fontWeight: '800',
-    color: '#172033',
+    color: COLORS.forest,
   },
 
   codigoMaterial: {
     fontSize: 10,
-    color: '#94A3B8',
+    color: COLORS.textMuted,
     marginTop: 4,
   },
 
   estadoBajo: {
-    backgroundColor: '#FEE2E2',
+    backgroundColor: COLORS.dangerBg,
     paddingHorizontal: 9,
     paddingVertical: 6,
     borderRadius: 20,
   },
 
   estadoBajoTexto: {
-    color: '#B91C1C',
+    color: COLORS.danger,
     fontSize: 10,
     fontWeight: '800',
   },
@@ -2524,7 +2526,7 @@ const styles = StyleSheet.create({
   estadistica: {
     flex: 1,
     minWidth: '22%',
-    backgroundColor: '#F8FAFC',
+    backgroundColor: COLORS.backgroundSoft,
     borderRadius: 9,
     paddingVertical: 11,
     paddingHorizontal: 5,
@@ -2534,12 +2536,12 @@ const styles = StyleSheet.create({
   estadisticaNumero: {
     fontSize: 17,
     fontWeight: '800',
-    color: '#172033',
+    color: COLORS.forest,
   },
 
   estadisticaTexto: {
     fontSize: 9,
-    color: '#64748B',
+    color: COLORS.textSecondary,
     marginTop: 4,
     textAlign: 'center',
   },
@@ -2549,19 +2551,19 @@ const styles = StyleSheet.create({
   },
 
   minimoTexto: {
-    color: '#475569',
+    color: COLORS.textSecondary,
     fontSize: 12,
     fontWeight: '700',
   },
 
   fecha: {
-    color: '#94A3B8',
+    color: COLORS.textMuted,
     fontSize: 10,
     marginTop: 5,
   },
 
   botonMinimo: {
-    backgroundColor: '#FEF3C7',
+    backgroundColor: COLORS.goldSoft,
     padding: 11,
     borderRadius: 9,
     alignItems: 'center',
@@ -2569,21 +2571,21 @@ const styles = StyleSheet.create({
   },
 
   textoBotonMinimo: {
-    color: '#92400E',
+    color: COLORS.goldText,
     fontSize: 12,
     fontWeight: '800',
   },
 
   separador: {
     height: 1,
-    backgroundColor: '#DCE3EC',
+    backgroundColor: COLORS.border,
     marginTop: 25,
   },
 
   label: {
     fontSize: 12,
     fontWeight: '800',
-    color: '#334155',
+    color: COLORS.text,
     marginTop: 13,
     marginBottom: 7,
   },
@@ -2595,27 +2597,27 @@ const styles = StyleSheet.create({
   },
 
   chip: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
-    borderColor: '#DCE3EC',
+    borderColor: COLORS.border,
     paddingHorizontal: 11,
     paddingVertical: 9,
     borderRadius: 20,
   },
 
   chipActivo: {
-    backgroundColor: '#FEF3C7',
-    borderColor: '#D99A16',
+    backgroundColor: COLORS.goldSoft,
+    borderColor: COLORS.gold,
   },
 
   chipTexto: {
-    color: '#475569',
+    color: COLORS.textSecondary,
     fontSize: 11,
     fontWeight: '700',
   },
 
   chipTextoActivo: {
-    color: '#92400E',
+    color: COLORS.goldText,
   },
 
   fechasFila: {
@@ -2628,12 +2630,12 @@ const styles = StyleSheet.create({
   },
 
   input: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: COLORS.backgroundSoft,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: COLORS.borderStrong,
     borderRadius: 10,
     padding: 12,
-    color: '#172033',
+    color: COLORS.forest,
     fontSize: 14,
   },
 
@@ -2645,67 +2647,67 @@ const styles = StyleSheet.create({
 
   botonAplicar: {
     flex: 1,
-    backgroundColor: '#172033',
+    backgroundColor: COLORS.forest,
     padding: 12,
     borderRadius: 9,
     alignItems: 'center',
   },
 
   textoBotonAplicar: {
-    color: '#FFFFFF',
+    color: COLORS.surface,
     fontWeight: '800',
     fontSize: 12,
   },
 
   botonLimpiar: {
-    backgroundColor: '#E2E8F0',
+    backgroundColor: COLORS.border,
     padding: 12,
     borderRadius: 9,
     alignItems: 'center',
   },
 
   textoBotonLimpiar: {
-    color: '#334155',
+    color: COLORS.text,
     fontWeight: '800',
     fontSize: 12,
   },
 
   tarjetaHistorial: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: COLORS.border,
     borderRadius: 13,
     padding: 14,
     marginTop: 10,
   },
 
   cantidadMovimiento: {
-    backgroundColor: '#FEF3C7',
+    backgroundColor: COLORS.goldSoft,
     paddingHorizontal: 10,
     paddingVertical: 7,
     borderRadius: 9,
   },
 
   cantidadMovimientoTexto: {
-    color: '#92400E',
+    color: COLORS.goldText,
     fontSize: 11,
     fontWeight: '800',
   },
 
   fechaHistorial: {
-    color: '#64748B',
+    color: COLORS.textSecondary,
     fontSize: 11,
     marginTop: 12,
   },
 
   detalleHistorial: {
-    color: '#475569',
+    color: COLORS.textSecondary,
     fontSize: 11,
     marginTop: 6,
   },
 
   usuarioHistorial: {
-    color: '#94A3B8',
+    color: COLORS.textMuted,
     fontSize: 10,
     marginTop: 9,
   },
@@ -2722,9 +2724,9 @@ const styles = StyleSheet.create({
   },
 
   botonPagina: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: COLORS.borderStrong,
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 9,
@@ -2735,19 +2737,19 @@ const styles = StyleSheet.create({
   },
 
   textoPagina: {
-    color: '#334155',
+    color: COLORS.text,
     fontSize: 11,
     fontWeight: '800',
   },
 
   numeroPagina: {
-    color: '#64748B',
+    color: COLORS.textSecondary,
     fontSize: 12,
     fontWeight: '700',
   },
 
   vacio: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
     borderRadius: 14,
     padding: 25,
     alignItems: 'center',
@@ -2762,26 +2764,26 @@ const styles = StyleSheet.create({
   vacioTitulo: {
     fontSize: 15,
     fontWeight: '800',
-    color: '#172033',
+    color: COLORS.forest,
     marginBottom: 5,
   },
 
   errorCaja: {
-    backgroundColor: '#FEF2F2',
+    backgroundColor: COLORS.dangerBg,
     borderWidth: 1,
-    borderColor: '#FECACA',
+    borderColor: COLORS.dangerBg,
     borderRadius: 11,
     padding: 13,
     marginTop: 12,
   },
 
   errorTexto: {
-    color: '#991B1B',
+    color: COLORS.danger,
     fontSize: 12,
   },
 
   reintentar: {
-    color: '#B91C1C',
+    color: COLORS.danger,
     fontWeight: '800',
     marginTop: 8,
   },
@@ -2794,7 +2796,7 @@ const styles = StyleSheet.create({
   },
 
   modal: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
     borderRadius: 18,
     padding: 20,
     maxHeight: '92%',
@@ -2803,12 +2805,12 @@ const styles = StyleSheet.create({
   modalTitulo: {
     fontSize: 21,
     fontWeight: '800',
-    color: '#172033',
+    color: COLORS.forest,
     marginBottom: 15,
   },
 
   subtituloModal: {
-    color: '#64748B',
+    color: COLORS.textSecondary,
     fontSize: 13,
     marginBottom: 10,
   },
@@ -2820,27 +2822,27 @@ const styles = StyleSheet.create({
   },
 
   opcion: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: COLORS.backgroundSoft,
     borderWidth: 1,
-    borderColor: '#DCE3EC',
+    borderColor: COLORS.border,
     paddingHorizontal: 11,
     paddingVertical: 9,
     borderRadius: 9,
   },
 
   opcionActiva: {
-    backgroundColor: '#FEF3C7',
-    borderColor: '#D99A16',
+    backgroundColor: COLORS.goldSoft,
+    borderColor: COLORS.gold,
   },
 
   opcionTexto: {
-    color: '#475569',
+    color: COLORS.textSecondary,
     fontSize: 11,
     fontWeight: '700',
   },
 
   opcionTextoActivo: {
-    color: '#92400E',
+    color: COLORS.goldText,
   },
 
   opcionesMaterial: {
@@ -2850,16 +2852,16 @@ const styles = StyleSheet.create({
   },
 
   opcionMaterial: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: COLORS.backgroundSoft,
     borderWidth: 1,
-    borderColor: '#DCE3EC',
+    borderColor: COLORS.border,
     paddingHorizontal: 10,
     paddingVertical: 9,
     borderRadius: 9,
   },
 
   ayuda: {
-    color: '#94A3B8',
+    color: COLORS.textMuted,
     fontSize: 11,
     lineHeight: 17,
     marginTop: 8,
@@ -2879,19 +2881,19 @@ const styles = StyleSheet.create({
   },
 
   botonCancelar: {
-    backgroundColor: '#E2E8F0',
+    backgroundColor: COLORS.border,
     borderRadius: 10,
     paddingHorizontal: 16,
     paddingVertical: 12,
   },
 
   textoCancelar: {
-    color: '#334155',
+    color: COLORS.text,
     fontWeight: '700',
   },
 
   botonGuardar: {
-    backgroundColor: '#D99A16',
+    backgroundColor: COLORS.gold,
     borderRadius: 10,
     paddingHorizontal: 20,
     paddingVertical: 12,
@@ -2900,7 +2902,7 @@ const styles = StyleSheet.create({
   },
 
   textoGuardar: {
-    color: '#172033',
+    color: COLORS.forest,
     fontWeight: '800',
   },
 

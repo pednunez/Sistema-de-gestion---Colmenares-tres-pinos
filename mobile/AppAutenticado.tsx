@@ -1,6 +1,8 @@
 
 import React, { useEffect, useState } from 'react';
 
+import { COLORS } from './theme';
+
 import {
   ActivityIndicator,
   Alert,
@@ -458,7 +460,7 @@ export default function AppAutenticado() {
 
         <ActivityIndicator
           size="large"
-          color="#FBBF24"
+          color={COLORS.gold}
         />
 
         <Text style={styles.cargandoTexto}>
@@ -515,12 +517,12 @@ const styles = StyleSheet.create({
 
   contenedor: {
     flex: 1,
-    backgroundColor: '#F1F4FA',
+    backgroundColor: COLORS.background,
   },
 
   cargando: {
     flex: 1,
-    backgroundColor: '#F1F4FA',
+    backgroundColor: COLORS.background,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -528,7 +530,7 @@ const styles = StyleSheet.create({
   cargandoTexto: {
     marginTop: 15,
     fontSize: 14,
-    color: '#475569',
+    color: COLORS.textSecondary,
   },
 
 });

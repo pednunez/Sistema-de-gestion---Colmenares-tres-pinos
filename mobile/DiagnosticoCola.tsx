@@ -5,6 +5,8 @@ import React, {
   useState,
 } from 'react';
 
+import { COLORS } from './theme';
+
 import {
   ActivityIndicator,
   Modal,
@@ -317,7 +319,7 @@ export default function DiagnosticoCola({
               <View style={styles.cargando}>
                 <ActivityIndicator
                   size="large"
-                  color="#D99A24"
+                  color={COLORS.gold}
                 />
 
                 <Text style={styles.detalle}>
@@ -555,23 +557,23 @@ const styles = StyleSheet.create({
     bottom: 24,
     zIndex: 100,
     elevation: 10,
-    backgroundColor: '#172337',
+    backgroundColor: COLORS.forestDeep,
     paddingHorizontal: 15,
     paddingVertical: 12,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#D99A24',
+    borderColor: COLORS.gold,
   },
 
   botonFlotanteTexto: {
-    color: '#FFFFFF',
+    color: COLORS.surface,
     fontSize: 12,
     fontWeight: '800',
   },
 
   pantalla: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: COLORS.backgroundSoft,
   },
 
   contenido: {
@@ -588,7 +590,7 @@ const styles = StyleSheet.create({
   },
 
   volverTexto: {
-    color: '#92400E',
+    color: COLORS.goldText,
     fontSize: 15,
     fontWeight: '700',
   },
@@ -596,40 +598,40 @@ const styles = StyleSheet.create({
   titulo: {
     fontSize: 25,
     fontWeight: '800',
-    color: '#172337',
+    color: COLORS.forestDeep,
   },
 
   subtitulo: {
     fontSize: 14,
-    color: '#64748B',
+    color: COLORS.textSecondary,
     marginTop: 5,
     marginBottom: 20,
   },
 
   aviso: {
-    backgroundColor: '#FFF7E6',
+    backgroundColor: COLORS.goldSoft,
     borderWidth: 1,
-    borderColor: '#F4D393',
+    borderColor: COLORS.goldBorder,
     borderRadius: 12,
     padding: 15,
     marginBottom: 16,
   },
 
   avisoTitulo: {
-    color: '#92400E',
+    color: COLORS.goldText,
     fontSize: 15,
     fontWeight: '800',
     marginBottom: 7,
   },
 
   avisoTexto: {
-    color: '#775315',
+    color: COLORS.goldText,
     fontSize: 13,
     lineHeight: 20,
   },
 
   boton: {
-    backgroundColor: '#D99A24',
+    backgroundColor: COLORS.gold,
     borderRadius: 11,
     padding: 16,
     alignItems: 'center',
@@ -637,15 +639,15 @@ const styles = StyleSheet.create({
   },
 
   botonTexto: {
-    color: '#FFFFFF',
+    color: COLORS.surface,
     fontSize: 15,
     fontWeight: '800',
   },
 
   botonSecundario: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
-    borderColor: '#D99A24',
+    borderColor: COLORS.gold,
     borderRadius: 11,
     padding: 16,
     alignItems: 'center',
@@ -653,7 +655,7 @@ const styles = StyleSheet.create({
   },
 
   textoSecundario: {
-    color: '#92400E',
+    color: COLORS.goldText,
     fontSize: 15,
     fontWeight: '800',
   },
@@ -669,23 +671,23 @@ const styles = StyleSheet.create({
   },
 
   tarjeta: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: COLORS.border,
     borderRadius: 13,
     padding: 17,
     marginBottom: 12,
   },
 
   seccion: {
-    color: '#172337',
+    color: COLORS.forestDeep,
     fontSize: 18,
     fontWeight: '800',
     marginBottom: 15,
   },
 
   seccionExterior: {
-    color: '#172337',
+    color: COLORS.forestDeep,
     fontSize: 18,
     fontWeight: '800',
     marginTop: 20,
@@ -693,55 +695,55 @@ const styles = StyleSheet.create({
   },
 
   detalle: {
-    color: '#475569',
+    color: COLORS.textSecondary,
     fontSize: 14,
     lineHeight: 22,
     marginBottom: 5,
   },
 
   operacionTitulo: {
-    color: '#172337',
+    color: COLORS.forestDeep,
     fontSize: 16,
     fontWeight: '800',
     marginBottom: 10,
   },
 
   clave: {
-    color: '#94A3B8',
+    color: COLORS.textMuted,
     fontSize: 11,
     marginTop: 10,
   },
 
   envios: {
-    color: '#92400E',
+    color: COLORS.goldText,
     fontWeight: '800',
     fontSize: 13,
     marginTop: 12,
   },
 
   mensaje: {
-    color: '#166534',
+    color: COLORS.successDeep,
     fontSize: 13,
     marginBottom: 14,
   },
 
   errorCaja: {
-    backgroundColor: '#FEF2F2',
+    backgroundColor: COLORS.dangerBg,
     borderWidth: 1,
-    borderColor: '#FCA5A5',
+    borderColor: COLORS.dangerBg,
     padding: 15,
     borderRadius: 10,
     marginBottom: 12,
   },
 
   error: {
-    color: '#B91C1C',
+    color: COLORS.danger,
     fontSize: 13,
     lineHeight: 20,
   },
 
   pie: {
-    color: '#94A3B8',
+    color: COLORS.textMuted,
     fontSize: 12,
     textAlign: 'center',
     lineHeight: 20,

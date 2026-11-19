@@ -4,9 +4,13 @@ import React, {
   useState,
 } from 'react';
 
+import { COLORS } from './theme';
+
 import {
   Alert,
+  Image,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StatusBar,
@@ -762,7 +766,10 @@ export default function App({
     mostrarCerrar: boolean
   ) => (
 
-    <View style={styles.sidebarContenido}>
+    <View style={[
+      styles.sidebarContenido,
+      mostrarCerrar && styles.sidebarContenidoMovil,
+    ]}>
 
       {/* MARCA: AL TOCARLA REGRESA A LA PANTALLA PRINCIPAL DEL ROL */}
       <View style={styles.sidebarMarca}>
@@ -780,11 +787,12 @@ export default function App({
               : 'Ir a colmenas'
           }
         >
-          <View style={styles.logo}>
-            <Text style={styles.logoTexto}>
-              CP
-            </Text>
-          </View>
+          <Image
+            source={require('./assets/colmenares-logo-mark.png')}
+            style={styles.logoImagen}
+            resizeMode="contain"
+            accessibilityLabel="Logo Colmenares Tres Pinos"
+          />
 
           <View style={styles.marcaTextos}>
             <Text style={styles.marcaTitulo}>
@@ -897,7 +905,10 @@ export default function App({
       </ScrollView>
 
       {/* USUARIO Y SESION */}
-      <View style={styles.sidebarFooter}>
+      <View style={[
+        styles.sidebarFooter,
+        mostrarCerrar && styles.sidebarFooterMovil,
+      ]}>
 
         <View style={styles.usuarioAvatar}>
           <Text style={styles.usuarioAvatarTexto}>
@@ -947,6 +958,9 @@ export default function App({
         <Pressable
           style={styles.botonSalir}
           onPress={onCerrarSesion}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Cerrar sesión"
         >
           <Text style={styles.botonSalirIcono}>
             ↪
@@ -1304,7 +1318,7 @@ export default function App({
 
     <View style={styles.appContainer}>
 
-      <StatusBar barStyle="dark-content" />
+      <StatusBar barStyle={menuAbierto ? 'light-content' : 'dark-content'} />
 
       {/* MENU PERMANENTE EN TABLETS */}
       {esTablet && (
@@ -1514,26 +1528,26 @@ const styles = StyleSheet.create({
     flex: 1,
     position: 'relative',
     flexDirection: 'row',
-    backgroundColor: '#F1F4FA',
+    backgroundColor: COLORS.background,
   },
 
   areaPrincipal: {
     flex: 1,
     minWidth: 0,
-    backgroundColor: '#F1F4FA',
+    backgroundColor: COLORS.background,
   },
 
   contenidoPrincipal: {
     flex: 1,
     minHeight: 0,
-    backgroundColor: '#F1F4FA',
+    backgroundColor: COLORS.background,
   },
 
   // SIDEBAR TABLET
 
   sidebarTablet: {
     width: 270,
-    backgroundColor: '#0F172A',
+    backgroundColor: COLORS.forestDeep,
   },
 
   menuModalContenedor: {
@@ -1548,14 +1562,25 @@ const styles = StyleSheet.create({
     left: 0,
     width: 292,
     maxWidth: '86%',
-    backgroundColor: '#0F172A',
+    backgroundColor: COLORS.forestDeep,
     zIndex: 2,
     elevation: 2,
   },
 
   sidebarContenido: {
     flex: 1,
-    backgroundColor: '#0F172A',
+    backgroundColor: COLORS.forestDeep,
+  },
+
+  // En el menú modal, reserva espacio para la barra de estado.
+  // El pie móvil reserva espacio para la navegación inferior de Android
+  // y el indicador de inicio de iOS.
+  sidebarContenidoMovil: {
+    paddingTop: Platform.OS === 'android'
+      ? (StatusBar.currentHeight ?? 24)
+      : Platform.OS === 'ios'
+        ? 44
+        : 0,
   },
 
   sidebarMarca: {
@@ -1564,7 +1589,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 19,
     borderBottomWidth: 1,
-    borderBottomColor: '#263449',
+    borderBottomColor: COLORS.forestBorder,
   },
 
   marcaAcceso: {
@@ -1579,19 +1604,9 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
 
-  logo: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: '#FBBF24',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  logoTexto: {
-    color: '#0F172A',
-    fontSize: 19,
-    fontWeight: '900',
+  logoImagen: {
+    width: 48,
+    height: 48,
   },
 
   marcaTextos: {
@@ -1600,13 +1615,13 @@ const styles = StyleSheet.create({
   },
 
   marcaTitulo: {
-    color: '#FFFFFF',
+    color: COLORS.surface,
     fontSize: 17,
     fontWeight: '900',
   },
 
   marcaSubtitulo: {
-    color: '#94A3B8',
+    color: COLORS.gold,
     fontSize: 12,
     marginTop: 3,
   },
@@ -1617,11 +1632,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderRadius: 8,
-    backgroundColor: '#1E293B',
+    backgroundColor: COLORS.forestMid,
   },
 
   botonCerrarMenuTexto: {
-    color: '#FFFFFF',
+    color: COLORS.surface,
     fontSize: 17,
   },
 
@@ -1638,7 +1653,7 @@ const styles = StyleSheet.create({
   },
 
   menuEtiqueta: {
-    color: '#64748B',
+    color: COLORS.textMuted,
     fontSize: 10,
     fontWeight: '900',
     letterSpacing: 1,
@@ -1657,7 +1672,7 @@ const styles = StyleSheet.create({
   },
 
   menuItemActivo: {
-    backgroundColor: '#FBBF24',
+    backgroundColor: COLORS.gold,
   },
 
   menuItemDeshabilitado: {
@@ -1665,22 +1680,22 @@ const styles = StyleSheet.create({
   },
 
   menuItemPresionado: {
-    backgroundColor: '#1E293B',
+    backgroundColor: COLORS.forestMid,
   },
 
   menuIcono: {
     width: 31,
     fontSize: 19,
-    color: '#CBD5E1',
+    color: COLORS.borderStrong,
     textAlign: 'center',
   },
 
   menuIconoActivo: {
-    color: '#0F172A',
+    color: COLORS.forest,
   },
 
   menuIconoDeshabilitado: {
-    color: '#64748B',
+    color: COLORS.textMuted,
   },
 
   menuTextos: {
@@ -1689,22 +1704,22 @@ const styles = StyleSheet.create({
   },
 
   menuNombre: {
-    color: '#CBD5E1',
+    color: COLORS.borderStrong,
     fontSize: 13,
     fontWeight: '600',
   },
 
   menuNombreActivo: {
-    color: '#0F172A',
+    color: COLORS.forest,
     fontWeight: '900',
   },
 
   menuNombreDeshabilitado: {
-    color: '#94A3B8',
+    color: COLORS.textMuted,
   },
 
   menuPendiente: {
-    color: '#64748B',
+    color: COLORS.textMuted,
     fontSize: 8,
     fontWeight: '900',
     marginTop: 3,
@@ -1715,28 +1730,38 @@ const styles = StyleSheet.create({
     width: 6,
     height: 6,
     borderRadius: 4,
-    backgroundColor: '#0F172A',
+    backgroundColor: COLORS.forest,
   },
 
   // USUARIO SIDEBAR
 
   sidebarFooter: {
     borderTopWidth: 1,
-    borderTopColor: '#263449',
-    padding: 16,
+    borderTopColor: COLORS.forestBorder,
+    paddingHorizontal: 16,
+    paddingTop: 14,
+    paddingBottom: 16,
+  },
+
+  sidebarFooterMovil: {
+    paddingBottom: Platform.OS === 'android'
+      ? 38
+      : Platform.OS === 'ios'
+        ? 36
+        : 20,
   },
 
   usuarioAvatar: {
     width: 37,
     height: 37,
     borderRadius: 11,
-    backgroundColor: '#FBBF24',
+    backgroundColor: COLORS.gold,
     alignItems: 'center',
     justifyContent: 'center',
   },
 
   usuarioAvatarTexto: {
-    color: '#0F172A',
+    color: COLORS.forest,
     fontSize: 17,
     fontWeight: '900',
   },
@@ -1746,84 +1771,86 @@ const styles = StyleSheet.create({
   },
 
   usuarioNombre: {
-    color: '#FFFFFF',
+    color: COLORS.surface,
     fontSize: 13,
     fontWeight: '800',
   },
 
   usuarioRol: {
-    color: '#94A3B8',
+    color: COLORS.textMuted,
     fontSize: 11,
     marginTop: 3,
   },
 
   botonAyuda: {
-    marginTop: 15,
-    minHeight: 43,
+    marginTop: 13,
+    minHeight: 48,
     borderRadius: 9,
-    backgroundColor: '#172337',
+    backgroundColor: COLORS.forestDeep,
     borderWidth: 1,
-    borderColor: '#475569',
+    borderColor: COLORS.forestBorder,
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
   },
 
   botonAyudaPresionado: {
-    backgroundColor: '#263449',
+    backgroundColor: COLORS.forestBorder,
   },
 
   botonAyudaIcono: {
     width: 22,
     height: 22,
     borderRadius: 11,
-    backgroundColor: '#FBBF24',
+    backgroundColor: COLORS.gold,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10,
   },
 
   botonAyudaIconoTexto: {
-    color: '#0F172A',
+    color: COLORS.forest,
     fontSize: 14,
     fontWeight: '900',
   },
 
   botonAyudaTexto: {
-    color: '#CBD5E1',
+    color: COLORS.borderStrong,
     fontSize: 12,
     fontWeight: '700',
   },
 
   botonSalir: {
-    marginTop: 15,
-    minHeight: 43,
-    borderRadius: 9,
-    backgroundColor: '#1E293B',
+    marginTop: 12,
+    minHeight: 52,
+    borderRadius: 11,
+    backgroundColor: COLORS.forestMid,
+    borderWidth: 1,
+    borderColor: COLORS.forestBorder,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
   },
 
   botonSalirIcono: {
-    color: '#FCA5A5',
+    color: COLORS.dangerBg,
     fontSize: 18,
     marginRight: 10,
   },
 
   botonSalirTexto: {
-    color: '#CBD5E1',
-    fontSize: 12,
-    fontWeight: '700',
+    color: COLORS.surface,
+    fontSize: 13,
+    fontWeight: '800',
   },
 
   // CABECERA
 
   cabecera: {
     minHeight: 76,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
     borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
+    borderBottomColor: COLORS.border,
     paddingHorizontal: 20,
     flexDirection: 'row',
     alignItems: 'center',
@@ -1844,13 +1871,13 @@ const styles = StyleSheet.create({
   },
 
   cabeceraTitulo: {
-    color: '#0F172A',
+    color: COLORS.forest,
     fontSize: 19,
     fontWeight: '900',
   },
 
   cabeceraSubtitulo: {
-    color: '#64748B',
+    color: COLORS.textSecondary,
     fontSize: 11,
     marginTop: 3,
   },
@@ -1867,13 +1894,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: COLORS.border,
     borderRadius: 9,
     marginRight: 11,
   },
 
   botonMenuTexto: {
-    color: '#0F172A',
+    color: COLORS.forest,
     fontSize: 21,
   },
 
@@ -1889,11 +1916,11 @@ const styles = StyleSheet.create({
   },
 
   estadoChipActivo: {
-    backgroundColor: '#F0FDF4',
+    backgroundColor: COLORS.successBg,
   },
 
   estadoChipOffline: {
-    backgroundColor: '#FFF7ED',
+    backgroundColor: COLORS.goldSoft,
   },
 
   estadoPunto: {
@@ -1903,11 +1930,11 @@ const styles = StyleSheet.create({
   },
 
   puntoActivo: {
-    backgroundColor: '#16A34A',
+    backgroundColor: COLORS.success,
   },
 
   puntoOffline: {
-    backgroundColor: '#EA580C',
+    backgroundColor: COLORS.warning,
   },
 
   estadoTexto: {
@@ -1916,11 +1943,11 @@ const styles = StyleSheet.create({
   },
 
   estadoTextoActivo: {
-    color: '#166534',
+    color: COLORS.successDeep,
   },
 
   estadoTextoOffline: {
-    color: '#9A3412',
+    color: COLORS.goldText,
   },
 
   // ACTUALIZAR
@@ -1930,8 +1957,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 11,
     borderRadius: 9,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    backgroundColor: '#FFFFFF',
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.surface,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1939,13 +1966,13 @@ const styles = StyleSheet.create({
   },
 
   actualizarIcono: {
-    color: '#0F172A',
+    color: COLORS.forest,
     fontSize: 21,
     fontWeight: '700',
   },
 
   actualizarTexto: {
-    color: '#334155',
+    color: COLORS.text,
     fontSize: 11,
     fontWeight: '700',
   },
@@ -1955,19 +1982,19 @@ const styles = StyleSheet.create({
   avisoOffline: {
     paddingHorizontal: 16,
     paddingVertical: 11,
-    backgroundColor: '#FFF7ED',
+    backgroundColor: COLORS.goldSoft,
     borderBottomWidth: 1,
-    borderBottomColor: '#FED7AA',
+    borderBottomColor: COLORS.warningBg,
   },
 
   avisoOfflineTitulo: {
-    color: '#9A3412',
+    color: COLORS.goldText,
     fontWeight: '900',
     fontSize: 12,
   },
 
   avisoOfflineTexto: {
-    color: '#9A3412',
+    color: COLORS.goldText,
     fontSize: 11,
     lineHeight: 17,
     marginTop: 3,
@@ -1976,13 +2003,13 @@ const styles = StyleSheet.create({
   avisoCatalogo: {
     paddingHorizontal: 16,
     paddingVertical: 10,
-    backgroundColor: '#FFFBEB',
+    backgroundColor: COLORS.goldSoft,
     borderBottomWidth: 1,
-    borderBottomColor: '#FDE68A',
+    borderBottomColor: COLORS.goldBorder,
   },
 
   avisoCatalogoTexto: {
-    color: '#92400E',
+    color: COLORS.goldText,
     fontSize: 11,
     lineHeight: 17,
   },
@@ -2020,14 +2047,14 @@ const styles = StyleSheet.create({
   },
 
   cameraTitle: {
-    color: '#FFFFFF',
+    color: COLORS.surface,
     fontSize: 22,
     fontWeight: 'bold',
     textAlign: 'center',
   },
 
   cameraSubtitle: {
-    color: '#FFFFFF',
+    color: COLORS.surface,
     fontSize: 14,
     marginTop: 8,
     textAlign: 'center',
@@ -2037,14 +2064,14 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 35,
     alignSelf: 'center',
-    backgroundColor: '#FBBF24',
+    backgroundColor: COLORS.gold,
     paddingVertical: 16,
     paddingHorizontal: 35,
     borderRadius: 12,
   },
 
   buttonText: {
-    color: '#0F172A',
+    color: COLORS.forest,
     fontSize: 16,
     fontWeight: '900',
   },
@@ -2066,25 +2093,25 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 26,
     fontWeight: '900',
-    color: '#0F172A',
+    color: COLORS.forest,
     textAlign: 'center',
   },
 
   card: {
     width: '100%',
     maxWidth: 700,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
     borderRadius: 16,
     padding: 24,
     marginTop: 25,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: COLORS.border,
   },
 
   cardLabel: {
     fontSize: 13,
-    color: '#64748B',
+    color: COLORS.textSecondary,
     marginTop: 12,
     fontWeight: '700',
   },
@@ -2092,7 +2119,7 @@ const styles = StyleSheet.create({
   nombreColmena: {
     fontSize: 23,
     fontWeight: '900',
-    color: '#0F172A',
+    color: COLORS.forest,
     marginTop: 10,
     textAlign: 'center',
   },
@@ -2100,13 +2127,13 @@ const styles = StyleSheet.create({
   codigo: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#956513',
+    color: COLORS.goldText,
     marginTop: 10,
     textAlign: 'center',
   },
 
   infoText: {
-    color: '#64748B',
+    color: COLORS.textSecondary,
     textAlign: 'center',
     fontSize: 13,
     lineHeight: 20,
@@ -2121,23 +2148,23 @@ const styles = StyleSheet.create({
   },
 
   button: {
-    backgroundColor: '#FBBF24',
+    backgroundColor: COLORS.gold,
     padding: 18,
     borderRadius: 12,
     alignItems: 'center',
   },
 
   secondaryButton: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
     padding: 18,
     borderRadius: 12,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: COLORS.border,
   },
 
   secondaryText: {
-    color: '#334155',
+    color: COLORS.text,
     fontSize: 16,
     fontWeight: '700',
   },

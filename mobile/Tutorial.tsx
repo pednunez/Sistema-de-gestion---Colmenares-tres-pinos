@@ -4,6 +4,8 @@ import React, {
   useState,
 } from 'react';
 
+import { COLORS } from './theme';
+
 import {
   Modal,
   Pressable,
@@ -455,11 +457,11 @@ left: 0,
   },
 
   tarjeta: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
     borderRadius: 22,
     overflow: 'hidden',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: COLORS.border,
     elevation: 18,
   },
 
@@ -475,14 +477,14 @@ left: 0,
   },
 
   etiqueta: {
-    color: '#A16207',
+    color: COLORS.goldText,
     fontSize: 10,
     fontWeight: '900',
     letterSpacing: 1.2,
   },
 
   subEtiqueta: {
-    color: '#64748B',
+    color: COLORS.textSecondary,
     fontSize: 12,
     marginTop: 5,
   },
@@ -491,13 +493,13 @@ left: 0,
     width: 35,
     height: 35,
     borderRadius: 10,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: COLORS.background,
     alignItems: 'center',
     justifyContent: 'center',
   },
 
   cerrarTexto: {
-    color: '#475569',
+    color: COLORS.textSecondary,
     fontSize: 16,
     fontWeight: '800',
   },
@@ -514,11 +516,11 @@ left: 0,
     flex: 1,
     height: 5,
     borderRadius: 5,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: COLORS.border,
   },
 
   progresoParteActiva: {
-    backgroundColor: '#FBBF24',
+    backgroundColor: COLORS.gold,
   },
 
   // CONTENIDO
@@ -534,7 +536,7 @@ left: 0,
   },
 
   numeroPaso: {
-    color: '#A16207',
+    color: COLORS.goldText,
     fontSize: 10,
     fontWeight: '900',
     letterSpacing: 1,
@@ -547,14 +549,14 @@ left: 0,
   },
 
   titulo: {
-    color: '#0F172A',
+    color: COLORS.forest,
     fontSize: 24,
     fontWeight: '900',
     lineHeight: 31,
   },
 
   descripcion: {
-    color: '#475569',
+    color: COLORS.textSecondary,
     fontSize: 14,
     lineHeight: 23,
     marginTop: 13,
@@ -566,20 +568,20 @@ left: 0,
     marginTop: 22,
     padding: 15,
     borderRadius: 14,
-    backgroundColor: '#FFFBEB',
+    backgroundColor: COLORS.goldSoft,
     borderWidth: 1,
-    borderColor: '#FDE68A',
+    borderColor: COLORS.goldBorder,
   },
 
   consejoTitulo: {
-    color: '#92400E',
+    color: COLORS.goldText,
     fontSize: 10,
     fontWeight: '900',
     letterSpacing: 1,
   },
 
   consejoTexto: {
-    color: '#78350F',
+    color: COLORS.goldText,
     fontSize: 13,
     lineHeight: 21,
     marginTop: 7,
@@ -589,7 +591,7 @@ left: 0,
 
   pie: {
     borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
+    borderTopColor: COLORS.border,
     paddingHorizontal: 18,
     paddingVertical: 15,
     flexDirection: 'row',
@@ -604,7 +606,7 @@ left: 0,
   },
 
   textoOmitir: {
-    color: '#64748B',
+    color: COLORS.textSecondary,
     fontSize: 12,
     fontWeight: '700',
   },
@@ -619,12 +621,12 @@ left: 0,
     minHeight: 42,
     paddingHorizontal: 13,
     borderRadius: 10,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: COLORS.background,
     justifyContent: 'center',
   },
 
   textoAnterior: {
-    color: '#334155',
+    color: COLORS.text,
     fontSize: 12,
     fontWeight: '800',
   },
@@ -633,13 +635,13 @@ left: 0,
     minHeight: 42,
     paddingHorizontal: 19,
     borderRadius: 10,
-    backgroundColor: '#FBBF24',
+    backgroundColor: COLORS.gold,
     justifyContent: 'center',
     alignItems: 'center',
   },
 
   textoSiguiente: {
-    color: '#0F172A',
+    color: COLORS.forest,
     fontSize: 12,
     fontWeight: '900',
   },

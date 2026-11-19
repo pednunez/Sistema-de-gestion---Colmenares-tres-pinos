@@ -6,6 +6,8 @@ import React, {
   useState,
 } from 'react';
 
+import { COLORS } from './theme';
+
 import {
   ActivityIndicator,
   Alert,
@@ -358,7 +360,7 @@ export default function ApiariosLocales({
       <View style={styles.cargando}>
         <ActivityIndicator
           size="large"
-          color="#D99A16"
+          color={COLORS.gold}
         />
 
         <Text style={styles.secundario}>
@@ -384,7 +386,7 @@ export default function ApiariosLocales({
             onRefresh={() => {
               void cargarApiarios(false);
             }}
-            colors={['#D99A16']}
+            colors={[COLORS.gold]}
           />
         }
       >
@@ -457,7 +459,7 @@ export default function ApiariosLocales({
         <TextInput
           style={styles.buscador}
           placeholder="Buscar por nombre o ubicación..."
-          placeholderTextColor="#94A3B8"
+          placeholderTextColor={COLORS.textMuted}
           value={busqueda}
           onChangeText={setBusqueda}
           autoCapitalize="none"
@@ -590,7 +592,7 @@ export default function ApiariosLocales({
                       onPress={() => confirmarBaja(item)}
                     >
                       {procesandoId === item.id ? (
-                        <ActivityIndicator color="#B91C1C" />
+                        <ActivityIndicator color={COLORS.danger} />
                       ) : (
                         <Text style={styles.textoBaja}>
                           Baja
@@ -702,7 +704,7 @@ export default function ApiariosLocales({
                     value={nombre}
                     onChangeText={setNombre}
                     placeholder="Ej. Apiario Melipilla"
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor={COLORS.textMuted}
                     maxLength={100}
                   />
 
@@ -715,7 +717,7 @@ export default function ApiariosLocales({
                     value={ubicacion}
                     onChangeText={setUbicacion}
                     placeholder="Comuna, sector o dirección"
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor={COLORS.textMuted}
                     maxLength={255}
                   />
 
@@ -728,7 +730,7 @@ export default function ApiariosLocales({
                     value={descripcion}
                     onChangeText={setDescripcion}
                     placeholder="Información adicional"
-                    placeholderTextColor="#94A3B8"
+                    placeholderTextColor={COLORS.textMuted}
                     multiline
                     numberOfLines={4}
                   />
@@ -764,7 +766,7 @@ export default function ApiariosLocales({
                     disabled={guardando}
                   >
                     {guardando ? (
-                      <ActivityIndicator color="#172033" />
+                      <ActivityIndicator color={COLORS.forest} />
                     ) : (
                       <Text style={styles.textoGuardar}>
                         {modal === 'editar'
@@ -798,7 +800,7 @@ const styles = StyleSheet.create({
 
   contenedor: {
     flex: 1,
-    backgroundColor: '#F1F4FA',
+    backgroundColor: COLORS.background,
   },
 
   contenido: {
@@ -810,12 +812,12 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F1F4FA',
+    backgroundColor: COLORS.background,
   },
 
   volver: {
     alignSelf: 'flex-start',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
     paddingHorizontal: 13,
     paddingVertical: 9,
     borderRadius: 9,
@@ -823,19 +825,19 @@ const styles = StyleSheet.create({
   },
 
   volverTexto: {
-    color: '#334155',
+    color: COLORS.text,
     fontWeight: '700',
   },
 
   titulo: {
     fontSize: 27,
     fontWeight: '800',
-    color: '#172033',
+    color: COLORS.forest,
   },
 
   subtitulo: {
     fontSize: 14,
-    color: '#64748B',
+    color: COLORS.textSecondary,
     marginTop: 5,
   },
 
@@ -846,54 +848,54 @@ const styles = StyleSheet.create({
 
   resumenCard: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
     borderRadius: 13,
     padding: 13,
     marginRight: 7,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: COLORS.border,
   },
 
   numero: {
     fontSize: 24,
     fontWeight: '800',
-    color: '#172033',
+    color: COLORS.forest,
   },
 
   resumenTexto: {
     fontSize: 11,
-    color: '#64748B',
+    color: COLORS.textSecondary,
     marginTop: 5,
   },
 
   verde: {
-    color: '#16865B',
+    color: COLORS.success,
   },
 
   naranja: {
-    color: '#B45309',
+    color: COLORS.warning,
   },
 
   botonNuevo: {
-    backgroundColor: '#D99A16',
+    backgroundColor: COLORS.gold,
     borderRadius: 11,
     padding: 15,
     alignItems: 'center',
   },
 
   botonNuevoTexto: {
-    color: '#172033',
+    color: COLORS.forest,
     fontWeight: '800',
     fontSize: 14,
   },
 
   buscador: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
-    borderColor: '#DCE3EC',
+    borderColor: COLORS.border,
     borderRadius: 11,
     padding: 13,
-    color: '#172033',
+    color: COLORS.forest,
     fontSize: 14,
     marginTop: 15,
   },
@@ -901,14 +903,14 @@ const styles = StyleSheet.create({
   seccion: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#172033',
+    color: COLORS.forest,
     marginVertical: 17,
   },
 
   tarjeta: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: COLORS.border,
     borderRadius: 15,
     padding: 15,
     marginBottom: 13,
@@ -923,7 +925,7 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 11,
-    backgroundColor: '#FEF3C7',
+    backgroundColor: COLORS.goldSoft,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10,
@@ -940,12 +942,12 @@ const styles = StyleSheet.create({
   nombre: {
     fontSize: 16,
     fontWeight: '800',
-    color: '#172033',
+    color: COLORS.forest,
   },
 
   ubicacion: {
     fontSize: 12,
-    color: '#64748B',
+    color: COLORS.textSecondary,
     marginTop: 4,
   },
 
@@ -956,11 +958,11 @@ const styles = StyleSheet.create({
   },
 
   estadoActivo: {
-    backgroundColor: '#DCFCE7',
+    backgroundColor: COLORS.successBg,
   },
 
   estadoInactivo: {
-    backgroundColor: '#F1F5F9',
+    backgroundColor: COLORS.background,
   },
 
   estadoTexto: {
@@ -969,21 +971,21 @@ const styles = StyleSheet.create({
   },
 
   textoActivo: {
-    color: '#166534',
+    color: COLORS.successDeep,
   },
 
   textoInactivo: {
-    color: '#64748B',
+    color: COLORS.textSecondary,
   },
 
   descripcion: {
-    color: '#475569',
+    color: COLORS.textSecondary,
     fontSize: 13,
     marginTop: 12,
   },
 
   fecha: {
-    color: '#94A3B8',
+    color: COLORS.textMuted,
     fontSize: 11,
     marginTop: 12,
   },
@@ -995,7 +997,7 @@ const styles = StyleSheet.create({
   },
 
   botonDetalle: {
-    backgroundColor: '#EFF6FF',
+    backgroundColor: COLORS.infoBg,
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 9,
@@ -1004,13 +1006,13 @@ const styles = StyleSheet.create({
   },
 
   textoDetalle: {
-    color: '#1D4ED8',
+    color: COLORS.info,
     fontSize: 12,
     fontWeight: '700',
   },
 
   botonEditar: {
-    backgroundColor: '#FEF3C7',
+    backgroundColor: COLORS.goldSoft,
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 9,
@@ -1019,13 +1021,13 @@ const styles = StyleSheet.create({
   },
 
   textoEditar: {
-    color: '#92400E',
+    color: COLORS.goldText,
     fontSize: 12,
     fontWeight: '700',
   },
 
   botonBaja: {
-    backgroundColor: '#FEE2E2',
+    backgroundColor: COLORS.dangerBg,
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 9,
@@ -1033,13 +1035,13 @@ const styles = StyleSheet.create({
   },
 
   textoBaja: {
-    color: '#B91C1C',
+    color: COLORS.danger,
     fontSize: 12,
     fontWeight: '700',
   },
 
   vacio: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
     borderRadius: 14,
     padding: 28,
     alignItems: 'center',
@@ -1053,33 +1055,33 @@ const styles = StyleSheet.create({
   vacioTitulo: {
     fontSize: 16,
     fontWeight: '800',
-    color: '#172033',
+    color: COLORS.forest,
     marginBottom: 6,
   },
 
   secundario: {
-    color: '#64748B',
+    color: COLORS.textSecondary,
     fontSize: 13,
     marginTop: 7,
     textAlign: 'center',
   },
 
   errorCaja: {
-    backgroundColor: '#FEF2F2',
+    backgroundColor: COLORS.dangerBg,
     borderWidth: 1,
-    borderColor: '#FECACA',
+    borderColor: COLORS.dangerBg,
     borderRadius: 11,
     padding: 13,
     marginTop: 12,
   },
 
   errorTexto: {
-    color: '#991B1B',
+    color: COLORS.danger,
     fontSize: 13,
   },
 
   reintentar: {
-    color: '#B91C1C',
+    color: COLORS.danger,
     fontWeight: '800',
     marginTop: 8,
   },
@@ -1092,7 +1094,7 @@ const styles = StyleSheet.create({
   },
 
   modal: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
     borderRadius: 18,
     padding: 20,
     maxHeight: '90%',
@@ -1101,25 +1103,25 @@ const styles = StyleSheet.create({
   modalTitulo: {
     fontSize: 21,
     fontWeight: '800',
-    color: '#172033',
+    color: COLORS.forest,
     marginBottom: 15,
   },
 
   label: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#334155',
+    color: COLORS.text,
     marginTop: 13,
     marginBottom: 7,
   },
 
   input: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: COLORS.backgroundSoft,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: COLORS.borderStrong,
     borderRadius: 10,
     padding: 12,
-    color: '#172033',
+    color: COLORS.forest,
     fontSize: 14,
   },
 
@@ -1129,15 +1131,15 @@ const styles = StyleSheet.create({
   },
 
   valor: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: COLORS.backgroundSoft,
     padding: 12,
     borderRadius: 9,
-    color: '#172033',
+    color: COLORS.forest,
     fontSize: 14,
   },
 
   ayuda: {
-    color: '#94A3B8',
+    color: COLORS.textMuted,
     fontSize: 11,
     marginTop: 10,
   },
@@ -1149,7 +1151,7 @@ const styles = StyleSheet.create({
   },
 
   botonCancelar: {
-    backgroundColor: '#E2E8F0',
+    backgroundColor: COLORS.border,
     borderRadius: 10,
     paddingHorizontal: 16,
     paddingVertical: 12,
@@ -1157,12 +1159,12 @@ const styles = StyleSheet.create({
   },
 
   textoCancelar: {
-    color: '#334155',
+    color: COLORS.text,
     fontWeight: '700',
   },
 
   botonGuardar: {
-    backgroundColor: '#D99A16',
+    backgroundColor: COLORS.gold,
     borderRadius: 10,
     paddingHorizontal: 16,
     paddingVertical: 12,
@@ -1171,7 +1173,7 @@ const styles = StyleSheet.create({
   },
 
   textoGuardar: {
-    color: '#172033',
+    color: COLORS.forest,
     fontWeight: '800',
   },
 

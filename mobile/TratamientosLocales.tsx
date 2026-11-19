@@ -6,6 +6,8 @@ import React, {
   useState,
 } from 'react';
 
+import { COLORS } from './theme';
+
 import {
   ActivityIndicator,
   Alert,
@@ -1216,7 +1218,7 @@ export default function TratamientosLocales({
         {sincronizando && (
 
           <View style={styles.fila}>
-            <ActivityIndicator color="#D99A24" />
+            <ActivityIndicator color={COLORS.gold} />
 
             <Text style={styles.texto}>
               Comprobando sincronización...
@@ -1307,7 +1309,7 @@ export default function TratamientosLocales({
 
         {sincronizando ? (
 
-          <ActivityIndicator color="#FFFFFF" />
+          <ActivityIndicator color={COLORS.surface} />
 
         ) : (
 
@@ -1372,7 +1374,7 @@ export default function TratamientosLocales({
 
         <ActivityIndicator
           size="large"
-          color="#D99A24"
+          color={COLORS.gold}
         />
 
       ) : error ? (
@@ -1571,7 +1573,7 @@ const styles = StyleSheet.create({
 
   pantalla: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: COLORS.backgroundSoft,
   },
 
   contenido: {
@@ -1583,13 +1585,13 @@ const styles = StyleSheet.create({
   titulo: {
     fontSize: 26,
     fontWeight: '800',
-    color: '#182337',
+    color: COLORS.forestDeep,
     marginTop: 18,
     marginBottom: 15,
   },
 
   subtitulo: {
-    color: '#64748B',
+    color: COLORS.textSecondary,
     fontSize: 13,
     marginVertical: 12,
   },
@@ -1597,38 +1599,38 @@ const styles = StyleSheet.create({
   tituloSeccion: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#182337',
+    color: COLORS.forestDeep,
     marginTop: 20,
     marginBottom: 12,
   },
 
   label: {
     fontWeight: '700',
-    color: '#334155',
+    color: COLORS.text,
     fontSize: 14,
     marginTop: 12,
     marginBottom: 8,
   },
 
   texto: {
-    color: '#334155',
+    color: COLORS.text,
     fontSize: 14,
   },
 
   enlace: {
-    color: '#92400E',
+    color: COLORS.goldText,
     fontWeight: '700',
     marginVertical: 12,
   },
 
   input: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: COLORS.borderStrong,
     borderRadius: 12,
     padding: 15,
     fontSize: 15,
-    color: '#182337',
+    color: COLORS.forestDeep,
     marginBottom: 12,
   },
 
@@ -1646,26 +1648,26 @@ const styles = StyleSheet.create({
 
   opcion: {
     borderWidth: 1,
-    borderColor: '#D6C29E',
-    backgroundColor: '#FFFFFF',
+    borderColor: COLORS.goldBorder,
+    backgroundColor: COLORS.surface,
     borderRadius: 10,
     padding: 12,
     marginBottom: 7,
   },
 
   opcionActiva: {
-    backgroundColor: '#FEF3C7',
-    borderColor: '#D99A24',
+    backgroundColor: COLORS.goldSoft,
+    borderColor: COLORS.gold,
   },
 
   textoOpcion: {
-    color: '#775315',
+    color: COLORS.goldText,
     fontSize: 13,
     fontWeight: '700',
   },
 
   boton: {
-    backgroundColor: '#D99A24',
+    backgroundColor: COLORS.gold,
     padding: 13,
     borderRadius: 10,
     alignItems: 'center',
@@ -1673,7 +1675,7 @@ const styles = StyleSheet.create({
   },
 
   botonAncho: {
-    backgroundColor: '#D99A24',
+    backgroundColor: COLORS.gold,
     padding: 18,
     borderRadius: 12,
     alignItems: 'center',
@@ -1681,7 +1683,7 @@ const styles = StyleSheet.create({
   },
 
   botonSincronizar: {
-    backgroundColor: '#475569',
+    backgroundColor: COLORS.textSecondary,
     padding: 16,
     borderRadius: 12,
     alignItems: 'center',
@@ -1691,14 +1693,14 @@ const styles = StyleSheet.create({
   },
 
   textoBoton: {
-    color: '#FFFFFF',
+    color: COLORS.surface,
     fontWeight: '800',
     fontSize: 15,
   },
 
   botonBorde: {
     borderWidth: 1,
-    borderColor: '#D99A24',
+    borderColor: COLORS.gold,
     borderRadius: 10,
     padding: 12,
     alignItems: 'center',
@@ -1706,66 +1708,66 @@ const styles = StyleSheet.create({
 
   textoBorde: {
     fontWeight: '700',
-    color: '#92400E',
+    color: COLORS.goldText,
   },
 
   tarjeta: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
     padding: 18,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: COLORS.border,
     marginBottom: 14,
   },
 
   tarjetaTitulo: {
     fontWeight: '800',
     fontSize: 18,
-    color: '#182337',
+    color: COLORS.forestDeep,
   },
 
   codigo: {
-    color: '#92400E',
+    color: COLORS.goldText,
     fontWeight: '700',
     marginVertical: 10,
   },
 
   detalle: {
-    color: '#475569',
+    color: COLORS.textSecondary,
     marginVertical: 4,
     fontSize: 14,
   },
 
   resumen: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
     padding: 20,
     borderRadius: 14,
     marginBottom: 10,
   },
 
   resumenNumero: {
-    color: '#92400E',
+    color: COLORS.goldText,
     fontSize: 21,
     fontWeight: '800',
     marginBottom: 8,
   },
 
   aviso: {
-    backgroundColor: '#FEF3C7',
+    backgroundColor: COLORS.goldSoft,
     padding: 14,
     borderRadius: 12,
     marginVertical: 12,
   },
 
   avisoTexto: {
-    color: '#78350F',
+    color: COLORS.goldText,
     fontSize: 13,
     lineHeight: 20,
     fontWeight: '600',
   },
 
   error: {
-    color: '#B91C1C',
+    color: COLORS.danger,
   },
 
   deshabilitado: {
@@ -1780,7 +1782,7 @@ const styles = StyleSheet.create({
   },
 
   modalCaja: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
     borderRadius: 20,
     padding: 20,
   },

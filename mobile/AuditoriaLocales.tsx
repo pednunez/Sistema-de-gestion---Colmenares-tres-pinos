@@ -6,6 +6,8 @@ import React, {
   useState,
 } from 'react';
 
+import { COLORS } from './theme';
+
 import {
   ActivityIndicator,
   Pressable,
@@ -75,20 +77,20 @@ const COLORES: Record<
   { fondo: string; texto: string }
 > = {
   CREAR: {
-    fondo: '#DCFCE7',
-    texto: '#15803D',
+    fondo: COLORS.successBg,
+    texto: COLORS.success,
   },
   MODIFICAR: {
-    fondo: '#DBEAFE',
-    texto: '#1D4ED8',
+    fondo: COLORS.infoBg,
+    texto: COLORS.info,
   },
   ELIMINAR: {
-    fondo: '#FEE2E2',
-    texto: '#B91C1C',
+    fondo: COLORS.dangerBg,
+    texto: COLORS.danger,
   },
   RESTAURAR: {
-    fondo: '#FEF3C7',
-    texto: '#B45309',
+    fondo: COLORS.goldSoft,
+    texto: COLORS.warning,
   },
 };
 
@@ -482,8 +484,8 @@ export default function AuditoriaLocales({
             onRefresh={() => {
               void actualizar();
             }}
-            colors={['#D99A16']}
-            tintColor="#D99A16"
+            colors={[COLORS.gold]}
+            tintColor={COLORS.gold}
           />
         }
       >
@@ -528,7 +530,7 @@ export default function AuditoriaLocales({
           <View style={styles.estado}>
             <ActivityIndicator
               size="large"
-              color="#D99A16"
+              color={COLORS.gold}
             />
 
             <Text style={styles.estadoTexto}>
@@ -587,7 +589,7 @@ export default function AuditoriaLocales({
               <View style={styles.resumenCard}>
                 <Text style={[
                   styles.resumenNumero,
-                  { color: '#15803D' }
+                  { color: COLORS.success }
                 ]}>
                   {creados}
                 </Text>
@@ -599,7 +601,7 @@ export default function AuditoriaLocales({
               <View style={styles.resumenCard}>
                 <Text style={[
                   styles.resumenNumero,
-                  { color: '#1D4ED8' }
+                  { color: COLORS.info }
                 ]}>
                   {modificados}
                 </Text>
@@ -611,7 +613,7 @@ export default function AuditoriaLocales({
               <View style={styles.resumenCard}>
                 <Text style={[
                   styles.resumenNumero,
-                  { color: '#B91C1C' }
+                  { color: COLORS.danger }
                 ]}>
                   {eliminados}
                 </Text>
@@ -623,7 +625,7 @@ export default function AuditoriaLocales({
               <View style={styles.resumenCard}>
                 <Text style={[
                   styles.resumenNumero,
-                  { color: '#B45309' }
+                  { color: COLORS.warning }
                 ]}>
                   {restaurados}
                 </Text>
@@ -653,7 +655,7 @@ export default function AuditoriaLocales({
             <TextInput
               style={styles.busqueda}
               placeholder="Buscar por entidad, usuario o ID..."
-              placeholderTextColor="#94A3B8"
+              placeholderTextColor={COLORS.textMuted}
               value={busqueda}
               onChangeText={setBusqueda}
               autoCapitalize="none"
@@ -760,7 +762,7 @@ export default function AuditoriaLocales({
                 {detalleCargando ? (
 
                   <ActivityIndicator
-                    color="#D99A16"
+                    color={COLORS.gold}
                     style={{ marginVertical: 20 }}
                   />
 
@@ -777,13 +779,13 @@ export default function AuditoriaLocales({
                     {renderDatos(
                       'DATOS ANTERIORES',
                       seleccionado.datos_anteriores,
-                      '#B45309',
+                      COLORS.warning,
                     )}
 
                     {renderDatos(
                       'DATOS NUEVOS',
                       seleccionado.datos_nuevos,
-                      '#15803D',
+                      COLORS.success,
                     )}
 
                   </>
@@ -915,7 +917,7 @@ const styles = StyleSheet.create({
 
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: COLORS.backgroundSoft,
   },
 
   contenido: {
@@ -937,27 +939,27 @@ const styles = StyleSheet.create({
   botonVolver: {
     paddingVertical: 9,
     paddingHorizontal: 13,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: COLORS.border,
   },
 
   botonVolverTexto: {
-    color: '#334155',
+    color: COLORS.text,
     fontSize: 14,
     fontWeight: '700',
   },
 
   adminChip: {
-    backgroundColor: '#FEF3C7',
+    backgroundColor: COLORS.goldSoft,
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: 20,
   },
 
   adminChipTexto: {
-    color: '#92400E',
+    color: COLORS.goldText,
     fontSize: 11,
     fontWeight: '800',
   },
@@ -965,12 +967,12 @@ const styles = StyleSheet.create({
   titulo: {
     fontSize: 28,
     fontWeight: '900',
-    color: '#0F172A',
+    color: COLORS.forest,
   },
 
   subtitulo: {
     fontSize: 14,
-    color: '#64748B',
+    color: COLORS.textSecondary,
     marginTop: 7,
     lineHeight: 21,
   },
@@ -978,7 +980,7 @@ const styles = StyleSheet.create({
   seccionTitulo: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#0F172A',
+    color: COLORS.forest,
     marginBottom: 14,
   },
 
@@ -992,11 +994,11 @@ const styles = StyleSheet.create({
   resumenCard: {
     width: '48%',
     flexGrow: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
     borderRadius: 14,
     padding: 16,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: COLORS.border,
     minHeight: 91,
     justifyContent: 'center',
   },
@@ -1004,12 +1006,12 @@ const styles = StyleSheet.create({
   resumenNumero: {
     fontSize: 27,
     fontWeight: '900',
-    color: '#0F172A',
+    color: COLORS.forest,
   },
 
   resumenEtiqueta: {
     fontSize: 12,
-    color: '#64748B',
+    color: COLORS.textSecondary,
     marginTop: 4,
     fontWeight: '600',
   },
@@ -1022,26 +1024,26 @@ const styles = StyleSheet.create({
 
   totalFiltrado: {
     fontSize: 12,
-    color: '#64748B',
+    color: COLORS.textSecondary,
     fontWeight: '700',
   },
 
   busqueda: {
     height: 48,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
     borderRadius: 12,
     paddingHorizontal: 14,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: COLORS.border,
     fontSize: 13,
-    color: '#0F172A',
+    color: COLORS.forest,
     marginBottom: 17,
   },
 
   filtroTitulo: {
     fontSize: 12,
     fontWeight: '800',
-    color: '#475569',
+    color: COLORS.textSecondary,
     marginBottom: 10,
   },
 
@@ -1055,30 +1057,30 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    backgroundColor: '#FFFFFF',
+    borderColor: COLORS.borderStrong,
+    backgroundColor: COLORS.surface,
   },
 
   filtroBotonActivo: {
-    backgroundColor: '#172554',
-    borderColor: '#172554',
+    backgroundColor: COLORS.forestMid,
+    borderColor: COLORS.forestMid,
   },
 
   filtroTexto: {
-    color: '#475569',
+    color: COLORS.textSecondary,
     fontSize: 11,
     fontWeight: '700',
   },
 
   filtroTextoActivo: {
-    color: '#FFFFFF',
+    color: COLORS.surface,
   },
 
   registroCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: COLORS.border,
     padding: 15,
     marginBottom: 11,
   },
@@ -1091,7 +1093,7 @@ const styles = StyleSheet.create({
   },
 
   registroEntidad: {
-    color: '#0F172A',
+    color: COLORS.forest,
     fontSize: 15,
     fontWeight: '900',
     flex: 1,
@@ -1109,7 +1111,7 @@ const styles = StyleSheet.create({
   },
 
   registroId: {
-    color: '#64748B',
+    color: COLORS.textSecondary,
     fontSize: 11,
     marginTop: 10,
   },
@@ -1124,27 +1126,27 @@ const styles = StyleSheet.create({
 
   registroFecha: {
     fontSize: 11,
-    color: '#64748B',
+    color: COLORS.textSecondary,
   },
 
   registroUsuario: {
     fontSize: 11,
-    color: '#64748B',
+    color: COLORS.textSecondary,
     fontWeight: '700',
   },
 
   verDetalle: {
     fontSize: 12,
-    color: '#B7791F',
+    color: COLORS.goldText,
     fontWeight: '800',
     marginTop: 13,
   },
 
   detalleCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
     borderRadius: 15,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
+    borderColor: COLORS.borderStrong,
     padding: 16,
     marginBottom: 20,
   },
@@ -1158,12 +1160,12 @@ const styles = StyleSheet.create({
   detalleTitulo: {
     fontSize: 17,
     fontWeight: '900',
-    color: '#0F172A',
+    color: COLORS.forest,
   },
 
   detalleFecha: {
     fontSize: 11,
-    color: '#64748B',
+    color: COLORS.textSecondary,
     marginTop: 6,
   },
 
@@ -1171,19 +1173,19 @@ const styles = StyleSheet.create({
     width: 30,
     height: 30,
     borderRadius: 9,
-    backgroundColor: '#F1F5F9',
+    backgroundColor: COLORS.background,
     alignItems: 'center',
     justifyContent: 'center',
   },
 
   cerrarDetalleTexto: {
     fontSize: 15,
-    color: '#475569',
+    color: COLORS.textSecondary,
     fontWeight: '800',
   },
 
   detalleInfo: {
-    backgroundColor: '#F8FAFC',
+    backgroundColor: COLORS.backgroundSoft,
     padding: 12,
     borderRadius: 10,
     marginTop: 15,
@@ -1191,7 +1193,7 @@ const styles = StyleSheet.create({
   },
 
   detalleInfoTexto: {
-    color: '#334155',
+    color: COLORS.text,
     fontSize: 12,
     fontWeight: '600',
   },
@@ -1200,7 +1202,7 @@ const styles = StyleSheet.create({
     marginTop: 19,
     paddingTop: 15,
     borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
+    borderTopColor: COLORS.border,
   },
 
   datosTitulo: {
@@ -1212,36 +1214,36 @@ const styles = StyleSheet.create({
   datoFila: {
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#F1F5F9',
+    borderBottomColor: COLORS.background,
     gap: 5,
   },
 
   datoClave: {
     fontSize: 11,
-    color: '#64748B',
+    color: COLORS.textSecondary,
     fontWeight: '800',
     textTransform: 'capitalize',
   },
 
   datoValor: {
     fontSize: 12,
-    color: '#0F172A',
+    color: COLORS.forest,
     lineHeight: 19,
   },
 
   sinDatos: {
-    color: '#94A3B8',
+    color: COLORS.textMuted,
     fontSize: 12,
     paddingVertical: 10,
   },
 
   vacioCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
     borderRadius: 14,
     padding: 28,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: COLORS.border,
   },
 
   vacioIcono: {
@@ -1252,11 +1254,11 @@ const styles = StyleSheet.create({
   vacioTitulo: {
     fontSize: 16,
     fontWeight: '900',
-    color: '#0F172A',
+    color: COLORS.forest,
   },
 
   vacioTexto: {
-    color: '#64748B',
+    color: COLORS.textSecondary,
     fontSize: 12,
     textAlign: 'center',
     marginTop: 8,
@@ -1270,33 +1272,33 @@ const styles = StyleSheet.create({
   },
 
   estadoTexto: {
-    color: '#64748B',
+    color: COLORS.textSecondary,
     fontSize: 13,
   },
 
   errorCard: {
     padding: 20,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#FECACA',
+    borderColor: COLORS.dangerBg,
   },
 
   errorTitulo: {
-    color: '#B91C1C',
+    color: COLORS.danger,
     fontSize: 16,
     fontWeight: '900',
   },
 
   errorTexto: {
-    color: '#64748B',
+    color: COLORS.textSecondary,
     fontSize: 12,
     marginTop: 9,
     lineHeight: 19,
   },
 
   botonReintentar: {
-    backgroundColor: '#172554',
+    backgroundColor: COLORS.forestMid,
     padding: 13,
     borderRadius: 10,
     alignItems: 'center',
@@ -1304,7 +1306,7 @@ const styles = StyleSheet.create({
   },
 
   botonReintentarTexto: {
-    color: '#FFFFFF',
+    color: COLORS.surface,
     fontWeight: '800',
     fontSize: 13,
   },
@@ -1315,7 +1317,7 @@ const styles = StyleSheet.create({
   },
 
   pieTexto: {
-    color: '#94A3B8',
+    color: COLORS.textMuted,
     fontSize: 10,
   },
 

@@ -5,6 +5,8 @@ import React, {
   useState,
 } from 'react';
 
+import { COLORS } from './theme';
+
 import {
   ActivityIndicator,
   Pressable,
@@ -595,7 +597,7 @@ export default function TransferenciasLocales({
           onRefresh={() => {
             void cargarTransferencias();
           }}
-          tintColor="#276749"
+          tintColor={COLORS.forestMid}
         />
       }
     >
@@ -638,7 +640,7 @@ export default function TransferenciasLocales({
           <Text
             style={[
               styles.resumenNumero,
-              { color: '#B7791F' },
+              { color: COLORS.goldText },
             ]}
           >
             {pendientes}
@@ -657,7 +659,7 @@ export default function TransferenciasLocales({
           <Text
             style={[
               styles.resumenNumero,
-              { color: '#276749' },
+              { color: COLORS.forestMid },
             ]}
           >
             {registradas}
@@ -759,7 +761,7 @@ export default function TransferenciasLocales({
 
           <ActivityIndicator
             size="large"
-            color="#276749"
+            color={COLORS.forestMid}
           />
 
           <Text style={styles.mensaje}>
@@ -855,7 +857,7 @@ const styles = StyleSheet.create({
 
   contenedor: {
     flex: 1,
-    backgroundColor: '#F5F7F4',
+    backgroundColor: COLORS.background,
   },
 
   contenido: {
@@ -870,18 +872,18 @@ const styles = StyleSheet.create({
   titulo: {
     fontSize: 26,
     fontWeight: '800',
-    color: '#183D2B',
+    color: COLORS.forestDeep,
   },
 
   descripcion: {
     fontSize: 14,
-    color: '#64748B',
+    color: COLORS.textSecondary,
     marginTop: 6,
     lineHeight: 21,
   },
 
   resumen: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
     borderRadius: 14,
     paddingVertical: 18,
     paddingHorizontal: 8,
@@ -899,12 +901,12 @@ const styles = StyleSheet.create({
   resumenNumero: {
     fontSize: 25,
     fontWeight: '800',
-    color: '#183D2B',
+    color: COLORS.forestDeep,
   },
 
   resumenEtiqueta: {
     fontSize: 11,
-    color: '#64748B',
+    color: COLORS.textSecondary,
     marginTop: 5,
     textAlign: 'center',
   },
@@ -912,11 +914,11 @@ const styles = StyleSheet.create({
   divisorResumen: {
     width: 1,
     height: 38,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: COLORS.border,
   },
 
   totalMarcos: {
-    backgroundColor: '#E7F3E9',
+    backgroundColor: COLORS.successBg,
     borderRadius: 12,
     padding: 14,
     flexDirection: 'row',
@@ -928,17 +930,17 @@ const styles = StyleSheet.create({
   totalMarcosEtiqueta: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#276749',
+    color: COLORS.forestMid,
   },
 
   totalMarcosNumero: {
     fontSize: 21,
     fontWeight: '800',
-    color: '#183D2B',
+    color: COLORS.forestDeep,
   },
 
   botonNueva: {
-    backgroundColor: '#276749',
+    backgroundColor: COLORS.forestMid,
     borderRadius: 13,
     padding: 17,
     marginBottom: 25,
@@ -949,13 +951,13 @@ const styles = StyleSheet.create({
   },
 
   botonNuevaTexto: {
-    color: '#FFFFFF',
+    color: COLORS.surface,
     fontSize: 16,
     fontWeight: '800',
   },
 
   botonNuevaDescripcion: {
-    color: '#E2F4E9',
+    color: COLORS.successBg,
     fontSize: 12,
     marginTop: 6,
     lineHeight: 18,
@@ -964,7 +966,7 @@ const styles = StyleSheet.create({
   tituloSeccion: {
     fontSize: 19,
     fontWeight: '800',
-    color: '#183D2B',
+    color: COLORS.forestDeep,
     marginBottom: 13,
   },
 
@@ -978,25 +980,25 @@ const styles = StyleSheet.create({
   filtro: {
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#D6DED7',
+    borderColor: COLORS.border,
     paddingHorizontal: 15,
     paddingVertical: 9,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
   },
 
   filtroActivo: {
-    backgroundColor: '#276749',
-    borderColor: '#276749',
+    backgroundColor: COLORS.forestMid,
+    borderColor: COLORS.forestMid,
   },
 
   filtroTexto: {
     fontSize: 12,
     fontWeight: '600',
-    color: '#526357',
+    color: COLORS.textSecondary,
   },
 
   filtroTextoActivo: {
-    color: '#FFFFFF',
+    color: COLORS.surface,
   },
 
   lista: {
@@ -1004,11 +1006,11 @@ const styles = StyleSheet.create({
   },
 
   tarjeta: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
     borderRadius: 14,
     padding: 15,
     borderWidth: 1,
-    borderColor: '#E5EAE5',
+    borderColor: COLORS.border,
     elevation: 1,
   },
 
@@ -1021,7 +1023,7 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 12,
-    backgroundColor: '#E7F3E9',
+    backgroundColor: COLORS.successBg,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -1029,7 +1031,7 @@ const styles = StyleSheet.create({
   numeroMarcoTexto: {
     fontSize: 15,
     fontWeight: '800',
-    color: '#276749',
+    color: COLORS.forestMid,
   },
 
   cabeceraInfo: {
@@ -1040,12 +1042,12 @@ const styles = StyleSheet.create({
   tituloTarjeta: {
     fontSize: 15,
     fontWeight: '800',
-    color: '#1E293B',
+    color: COLORS.forestMid,
   },
 
   subtitulo: {
     fontSize: 12,
-    color: '#64748B',
+    color: COLORS.textSecondary,
     marginTop: 3,
   },
 
@@ -1057,11 +1059,11 @@ const styles = StyleSheet.create({
   },
 
   estadoPendiente: {
-    backgroundColor: '#FEF3C7',
+    backgroundColor: COLORS.goldSoft,
   },
 
   estadoRegistrada: {
-    backgroundColor: '#D1FAE5',
+    backgroundColor: COLORS.successBg,
   },
 
   estadoTexto: {
@@ -1071,16 +1073,16 @@ const styles = StyleSheet.create({
   },
 
   textoPendiente: {
-    color: '#92400E',
+    color: COLORS.goldText,
   },
 
   textoRegistrada: {
-    color: '#065F46',
+    color: COLORS.successDeep,
   },
 
   separador: {
     height: 1,
-    backgroundColor: '#EDF0ED',
+    backgroundColor: COLORS.background,
     marginVertical: 13,
   },
 
@@ -1090,32 +1092,32 @@ const styles = StyleSheet.create({
 
   etiqueta: {
     fontSize: 11,
-    color: '#64748B',
+    color: COLORS.textSecondary,
     marginBottom: 4,
   },
 
   valor: {
     fontSize: 13,
     fontWeight: '600',
-    color: '#334155',
+    color: COLORS.text,
   },
 
   destino: {
     fontSize: 13,
     fontWeight: '800',
-    color: '#276749',
+    color: COLORS.forestMid,
   },
 
   fuenteFila: {
     borderTopWidth: 1,
-    borderTopColor: '#EDF0ED',
+    borderTopColor: COLORS.background,
     paddingTop: 10,
     marginTop: 2,
   },
 
   fuenteTexto: {
     fontSize: 10,
-    color: '#64748B',
+    color: COLORS.textSecondary,
   },
 
   centrado: {
@@ -1126,24 +1128,24 @@ const styles = StyleSheet.create({
   mensaje: {
     marginTop: 12,
     fontSize: 13,
-    color: '#64748B',
+    color: COLORS.textSecondary,
   },
 
   errorCaja: {
     padding: 18,
     borderRadius: 12,
-    backgroundColor: '#FEF2F2',
+    backgroundColor: COLORS.dangerBg,
     marginBottom: 15,
   },
 
   errorTitulo: {
     fontWeight: '800',
-    color: '#991B1B',
+    color: COLORS.danger,
     fontSize: 14,
   },
 
   errorTexto: {
-    color: '#7F1D1D',
+    color: COLORS.danger,
     fontSize: 12,
     marginTop: 7,
     lineHeight: 19,
@@ -1151,7 +1153,7 @@ const styles = StyleSheet.create({
 
   botonReintentar: {
     alignSelf: 'flex-start',
-    backgroundColor: '#991B1B',
+    backgroundColor: COLORS.danger,
     paddingHorizontal: 15,
     paddingVertical: 9,
     borderRadius: 8,
@@ -1159,12 +1161,12 @@ const styles = StyleSheet.create({
   },
 
   botonReintentarTexto: {
-    color: '#FFFFFF',
+    color: COLORS.surface,
     fontWeight: '700',
   },
 
   vacio: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
     borderRadius: 14,
     padding: 28,
     alignItems: 'center',
@@ -1173,21 +1175,21 @@ const styles = StyleSheet.create({
 
   vacioIcono: {
     fontSize: 38,
-    color: '#276749',
+    color: COLORS.forestMid,
     marginBottom: 12,
   },
 
   vacioTitulo: {
     fontSize: 15,
     fontWeight: '800',
-    color: '#334155',
+    color: COLORS.text,
     textAlign: 'center',
   },
 
   vacioTexto: {
     fontSize: 12,
     lineHeight: 19,
-    color: '#64748B',
+    color: COLORS.textSecondary,
     textAlign: 'center',
     marginTop: 8,
   },

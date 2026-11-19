@@ -5,6 +5,8 @@ import React, {
   useState,
 } from 'react';
 
+import { COLORS } from './theme';
+
 import {
   ActivityIndicator,
   Alert,
@@ -760,7 +762,7 @@ export default function FormularioInspeccion({
 
         {cargandoCatalogo && (
           <ActivityIndicator
-            color="#D99A24"
+            color={COLORS.gold}
           />
         )}
 
@@ -1244,7 +1246,7 @@ export default function FormularioInspeccion({
 const styles = StyleSheet.create({
   pantalla: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: COLORS.backgroundSoft,
   },
 
   contenido: {
@@ -1256,50 +1258,50 @@ const styles = StyleSheet.create({
   titulo: {
     fontSize: 26,
     fontWeight: '800',
-    color: '#172337',
+    color: COLORS.forestDeep,
     marginBottom: 18,
   },
 
   tituloSeccion: {
     fontSize: 18,
     fontWeight: '800',
-    color: '#172337',
+    color: COLORS.forestDeep,
     marginBottom: 12,
   },
 
   subtitulo: {
     fontSize: 15,
     fontWeight: '800',
-    color: '#172337',
+    color: COLORS.forestDeep,
     marginBottom: 10,
   },
 
   tarjeta: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: COLORS.surface,
     padding: 17,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: COLORS.border,
     marginBottom: 15,
   },
 
   label: {
     fontSize: 14,
     fontWeight: '700',
-    color: '#334155',
+    color: COLORS.text,
     marginTop: 12,
     marginBottom: 8,
   },
 
   codigo: {
-    color: '#92400E',
+    color: COLORS.goldText,
     fontSize: 13,
     fontWeight: '700',
     marginVertical: 8,
   },
 
   ayuda: {
-    color: '#64748B',
+    color: COLORS.textSecondary,
     fontSize: 12,
     lineHeight: 19,
     marginTop: 5,
@@ -1314,20 +1316,20 @@ const styles = StyleSheet.create({
 
   opcion: {
     borderWidth: 1,
-    borderColor: '#D6C29E',
-    backgroundColor: '#FFFFFF',
+    borderColor: COLORS.goldBorder,
+    backgroundColor: COLORS.surface,
     borderRadius: 10,
     padding: 11,
     marginBottom: 5,
   },
 
   opcionActiva: {
-    borderColor: '#D99A24',
-    backgroundColor: '#FEF3C7',
+    borderColor: COLORS.gold,
+    backgroundColor: COLORS.goldSoft,
   },
 
   opcionTexto: {
-    color: '#775315',
+    color: COLORS.goldText,
     fontWeight: '600',
     fontSize: 13,
   },
@@ -1338,11 +1340,11 @@ const styles = StyleSheet.create({
 
   input: {
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    backgroundColor: '#FFFFFF',
+    borderColor: COLORS.borderStrong,
+    backgroundColor: COLORS.surface,
     borderRadius: 10,
     padding: 13,
-    color: '#172337',
+    color: COLORS.forestDeep,
     fontSize: 14,
     minHeight: 48,
   },
@@ -1363,42 +1365,42 @@ const styles = StyleSheet.create({
     minHeight: 57,
     borderRadius: 9,
     borderWidth: 1,
-    borderColor: '#CBD5E1',
-    backgroundColor: '#F8FAFC',
+    borderColor: COLORS.borderStrong,
+    backgroundColor: COLORS.backgroundSoft,
     justifyContent: 'center',
     alignItems: 'center',
   },
 
   numeroMarcoCompleto: {
-    backgroundColor: '#ECFDF5',
-    borderColor: '#86EFAC',
+    backgroundColor: COLORS.successBg,
+    borderColor: COLORS.successBg,
   },
 
   numeroMarcoActivo: {
-    backgroundColor: '#D99A24',
-    borderColor: '#92400E',
+    backgroundColor: COLORS.gold,
+    borderColor: COLORS.goldText,
   },
 
   numeroMarcoTexto: {
     fontSize: 15,
     fontWeight: '800',
-    color: '#334155',
+    color: COLORS.text,
   },
 
   numeroMarcoTextoActivo: {
-    color: '#FFFFFF',
+    color: COLORS.surface,
   },
 
   numeroMarcoEstado: {
     fontSize: 12,
-    color: '#475569',
+    color: COLORS.textSecondary,
   },
 
   detalleMarco: {
     marginTop: 18,
     paddingTop: 15,
     borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
+    borderTopColor: COLORS.border,
   },
 
   resumen: {
@@ -1410,26 +1412,26 @@ const styles = StyleSheet.create({
   resumenNumero: {
     fontSize: 23,
     fontWeight: '800',
-    color: '#92400E',
+    color: COLORS.goldText,
     textAlign: 'center',
   },
 
   enlace: {
-    color: '#92400E',
+    color: COLORS.goldText,
     fontSize: 15,
     fontWeight: '700',
     marginBottom: 20,
   },
 
   avisoTexto: {
-    color: '#B45309',
+    color: COLORS.warning,
     fontSize: 13,
     lineHeight: 20,
     marginVertical: 10,
   },
 
   botonGuardar: {
-    backgroundColor: '#D99A24',
+    backgroundColor: COLORS.gold,
     borderRadius: 12,
     padding: 18,
     alignItems: 'center',
@@ -1437,7 +1439,7 @@ const styles = StyleSheet.create({
   },
 
   botonTexto: {
-    color: '#FFFFFF',
+    color: COLORS.surface,
     fontSize: 16,
     fontWeight: '800',
   },
@@ -1447,7 +1449,7 @@ const styles = StyleSheet.create({
   },
 
   pie: {
-    color: '#94A3B8',
+    color: COLORS.textMuted,
     fontSize: 12,
     textAlign: 'center',
     marginTop: 20,
