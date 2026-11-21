@@ -1,0 +1,53 @@
+COLMENARES TRES PINOS | PARCHE RESPONSIVE PARA ANDROID Y IPHONE
+===============================================================
+
+Este paquete aplica cambios SOBRE TUS ARCHIVOS LOCALES. No reemplaza
+App.tsx ni altera el backend, los datos SQLite o los roles existentes.
+
+QUE CAMBIA
+- SafeAreaProvider y SafeAreaView para zonas seguras de Android/iOS.
+  Incluye laterales para iPhone con notch en horizontal.
+- Inicio de sesion centrado en pantallas pequenas o grandes.
+- Detecta tablets con ancho y alto, evitando el falso "modo tablet"
+  en telefonos rotados.
+- Ajusta el ancho del menu permanente en tablets.
+- Barra inferior en la app: ATRAS, INICIO y MENU (MENU solo en telefono).
+- Responde al boton fisico/gesto Atras de Android fuera de modales.
+- Esconde la barra inferior al mostrar el teclado.
+- Mide el espacio realmente disponible en Stock y Reportes.
+- Mantiene las tablas anchas con desplazamiento horizontal.
+- En app.json cambia orientacion "portrait" a "default" para rotar.
+- Respeta la restriccion de Apiarios al rol ADMIN.
+
+COMO INSTALAR
+1) Descarga ResponsiveColmenares.zip desde el chat.
+2) Extraelo EN LA RAIZ de tu repositorio; debe quedar:
+   ...\Sistema-de-gestion---Colmenares-tres-pinos\ResponsiveColmenares\aplicar_responsive.py
+3) Desde PowerShell, en la raiz del proyecto:
+   python .\ResponsiveColmenares\aplicar_responsive.py
+4) Entra a mobile y ejecuta:
+   cd mobile
+   npx expo install react-native-safe-area-context
+   npx tsc --noEmit
+   npx expo start -c
+
+COMPROBACIONES
+- Android pequeno: menu, formularios, modales y barra inferior.
+- Android tablet: menu lateral y tablas Stock / Reportes.
+- iPhone con notch: cabecera, login, botones y home indicator.
+- iPad: horizontal y vertical.
+- Teclado abierto: no debe cubrir botones de formulario.
+- Camera QR, exportaciones PDF/Excel/CSV, sesion ADMIN/APICULTOR.
+
+REVERSION / SEGURIDAD
+Antes de modificar, el script conserva copia de cada archivo en una
+carpeta al lado del repositorio, por ejemplo:
+...\Sistema-de-gestion---Colmenares-tres-pinos-respaldo-responsive-AAAAMMDD-HHMMSS
+
+NO hagas git add . ni commit hasta revisar la salida de TypeScript y
+probar la interfaz. El script no puede garantizar que todos los modales
+de las otras pantallas no tengan anchos fijos: genera un informe
+REVISAR_RESPONSIVE.txt dentro de la carpeta de respaldos.
+
+NOTA: Un APK solo se instala en Android. Para iPhone se requiere una
+compilacion iOS independiente (no se instala un APK en iOS).

@@ -1,4 +1,3 @@
-
 import * as Crypto from 'expo-crypto';
 
 import {
@@ -22,7 +21,7 @@ export class ErrorAPI extends Error {
 }
 
 type OpcionesPeticion = {
-  method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+  method?: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE';
   body?: unknown;
   token?: string;
 };

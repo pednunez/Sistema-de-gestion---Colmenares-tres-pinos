@@ -1,4 +1,3 @@
-
 import * as SQLite from 'expo-sqlite';
 
 import { leerSesionGuardada } from '../api/auth';
@@ -47,26 +46,7 @@ export type TratamientoGuardado = {
   usuario_local_id: number | null;
 };
 
-// Valores temporales para probar la interfaz.
-// No son tratamientos ni productos autorizados.
-export const TIPOS_TRATAMIENTO = [
-  'Simulación sanitaria',
-  'Evaluación sanitaria de prueba',
-] as const;
-
-export const PRODUCTOS_TRATAMIENTO = [
-  'Sin producto (prueba)',
-  'Producto simulado',
-] as const;
-
-export const UNIDADES_DOSIS = [
-  'mg',
-  'g',
-  'ml',
-  'l',
-  'tiras',
-  'unidades',
-] as const;
+// Los tipos, productos y dosis se registran como texto libre, igual que en la web.
 
 const caracteresTexto =
   /[^A-Za-zÀ-ÖØ-öø-ÿ0-9 \n.,;:¿?¡!()%+°ºµ'/-]/g;
@@ -159,59 +139,16 @@ export function validarTratamiento(
     throw new Error('Selecciona una colmena válida.');
   }
 
-  if (
-    !TIPOS_TRATAMIENTO.some(
-      t => t === datos.tipoTratamiento
-    )
-  ) {
-    throw new Error(
-      'Selecciona un tipo del catálogo de prueba.'
-    );
+  const tipo = datos.tipoTratamiento.trim();
+  if (tipo.length < 2 || tipo.length > 100) {
+    throw new Error('Indica un tipo de tratamiento entre 2 y 100 caracteres.');
   }
 
-  if (
-    !PRODUCTOS_TRATAMIENTO.some(
-      p => p === datos.producto
-    )
-  ) {
-    throw new Error(
-      'Selecciona un producto del catálogo de prueba.'
-    );
-  }
-
+  validarTexto(tipo, 'Tipo de tratamiento', 100);
+  validarTexto(datos.producto, 'Producto', 150);
+  validarTexto(datos.dosis, 'Dosis', 100);
   validarTexto(datos.motivo, 'Motivo', 500);
   validarTexto(datos.observaciones, 'Observaciones', 1000);
-
-  if (datos.producto === 'Sin producto (prueba)') {
-    if (datos.dosis.trim()) {
-      throw new Error(
-        'Sin producto no se puede registrar una dosis.'
-      );
-    }
-  } else {
-    const dosis = datos.dosis.match(
-      /^(\d{1,6}(?:[.,]\d{1,3})?) (mg|g|ml|l|tiras|unidades)$/
-    );
-
-    if (!dosis) {
-      throw new Error(
-        'Selecciona cantidad positiva y unidad de dosis.'
-      );
-    }
-
-    const cantidad = Number(
-      dosis[1].replace(',', '.')
-    );
-
-    if (
-      cantidad <= 0 ||
-      !Number.isFinite(cantidad)
-    ) {
-      throw new Error(
-        'La dosis debe ser mayor que cero.'
-      );
-    }
-  }
 
   if (!fechaValida(datos.fechaInicio)) {
     throw new Error('Fecha de inicio inválida.');

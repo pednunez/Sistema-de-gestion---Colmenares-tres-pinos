@@ -1,0 +1,6678 @@
+﻿
+========== .\mobile\App.tsx ==========
+
+import React, {
+  useRef,
+  useState,
+} from 'react';
+
+import {
+  Alert,
+  Modal,
+  Pressable,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  View,
+  useWindowDimensions,
+} from 'react-native';
+
+import {
+  CameraView,
+  useCameraPermissions,
+} from 'expo-camera';
+
+// ==========================================
+// PANTALLAS
+// ==========================================
+
+import FormularioInspeccion from './FormularioInspeccion';
+import MisInspecciones from './MisInspecciones';
+import InicioModulos from './InicioModulos';
+import ColmenasLocales from './ColmenasLocales';
+import TratamientosLocales from './TratamientosLocales';
+import RevisionesGrupos from './RevisionesGrupos';
+import ApiariosLocales from './ApiariosLocales';
+import TransferenciasLocales from './TransferenciasLocales';
+import StockLocales from './StockLocales';
+import AuditoriaLocales from './AuditoriaLocales';
+import UsuariosLocales from './UsuariosLocales';
+
+// ==========================================
+// AUTENTICACION Y CATALOGO
+// ==========================================
+
+import {
+  leerSesionGuardada,
+} from './api/auth';
+
+import type {
+  UsuarioMovil,
+} from './api/auth';
+
+import {
+  leerCatalogoLocal,
+} from './database/catalogo';
+
+// ==========================================
+// SINCRONIZACION AUTOMATICA
+// ==========================================
+
+import {
+  useControladorSincronizacion,
+} from './sincronizacion/controlador';
+
+// ==========================================
+// TIPOS
+// ==========================================
+
+type Pantalla =
+  | 'inicio'
+  | 'escaner'
+  | 'colmena'
+  | 'inspeccion'
+  | 'mis-inspecciones'
+  | 'colmenas-locales'
+  | 'apiarios-locales'
+  | 'transferencias-locales'
+  | 'tratamientos-locales'
+  | 'revisiones-grupos'
+  | 'stock-locales'
+  | 'auditoria'
+  | 'usuarios-locales';
+
+type Rol = 'ADMIN' | 'APICULTOR';
+
+type IdModulo =
+  | 'dashboard'
+  | 'apiarios'
+  | 'colmenas'
+  | 'grupos'
+  | 'inspecciones'
+  | 'tratamientos'
+  | 'transferencias'
+  | 'stock'
+  | 'qr'
+  | 'auditoria'
+  | 'usuarios';
+
+type ItemMenu = {
+  id: IdModulo;
+  nombre: string;
+  icono: string;
+  roles: Rol[];
+  destino?: Pantalla;
+  disponible: boolean;
+};
+
+type Props = {
+  usuario: UsuarioMovil;
+  sinConexion: boolean;
+  avisoCatalogo: string;
+  onReintentarConexion: () => void;
+  onCerrarSesion: () => void;
+};
+
+type Catalogo = NonNullable<
+  Awaited<ReturnType<typeof leerCatalogoLocal>>
+>;
+
+type ColmenaCatalogo =
+  Catalogo['colmenas'][number];
+
+type ApiarioCatalogo =
+  Catalogo['apiarios'][number];
+
+// ==========================================
+// MENU SEGUN LOS ROLES DE LA WEB
+// ==========================================
+
+const TODOS: Rol[] = [
+  'ADMIN',
+  'APICULTOR',
+];
+
+const SOLO_ADMIN: Rol[] = [
+  'ADMIN',
+];
+
+const MENU: ItemMenu[] = [
+
+  {
+    id: 'dashboard',
+    nombre: 'Dashboard',
+    icono: 'â–¦',
+    roles: SOLO_ADMIN,
+    destino: 'inicio',
+    disponible: true,
+  },
+
+  {
+    id: 'apiarios',
+    nombre: 'Apiarios',
+    icono: 'ðŸŒ¿',
+    roles: SOLO_ADMIN,
+    destino: 'apiarios-locales',
+    disponible: true,
+  },
+
+  {
+    id: 'colmenas',
+    nombre: 'Colmenas',
+    icono: 'ðŸ',
+    roles: TODOS,
+    destino: 'colmenas-locales',
+    disponible: true,
+  },
+
+
+
+  {
+    id: 'inspecciones',
+    nombre: 'Inspecciones',
+    icono: 'ðŸ“‹',
+    roles: TODOS,
+    destino: 'mis-inspecciones',
+    disponible: true,
+  },
+
+  {
+    id: 'tratamientos',
+    nombre: 'Tratamientos',
+    icono: 'ðŸ’Š',
+    roles: TODOS,
+    destino: 'tratamientos-locales',
+    disponible: true,
+  },
+
+  {
+    id: 'transferencias',
+    nombre: 'Transferencias',
+    icono: 'â‡„',
+    roles: TODOS,
+    destino: 'transferencias-locales',
+    disponible: true,
+  },
+
+  {
+    id: 'stock',
+    nombre: 'Stock',
+    icono: 'ðŸ“¦',
+    roles: TODOS,
+    destino: 'stock-locales',
+    disponible: true,
+  },
+
+  {
+    id: 'qr',
+    nombre: 'CÃ³digos QR',
+    icono: 'â–¦',
+    roles: TODOS,
+    disponible: true,
+  },
+
+  {
+    id: 'auditoria',
+    nombre: 'AuditorÃ­a',
+    icono: 'ðŸ›¡ï¸',
+    roles: SOLO_ADMIN,
+    destino: 'auditoria',
+    disponible: true,
+  },
+
+  {
+    id: 'usuarios',
+    nombre: 'Usuarios',
+    icono: 'ðŸ‘¥',
+    roles: SOLO_ADMIN,
+    destino: 'usuarios-locales',
+    disponible: true,
+  },
+
+];
+
+// ==========================================
+// FILTRAR MENU POR ROL
+// ==========================================
+
+function menuParaRol(rol: string): ItemMenu[] {
+  return MENU.filter(item =>
+    item.roles.includes(rol as Rol)
+  );
+}
+
+// ==========================================
+// IDENTIFICAR MODULO ACTIVO
+// ==========================================
+
+function obtenerModuloActivo(
+  pantalla: Pantalla
+): IdModulo {
+
+  switch (pantalla) {
+
+    case 'inicio':
+      return 'dashboard';
+
+    case 'apiarios-locales':
+      return 'apiarios';
+
+    case 'transferencias-locales':
+      return 'transferencias';
+
+    case 'stock-locales':
+      return 'stock';
+
+    case 'auditoria':
+      return 'auditoria';
+
+    case 'usuarios-locales':
+      return 'usuarios';
+
+    case 'colmenas-locales':
+    case 'colmena':
+      return 'colmenas';
+
+    case 'revisiones-grupos':
+      return 'grupos';
+
+    case 'mis-inspecciones':
+    case 'inspeccion':
+      return 'inspecciones';
+
+    case 'tratamientos-locales':
+      return 'tratamientos';
+
+    case 'escaner':
+      return 'qr';
+
+    default:
+      return 'colmenas';
+  }
+}
+
+// ==========================================
+// VALIDAR QR OFICIAL
+// ==========================================
+
+const UUID =
+  '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
+
+const PATRON_QR = new RegExp(
+  `(?:^|/colmenas/qr/)(${UUID})/?(?:[?#].*)?$`,
+  'i'
+);
+
+const PATRON_QR_WEB = new RegExp(
+  `[?&]qr=(${UUID})(?:&|#|$)`,
+  'i'
+);
+
+function obtenerUUIDDesdeQR(
+  valor: string
+): string | null {
+
+  const texto = valor.trim();
+
+  const coincidencia =
+    texto.match(PATRON_QR) ??
+    texto.match(PATRON_QR_WEB);
+
+  if (!coincidencia) {
+    return null;
+  }
+
+  return coincidencia[1].toLowerCase();
+}
+
+// ==========================================
+// APLICACION PRINCIPAL
+// ==========================================
+
+export default function App({
+  usuario,
+  sinConexion,
+  avisoCatalogo,
+  onReintentarConexion,
+  onCerrarSesion,
+}: Props) {
+
+  // ========================================
+  // SINCRONIZACION AUTOMATICA
+  // ========================================
+
+  useControladorSincronizacion();
+
+  // ========================================
+  // RESPONSIVE
+  // ========================================
+
+  const { width } = useWindowDimensions();
+
+  // Tablet desde 768 px.
+  const esTablet = width >= 768;
+
+  const pantallaInicial: Pantalla =
+    usuario.rol === 'ADMIN'
+      ? 'inicio'
+      : 'colmenas-locales';
+
+  // ========================================
+  // NAVEGACION
+  // ========================================
+
+  const [pantalla, setPantalla] =
+    useState<Pantalla>(pantallaInicial);
+
+  const [menuAbierto, setMenuAbierto] =
+    useState(false);
+
+  const itemsMenu = menuParaRol(usuario.rol);
+
+  const moduloActivo =
+    obtenerModuloActivo(pantalla);
+
+  const itemActual = itemsMenu.find(
+    item => item.id === moduloActivo
+  );
+
+  const tituloActual =
+    itemActual?.nombre ??
+    (
+      pantalla === 'inspeccion'
+        ? 'Nueva inspecciÃ³n'
+        : 'InformaciÃ³n de colmena'
+    );
+
+  const nombreRol =
+    usuario.rol === 'ADMIN'
+      ? 'Administrador'
+      : 'Apicultor';
+
+  // ========================================
+  // COLMENA IDENTIFICADA
+  // ========================================
+
+  const [codigoQR, setCodigoQR] =
+    useState('');
+
+  const [
+    colmenaSeleccionada,
+    setColmenaSeleccionada,
+  ] = useState<ColmenaCatalogo | null>(null);
+
+  const [
+    apiarioSeleccionado,
+    setApiarioSeleccionado,
+  ] = useState<ApiarioCatalogo | null>(null);
+
+  // ========================================
+  // CAMARA
+  // ========================================
+
+  const [
+    cameraReady,
+    setCameraReady,
+  ] = useState(false);
+
+  const [
+    permission,
+    requestPermission,
+  ] = useCameraPermissions();
+
+  const bloqueoEscaneo = useRef(false);
+
+  // ========================================
+  // VOLVER AL INICIO SEGUN EL ROL
+  // ========================================
+
+  const volverInicio = () => {
+
+    bloqueoEscaneo.current = false;
+
+    setCameraReady(false);
+    setCodigoQR('');
+    setColmenaSeleccionada(null);
+    setApiarioSeleccionado(null);
+    setMenuAbierto(false);
+
+    setPantalla(pantallaInicial);
+  };
+
+  // ========================================
+  // ABRIR ESCANER QR
+  // ========================================
+
+  const abrirEscaner = async () => {
+
+    if (!permission?.granted) {
+
+      const resultado =
+        await requestPermission();
+
+      if (!resultado.granted) {
+
+        Alert.alert(
+          'Permiso necesario',
+          'Debes permitir el acceso a la cÃ¡mara para escanear las colmenas.'
+        );
+
+        return;
+      }
+    }
+
+    bloqueoEscaneo.current = false;
+
+    setCameraReady(false);
+    setCodigoQR('');
+
+    setColmenaSeleccionada(null);
+    setApiarioSeleccionado(null);
+
+    setMenuAbierto(false);
+    setPantalla('escaner');
+  };
+
+  // ========================================
+  // NAVEGAR POR EL MENU
+  // ========================================
+
+  const navegarModulo = (item: ItemMenu) => {
+
+    if (!item.disponible) {
+      return;
+    }
+
+    // Panel de control: volver al inicio en un solo toque.
+    if (item.id === 'dashboard') {
+      volverInicio();
+      return;
+    }
+
+    setMenuAbierto(false);
+
+    // EscÃ¡ner QR.
+    if (item.id === 'qr') {
+      void abrirEscaner();
+      return;
+    }
+
+    // Resto de los mÃ³dulos disponibles.
+    if (item.destino) {
+      setCameraReady(false);
+      setPantalla(item.destino);
+    }
+  };
+
+  // ========================================
+  // MOSTRAR ERROR DE ESCANEO
+  // ========================================
+
+  const mostrarErrorEscaneo = (
+    titulo: string,
+    mensaje: string
+  ) => {
+
+    Alert.alert(
+      titulo,
+      mensaje,
+      [
+        {
+          text: 'Volver a escanear',
+          onPress: () => {
+            bloqueoEscaneo.current = false;
+          },
+        },
+        {
+          text: 'Ir al inicio',
+          onPress: volverInicio,
+        },
+      ]
+    );
+  };
+
+  // ========================================
+  // LEER Y VALIDAR QR
+  // ========================================
+
+  const escanearQR = async ({
+    data,
+  }: {
+    data: string;
+  }) => {
+
+    // Impedir escaneos simultÃ¡neos.
+    if (bloqueoEscaneo.current) {
+      return;
+    }
+
+    bloqueoEscaneo.current = true;
+
+    // Extraer UUID.
+    const uuid = obtenerUUIDDesdeQR(data);
+
+    if (!uuid) {
+
+      mostrarErrorEscaneo(
+        'CÃ³digo QR invÃ¡lido',
+        'El QR no tiene el formato oficial de una colmena.'
+      );
+
+      return;
+    }
+
+    try {
+
+      // IDENTIFICAR USUARIO
+      const sesion =
+        await leerSesionGuardada();
+
+      if (!sesion) {
+
+        mostrarErrorEscaneo(
+          'SesiÃ³n no disponible',
+          'El QR fue leÃ­do correctamente, pero debes iniciar sesiÃ³n para consultar el catÃ¡logo oficial de colmenas.'
+        );
+
+        return;
+      }
+
+      // CONSULTAR SQLITE
+      const catalogo =
+        await leerCatalogoLocal(
+          sesion.usuario.id
+        );
+
+      if (!catalogo) {
+
+        mostrarErrorEscaneo(
+          'CatÃ¡logo no disponible',
+          'No hay un catÃ¡logo oficial descargado para este usuario. Debes iniciar sesiÃ³n con conexiÃ³n a FastAPI para obtenerlo.'
+        );
+
+        return;
+      }
+
+      // BUSCAR COLMENA
+      const colmena =
+        catalogo.colmenas.find(
+          item =>
+            item.codigo_qr
+              .trim()
+              .toLowerCase() === uuid
+        );
+
+      if (!colmena) {
+
+        mostrarErrorEscaneo(
+          'Colmena no registrada',
+          'El QR tiene un formato vÃ¡lido, pero no pertenece a ninguna colmena del catÃ¡logo oficial disponible.'
+        );
+
+        return;
+      }
+
+      // IDENTIFICAR APIARIO
+      const apiario =
+        catalogo.apiarios.find(
+          item =>
+            item.id === colmena.apiario_id
+        ) ?? null;
+
+      // ABRIR COLMENA
+      setCodigoQR(colmena.codigo_qr);
+
+      setColmenaSeleccionada(colmena);
+
+      setApiarioSeleccionado(apiario);
+
+      setCameraReady(false);
+
+      setPantalla('colmena');
+
+    } catch (error) {
+
+      console.error(
+        'Error al consultar la colmena:',
+        error
+      );
+
+      mostrarErrorEscaneo(
+        'Error de consulta',
+        'No se pudo consultar el catÃ¡logo local. Los datos no se han modificado.'
+      );
+    }
+  };
+
+  // ========================================
+  // MENU LATERAL
+  // ========================================
+
+  const renderSidebar = (
+    mostrarCerrar: boolean
+  ) => (
+
+    <View style={styles.sidebarContenido}>
+
+      {/* MARCA: AL TOCARLA REGRESA A LA PANTALLA PRINCIPAL DEL ROL */}
+      <View style={styles.sidebarMarca}>
+
+        <Pressable
+          style={({ pressed }) => [
+            styles.marcaAcceso,
+            pressed && styles.marcaAccesoPresionado,
+          ]}
+          onPress={volverInicio}
+          accessibilityRole="button"
+          accessibilityLabel={
+            usuario.rol === 'ADMIN'
+              ? 'Ir al panel de control'
+              : 'Ir a colmenas'
+          }
+        >
+          <View style={styles.logo}>
+            <Text style={styles.logoTexto}>
+              CP
+            </Text>
+          </View>
+
+          <View style={styles.marcaTextos}>
+            <Text style={styles.marcaTitulo}>
+              Colmenares
+            </Text>
+
+            <Text style={styles.marcaSubtitulo}>
+              Tres Pinos
+            </Text>
+          </View>
+        </Pressable>
+
+        {mostrarCerrar && (
+          <Pressable
+            style={styles.botonCerrarMenu}
+            onPress={() => setMenuAbierto(false)}
+            accessibilityLabel="Cerrar menÃº"
+          >
+            <Text style={styles.botonCerrarMenuTexto}>
+              âœ•
+            </Text>
+          </Pressable>
+        )}
+
+      </View>
+
+      {/* NAVEGACION */}
+      <ScrollView
+        style={styles.listaMenu}
+        contentContainerStyle={styles.listaMenuContenido}
+        showsVerticalScrollIndicator={false}
+      >
+
+        <Text style={styles.menuEtiqueta}>
+          MENÃš PRINCIPAL
+        </Text>
+
+        {itemsMenu.map(item => {
+
+          const activo =
+            item.id === moduloActivo;
+
+          return (
+
+            <Pressable
+              key={item.id}
+              disabled={!item.disponible}
+              onPress={() => navegarModulo(item)}
+              accessibilityRole="button"
+              accessibilityState={{
+                disabled: !item.disponible,
+                selected: activo,
+              }}
+              style={({ pressed }) => [
+
+                styles.menuItem,
+
+                activo && styles.menuItemActivo,
+
+                !item.disponible &&
+                  styles.menuItemDeshabilitado,
+
+                pressed &&
+                  item.disponible &&
+                  styles.menuItemPresionado,
+
+              ]}
+            >
+
+              <Text
+                style={[
+                  styles.menuIcono,
+                  activo && styles.menuIconoActivo,
+                  !item.disponible &&
+                    styles.menuIconoDeshabilitado,
+                ]}
+              >
+                {item.icono}
+              </Text>
+
+              <View style={styles.menuTextos}>
+
+                <Text
+                  style={[
+                    styles.menuNombre,
+                    activo && styles.menuNombreActivo,
+                    !item.disponible &&
+                      styles.menuNombreDeshabilitado,
+                  ]}
+                >
+                  {item.nombre}
+                </Text>
+
+                {!item.disponible && (
+                  <Text style={styles.menuPendiente}>
+                    EN DESARROLLO
+                  </Text>
+                )}
+
+              </View>
+
+              {activo && (
+                <View style={styles.menuIndicador} />
+              )}
+
+            </Pressable>
+          );
+        })}
+
+      </ScrollView>
+
+      {/* USUARIO Y SESION */}
+      <View style={styles.sidebarFooter}>
+
+        <View style={styles.usuarioAvatar}>
+          <Text style={styles.usuarioAvatarTexto}>
+            {usuario.nombre.charAt(0).toUpperCase()}
+          </Text>
+        </View>
+
+        <View style={styles.usuarioDatos}>
+
+          <Text
+            style={styles.usuarioNombre}
+            numberOfLines={1}
+          >
+            {usuario.nombre}
+          </Text>
+
+          <Text style={styles.usuarioRol}>
+            {nombreRol}
+          </Text>
+
+        </View>
+
+        <Pressable
+          style={styles.botonSalir}
+          onPress={onCerrarSesion}
+        >
+          <Text style={styles.botonSalirIcono}>
+            â†ª
+          </Text>
+
+          <Text style={styles.botonSalirTexto}>
+            Cerrar sesiÃ³n
+          </Text>
+        </Pressable>
+
+      </View>
+
+    </View>
+  );
+
+  // ========================================
+  // ESCANER QR
+  // PANTALLA COMPLETA
+  // ========================================
+
+  if (pantalla === 'escaner') {
+
+    return (
+
+      <View style={styles.cameraContainer}>
+
+        <StatusBar barStyle="light-content" />
+
+        <CameraView
+          style={styles.camera}
+          facing="back"
+          barcodeScannerSettings={{
+            barcodeTypes: ['qr'],
+          }}
+          onCameraReady={() => {
+            setCameraReady(true);
+          }}
+          onMountError={error => {
+
+            Alert.alert(
+              'Error de cÃ¡mara',
+              error.message
+            );
+
+          }}
+          onBarcodeScanned={
+            bloqueoEscaneo.current
+              ? undefined
+              : resultado => {
+                  void escanearQR(resultado);
+                }
+          }
+        />
+
+        <View style={styles.cameraHeader}>
+
+          <Text style={styles.cameraTitle}>
+            Escanear cÃ³digo QR
+          </Text>
+
+          <Text style={styles.cameraSubtitle}>
+            Apunta la cÃ¡mara al QR oficial de una colmena.
+          </Text>
+
+          {!cameraReady && (
+            <Text style={styles.cameraSubtitle}>
+              Iniciando cÃ¡mara...
+            </Text>
+          )}
+
+        </View>
+
+        <Pressable
+          style={styles.backButton}
+          onPress={volverInicio}
+        >
+          <Text style={styles.buttonText}>
+            Volver al inicio
+          </Text>
+        </Pressable>
+
+      </View>
+    );
+  }
+
+  // ==========================================
+  // CONTENIDO DE LAS PANTALLAS
+  // ==========================================
+
+  let contenido: React.ReactNode = null;
+
+  // DASHBOARD
+  if (pantalla === 'inicio') {
+
+    contenido = (
+      <InicioModulos
+
+        onEscanear={() => {
+          void abrirEscaner();
+        }}
+
+        onInspecciones={() => {
+          setPantalla('mis-inspecciones');
+        }}
+
+        onColmenas={() => {
+          setPantalla('colmenas-locales');
+        }}
+
+        onTratamientos={() => {
+          setPantalla('tratamientos-locales');
+        }}
+
+        onRevisiones={() => {
+          setPantalla('revisiones-grupos');
+        }}
+
+      />
+    );
+  }
+
+  // APIARIOS
+  else if (pantalla === 'apiarios-locales') {
+
+    contenido = (
+      <ApiariosLocales
+        onVolver={volverInicio}
+      />
+    );
+  }
+
+  // TRANSFERENCIAS
+  else if (pantalla === 'transferencias-locales') {
+
+    contenido = (
+      <TransferenciasLocales
+        onEscanear={() => {
+          void abrirEscaner();
+        }}
+      />
+    );
+  }
+
+  // STOCK
+  else if (pantalla === 'stock-locales') {
+
+    contenido = (
+      <StockLocales
+        onVolver={volverInicio}
+        rol={usuario.rol}
+      />
+    );
+  }
+
+  // AUDITORÃA
+  else if (pantalla === 'auditoria') {
+
+    contenido = (
+      <AuditoriaLocales
+        onVolver={volverInicio}
+      />
+    );
+  }
+
+  // USUARIOS
+  else if (pantalla === 'usuarios-locales') {
+
+    contenido = (
+      <UsuariosLocales
+        onVolver={volverInicio}
+      />
+    );
+  }
+
+  // REVISIONES POR GRUPO
+  else if (pantalla === 'revisiones-grupos') {
+
+    contenido = (
+      <RevisionesGrupos
+        onVolver={volverInicio}
+      />
+    );
+  }
+
+  // TRATAMIENTOS
+  else if (pantalla === 'tratamientos-locales') {
+
+    contenido = (
+      <TratamientosLocales
+        onVolver={volverInicio}
+      />
+    );
+  }
+
+  // COLMENAS LOCALES
+  else if (pantalla === 'colmenas-locales') {
+
+    contenido = (
+      <ColmenasLocales
+
+        onVolver={volverInicio}
+
+        onEscanear={() => {
+          void abrirEscaner();
+        }}
+
+        onVerInspecciones={() => {
+          setPantalla('mis-inspecciones');
+        }}
+
+      />
+    );
+  }
+
+  // HISTORIAL DE INSPECCIONES
+  else if (pantalla === 'mis-inspecciones') {
+
+    contenido = (
+      <MisInspecciones
+        onVolver={volverInicio}
+      />
+    );
+  }
+
+  // FORMULARIO DE INSPECCION
+  else if (pantalla === 'inspeccion') {
+
+    contenido = (
+      <FormularioInspeccion
+
+        codigoQR={codigoQR}
+
+        onVolver={() => {
+          setPantalla('colmena');
+        }}
+
+      />
+    );
+  }
+
+  // INFORMACION DE LA COLMENA
+  else if (pantalla === 'colmena') {
+
+    contenido = (
+
+      <ScrollView
+        contentContainerStyle={styles.detalleContenido}
+        showsVerticalScrollIndicator={false}
+      >
+
+        <Text style={styles.icon}>
+          ðŸ
+        </Text>
+
+        <Text style={styles.title}>
+          InformaciÃ³n de la colmena
+        </Text>
+
+        <View style={styles.card}>
+
+          <Text style={styles.cardLabel}>
+            Colmena identificada
+          </Text>
+
+          <Text style={styles.nombreColmena}>
+            {colmenaSeleccionada?.codigo ??
+              'Sin identificar'}
+          </Text>
+
+          <Text style={styles.infoText}>
+            Apiario: {
+              apiarioSeleccionado?.nombre ??
+              'Sin informaciÃ³n'
+            }
+          </Text>
+
+          <Text style={styles.infoText}>
+            Estado: {
+              colmenaSeleccionada?.estado ??
+              'Sin informaciÃ³n'
+            }
+          </Text>
+
+          <Text style={styles.infoText}>
+            Marcos registrados: {
+              colmenaSeleccionada
+                ?.cantidad_marcos ?? 'Sin informaciÃ³n'
+            }
+          </Text>
+
+          <Text style={styles.cardLabel}>
+            UUID de la colmena
+          </Text>
+
+          <Text style={styles.codigo}>
+            {codigoQR}
+          </Text>
+
+          <Text style={styles.infoText}>
+            InformaciÃ³n obtenida del catÃ¡logo oficial
+            almacenado en el telÃ©fono.
+          </Text>
+
+        </View>
+
+        <View style={styles.menuDetalle}>
+
+          <Pressable
+            style={styles.button}
+            onPress={() => {
+
+              if (
+                !colmenaSeleccionada ||
+                !codigoQR
+              ) {
+
+                Alert.alert(
+                  'Colmena no disponible',
+                  'Debes escanear una colmena oficial antes de registrar una inspecciÃ³n.'
+                );
+
+                return;
+              }
+
+              setPantalla('inspeccion');
+            }}
+          >
+            <Text style={styles.buttonText}>
+              Iniciar inspecciÃ³n
+            </Text>
+          </Pressable>
+
+          <Pressable
+            style={styles.secondaryButton}
+            onPress={volverInicio}
+          >
+            <Text style={styles.secondaryText}>
+              Volver al inicio
+            </Text>
+          </Pressable>
+
+        </View>
+
+      </ScrollView>
+    );
+  }
+
+  // ==========================================
+  // INTERFAZ RESPONSIVE
+  // ==========================================
+
+  return (
+
+    <View style={styles.appContainer}>
+
+      <StatusBar barStyle="dark-content" />
+
+      {/* MENU PERMANENTE EN TABLETS */}
+      {esTablet && (
+
+        <View style={styles.sidebarTablet}>
+          {renderSidebar(false)}
+        </View>
+
+      )}
+
+      {/* AREA PRINCIPAL */}
+      <View style={styles.areaPrincipal}>
+
+        {/* CABECERA SUPERIOR */}
+        <View style={styles.cabecera}>
+
+          <View style={styles.cabeceraIzquierda}>
+
+            {!esTablet && (
+
+              <Pressable
+                style={styles.botonMenu}
+                onPress={() => setMenuAbierto(true)}
+                accessibilityLabel="Abrir menÃº"
+              >
+                <Text style={styles.botonMenuTexto}>
+                  â˜°
+                </Text>
+              </Pressable>
+
+            )}
+
+            <View style={styles.cabeceraTitulos}>
+
+              <Text
+                style={styles.cabeceraTitulo}
+                numberOfLines={1}
+              >
+                {tituloActual}
+              </Text>
+
+              {width >= 420 && (
+                <Text style={styles.cabeceraSubtitulo}>
+                  Colmenares Tres Pinos
+                </Text>
+              )}
+
+            </View>
+
+          </View>
+
+          <View style={styles.cabeceraDerecha}>
+
+            {/* ESTADO DE SESION */}
+            <View
+              style={[
+                styles.estadoChip,
+                sinConexion
+                  ? styles.estadoChipOffline
+                  : styles.estadoChipActivo,
+              ]}
+            >
+
+              <View
+                style={[
+                  styles.estadoPunto,
+                  sinConexion
+                    ? styles.puntoOffline
+                    : styles.puntoActivo,
+                ]}
+              />
+
+              {width >= 420 && (
+                <Text
+                  style={[
+                    styles.estadoTexto,
+                    sinConexion
+                      ? styles.estadoTextoOffline
+                      : styles.estadoTextoActivo,
+                  ]}
+                >
+                  {sinConexion
+                    ? 'Sin conexiÃ³n'
+                    : 'SesiÃ³n activa'}
+                </Text>
+              )}
+
+            </View>
+
+            {/* ACTUALIZAR */}
+            <Pressable
+              style={styles.botonActualizar}
+              onPress={() => {
+                onReintentarConexion();
+              }}
+            >
+
+              <Text style={styles.actualizarIcono}>
+                â†»
+              </Text>
+
+              {width >= 520 && (
+                <Text style={styles.actualizarTexto}>
+                  Actualizar
+                </Text>
+              )}
+
+            </Pressable>
+
+          </View>
+
+        </View>
+
+        {/* AVISO SIN CONEXION */}
+        {sinConexion && (
+
+          <View style={styles.avisoOffline}>
+
+            <Text style={styles.avisoOfflineTitulo}>
+              Sin conexiÃ³n con FastAPI
+            </Text>
+
+            <Text style={styles.avisoOfflineTexto}>
+              Los registros locales se conservan.
+              La sincronizaciÃ³n automÃ¡tica todavÃ­a estÃ¡ pendiente.
+            </Text>
+
+          </View>
+
+        )}
+
+        {/* AVISO CATALOGO */}
+        {avisoCatalogo !== '' && (
+
+          <View style={styles.avisoCatalogo}>
+
+            <Text style={styles.avisoCatalogoTexto}>
+              {avisoCatalogo}
+            </Text>
+
+          </View>
+
+        )}
+
+        {/* CONTENIDO */}
+        <View style={styles.contenidoPrincipal}>
+          {contenido}
+        </View>
+
+      </View>
+
+      {/* MENU DESPLEGABLE EN TELEFONOS
+          Modal nativo para asegurar que el panel quede por encima
+          de toda la pantalla y reciba correctamente los toques. */}
+      <Modal
+        visible={menuAbierto && !esTablet}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        onRequestClose={() => setMenuAbierto(false)}
+      >
+        <View style={styles.menuModalContenedor}>
+
+          {/* Tocar fuera del panel lo cierra y mantiene la pantalla actual. */}
+          <Pressable
+            style={styles.fondoModal}
+            onPress={() => setMenuAbierto(false)}
+            accessibilityRole="button"
+            accessibilityLabel="Cerrar menÃº y volver a la pantalla actual"
+          />
+
+          {/* El panel queda por encima del fondo y conserva su navegaciÃ³n. */}
+          <View style={styles.sidebarMovil}>
+            {renderSidebar(true)}
+          </View>
+
+        </View>
+      </Modal>
+
+    </View>
+  );
+}
+
+// ==========================================
+// ESTILOS
+// ==========================================
+
+const styles = StyleSheet.create({
+
+  // ESTRUCTURA GENERAL
+
+  appContainer: {
+    flex: 1,
+    position: 'relative',
+    flexDirection: 'row',
+    backgroundColor: '#F1F4FA',
+  },
+
+  areaPrincipal: {
+    flex: 1,
+    minWidth: 0,
+    backgroundColor: '#F1F4FA',
+  },
+
+  contenidoPrincipal: {
+    flex: 1,
+    minHeight: 0,
+    backgroundColor: '#F1F4FA',
+  },
+
+  // SIDEBAR TABLET
+
+  sidebarTablet: {
+    width: 270,
+    backgroundColor: '#0F172A',
+  },
+
+  menuModalContenedor: {
+    flex: 1,
+    backgroundColor: 'transparent',
+  },
+
+  sidebarMovil: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    width: 292,
+    maxWidth: '86%',
+    backgroundColor: '#0F172A',
+    zIndex: 2,
+    elevation: 2,
+  },
+
+  sidebarContenido: {
+    flex: 1,
+    backgroundColor: '#0F172A',
+  },
+
+  sidebarMarca: {
+    height: 86,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 19,
+    borderBottomWidth: 1,
+    borderBottomColor: '#263449',
+  },
+
+  marcaAcceso: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 64,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  marcaAccesoPresionado: {
+    opacity: 0.7,
+  },
+
+  logo: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#FBBF24',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  logoTexto: {
+    color: '#0F172A',
+    fontSize: 19,
+    fontWeight: '900',
+  },
+
+  marcaTextos: {
+    marginLeft: 11,
+    flex: 1,
+  },
+
+  marcaTitulo: {
+    color: '#FFFFFF',
+    fontSize: 17,
+    fontWeight: '900',
+  },
+
+  marcaSubtitulo: {
+    color: '#94A3B8',
+    fontSize: 12,
+    marginTop: 3,
+  },
+
+  botonCerrarMenu: {
+    width: 34,
+    height: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+    backgroundColor: '#1E293B',
+  },
+
+  botonCerrarMenuTexto: {
+    color: '#FFFFFF',
+    fontSize: 17,
+  },
+
+  // MENU
+
+  listaMenu: {
+    flex: 1,
+  },
+
+  listaMenuContenido: {
+    paddingHorizontal: 13,
+    paddingTop: 23,
+    paddingBottom: 20,
+  },
+
+  menuEtiqueta: {
+    color: '#64748B',
+    fontSize: 10,
+    fontWeight: '900',
+    letterSpacing: 1,
+    marginHorizontal: 9,
+    marginBottom: 13,
+  },
+
+  menuItem: {
+    minHeight: 49,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 11,
+    marginBottom: 5,
+  },
+
+  menuItemActivo: {
+    backgroundColor: '#FBBF24',
+  },
+
+  menuItemDeshabilitado: {
+    opacity: 0.65,
+  },
+
+  menuItemPresionado: {
+    backgroundColor: '#1E293B',
+  },
+
+  menuIcono: {
+    width: 31,
+    fontSize: 19,
+    color: '#CBD5E1',
+    textAlign: 'center',
+  },
+
+  menuIconoActivo: {
+    color: '#0F172A',
+  },
+
+  menuIconoDeshabilitado: {
+    color: '#64748B',
+  },
+
+  menuTextos: {
+    flex: 1,
+    marginLeft: 7,
+  },
+
+  menuNombre: {
+    color: '#CBD5E1',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+
+  menuNombreActivo: {
+    color: '#0F172A',
+    fontWeight: '900',
+  },
+
+  menuNombreDeshabilitado: {
+    color: '#94A3B8',
+  },
+
+  menuPendiente: {
+    color: '#64748B',
+    fontSize: 8,
+    fontWeight: '900',
+    marginTop: 3,
+    letterSpacing: 0.5,
+  },
+
+  menuIndicador: {
+    width: 6,
+    height: 6,
+    borderRadius: 4,
+    backgroundColor: '#0F172A',
+  },
+
+  // USUARIO SIDEBAR
+
+  sidebarFooter: {
+    borderTopWidth: 1,
+    borderTopColor: '#263449',
+    padding: 16,
+  },
+
+  usuarioAvatar: {
+    width: 37,
+    height: 37,
+    borderRadius: 11,
+    backgroundColor: '#FBBF24',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  usuarioAvatarTexto: {
+    color: '#0F172A',
+    fontSize: 17,
+    fontWeight: '900',
+  },
+
+  usuarioDatos: {
+    marginTop: 9,
+  },
+
+  usuarioNombre: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+
+  usuarioRol: {
+    color: '#94A3B8',
+    fontSize: 11,
+    marginTop: 3,
+  },
+
+  botonSalir: {
+    marginTop: 15,
+    minHeight: 43,
+    borderRadius: 9,
+    backgroundColor: '#1E293B',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+  },
+
+  botonSalirIcono: {
+    color: '#FCA5A5',
+    fontSize: 18,
+    marginRight: 10,
+  },
+
+  botonSalirTexto: {
+    color: '#CBD5E1',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+
+  // CABECERA
+
+  cabecera: {
+    minHeight: 76,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+    paddingHorizontal: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+
+  cabeceraIzquierda: {
+    flex: 1,
+    minWidth: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  cabeceraTitulos: {
+    flex: 1,
+    minWidth: 0,
+  },
+
+  cabeceraTitulo: {
+    color: '#0F172A',
+    fontSize: 19,
+    fontWeight: '900',
+  },
+
+  cabeceraSubtitulo: {
+    color: '#64748B',
+    fontSize: 11,
+    marginTop: 3,
+  },
+
+  cabeceraDerecha: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+
+  botonMenu: {
+    width: 39,
+    height: 39,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 9,
+    marginRight: 11,
+  },
+
+  botonMenuTexto: {
+    color: '#0F172A',
+    fontSize: 21,
+  },
+
+  // ESTADO
+
+  estadoChip: {
+    minHeight: 34,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 10,
+    borderRadius: 9,
+    gap: 7,
+  },
+
+  estadoChipActivo: {
+    backgroundColor: '#F0FDF4',
+  },
+
+  estadoChipOffline: {
+    backgroundColor: '#FFF7ED',
+  },
+
+  estadoPunto: {
+    width: 7,
+    height: 7,
+    borderRadius: 5,
+  },
+
+  puntoActivo: {
+    backgroundColor: '#16A34A',
+  },
+
+  puntoOffline: {
+    backgroundColor: '#EA580C',
+  },
+
+  estadoTexto: {
+    fontSize: 10,
+    fontWeight: '800',
+  },
+
+  estadoTextoActivo: {
+    color: '#166534',
+  },
+
+  estadoTextoOffline: {
+    color: '#9A3412',
+  },
+
+  // ACTUALIZAR
+
+  botonActualizar: {
+    minHeight: 39,
+    paddingHorizontal: 11,
+    borderRadius: 9,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+  },
+
+  actualizarIcono: {
+    color: '#0F172A',
+    fontSize: 21,
+    fontWeight: '700',
+  },
+
+  actualizarTexto: {
+    color: '#334155',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+
+  // AVISOS
+
+  avisoOffline: {
+    paddingHorizontal: 16,
+    paddingVertical: 11,
+    backgroundColor: '#FFF7ED',
+    borderBottomWidth: 1,
+    borderBottomColor: '#FED7AA',
+  },
+
+  avisoOfflineTitulo: {
+    color: '#9A3412',
+    fontWeight: '900',
+    fontSize: 12,
+  },
+
+  avisoOfflineTexto: {
+    color: '#9A3412',
+    fontSize: 11,
+    lineHeight: 17,
+    marginTop: 3,
+  },
+
+  avisoCatalogo: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: '#FFFBEB',
+    borderBottomWidth: 1,
+    borderBottomColor: '#FDE68A',
+  },
+
+  avisoCatalogoTexto: {
+    color: '#92400E',
+    fontSize: 11,
+    lineHeight: 17,
+  },
+
+  // MENU MOVIL
+
+  fondoModal: {
+    ...StyleSheet.absoluteFill,
+    backgroundColor: '#00000088',
+    zIndex: 1,
+    elevation: 1,
+  },
+
+  // CAMARA
+
+  cameraContainer: {
+    flex: 1,
+    backgroundColor: '#000000',
+  },
+
+  camera: {
+    flex: 1,
+    width: '100%',
+  },
+
+  cameraHeader: {
+    position: 'absolute',
+    top: 75,
+    alignSelf: 'center',
+    alignItems: 'center',
+    padding: 15,
+    backgroundColor: '#00000099',
+    borderRadius: 12,
+    maxWidth: '90%',
+  },
+
+  cameraTitle: {
+    color: '#FFFFFF',
+    fontSize: 22,
+    fontWeight: 'bold',
+    textAlign: 'center',
+  },
+
+  cameraSubtitle: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    marginTop: 8,
+    textAlign: 'center',
+  },
+
+  backButton: {
+    position: 'absolute',
+    bottom: 35,
+    alignSelf: 'center',
+    backgroundColor: '#FBBF24',
+    paddingVertical: 16,
+    paddingHorizontal: 35,
+    borderRadius: 12,
+  },
+
+  buttonText: {
+    color: '#0F172A',
+    fontSize: 16,
+    fontWeight: '900',
+  },
+
+  // INFORMACION DE COLMENA
+
+  detalleContenido: {
+    flexGrow: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+
+  icon: {
+    fontSize: 55,
+    marginBottom: 15,
+  },
+
+  title: {
+    fontSize: 26,
+    fontWeight: '900',
+    color: '#0F172A',
+    textAlign: 'center',
+  },
+
+  card: {
+    width: '100%',
+    maxWidth: 700,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 24,
+    marginTop: 25,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+
+  cardLabel: {
+    fontSize: 13,
+    color: '#64748B',
+    marginTop: 12,
+    fontWeight: '700',
+  },
+
+  nombreColmena: {
+    fontSize: 23,
+    fontWeight: '900',
+    color: '#0F172A',
+    marginTop: 10,
+    textAlign: 'center',
+  },
+
+  codigo: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#956513',
+    marginTop: 10,
+    textAlign: 'center',
+  },
+
+  infoText: {
+    color: '#64748B',
+    textAlign: 'center',
+    fontSize: 13,
+    lineHeight: 20,
+    marginTop: 12,
+  },
+
+  menuDetalle: {
+    width: '100%',
+    maxWidth: 700,
+    marginTop: 25,
+    gap: 12,
+  },
+
+  button: {
+    backgroundColor: '#FBBF24',
+    padding: 18,
+    borderRadius: 12,
+    alignItems: 'center',
+  },
+
+  secondaryButton: {
+    backgroundColor: '#FFFFFF',
+    padding: 18,
+    borderRadius: 12,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+
+  secondaryText: {
+    color: '#334155',
+    fontSize: 16,
+    fontWeight: '700',
+  },
+
+});
+
+========== .\mobile\AppAutenticado.tsx ==========
+
+
+import React, { useEffect, useState } from 'react';
+
+import {
+  ActivityIndicator,
+  Alert,
+  SafeAreaView,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+
+import App from './App';
+import Login from './Login';
+
+import {
+  iniciarSesion,
+  leerSesionGuardada,
+  salirDeEsteDispositivo,
+  tokenVigente,
+  verificarUsuario,
+} from './api/auth';
+
+import type { SesionMovil } from './api/auth';
+
+import { ErrorAPI } from './api/cliente';
+
+import {
+  descargarCatalogo,
+  leerCatalogoLocal,
+} from './database/catalogo';
+
+// ==========================================
+// COLMENARES TRES PINOS
+// AUTENTICACION Y CATALOGO MOVIL
+// ==========================================
+
+type EstadoAplicacion =
+  | 'CARGANDO'
+  | 'LOGIN'
+  | 'AUTENTICADO'
+  | 'SIN_CONEXION';
+
+// ==========================================
+// DESCARGAR CATALOGO DESDE FASTAPI
+// ==========================================
+
+async function actualizarCatalogo(
+  sesion: SesionMovil
+): Promise<string> {
+  try {
+    await descargarCatalogo(sesion);
+    return '';
+
+  } catch (error) {
+
+    if (
+      error instanceof ErrorAPI &&
+      (error.estado === 401 || error.estado === 403)
+    ) {
+      throw error;
+    }
+
+    const catalogoLocal =
+      await leerCatalogoLocal(
+        sesion.usuario.id
+      ).catch(() => null);
+
+    if (
+      error instanceof ErrorAPI &&
+      error.estado === 404
+    ) {
+      return (
+        'El servidor todavÃ­a no tiene disponible ' +
+        '/movil/catalogo. Se necesita la versiÃ³n ' +
+        'actualizada de la API.'
+      );
+    }
+
+    if (catalogoLocal) {
+      return (
+        'No se pudo actualizar el catÃ¡logo. ' +
+        'Se conserva la Ãºltima versiÃ³n guardada ' +
+        'en SQLite.'
+      );
+    }
+
+    return (
+      'No se pudo descargar el catÃ¡logo oficial. ' +
+      'TodavÃ­a no hay colmenas oficiales ' +
+      'disponibles sin conexiÃ³n.'
+    );
+  }
+}
+
+// ==========================================
+// COMPONENTE PRINCIPAL
+// ==========================================
+
+export default function AppAutenticado() {
+
+  const [estado, setEstado] =
+    useState<EstadoAplicacion>('CARGANDO');
+
+  const [sesion, setSesion] =
+    useState<SesionMovil | null>(null);
+
+  const [mensajeLogin, setMensajeLogin] =
+    useState('');
+
+  const [avisoCatalogo, setAvisoCatalogo] =
+    useState('');
+
+  // ========================================
+  // RECUPERAR SESION AL ABRIR EXPO
+  // ========================================
+
+  useEffect(() => {
+
+    let activo = true;
+
+    const recuperarSesion = async () => {
+
+      try {
+        const guardada =
+          await leerSesionGuardada();
+
+        if (!activo) return;
+
+        if (!guardada) {
+          setEstado('LOGIN');
+          return;
+        }
+
+        if (!tokenVigente(guardada)) {
+
+          await salirDeEsteDispositivo();
+
+          if (!activo) return;
+
+          setMensajeLogin(
+            'Tu sesiÃ³n ha vencido. ' +
+            'Debes iniciar sesiÃ³n nuevamente.'
+          );
+
+          setEstado('LOGIN');
+          return;
+        }
+
+        // VERIFICAR USUARIO CON FASTAPI
+        try {
+          await verificarUsuario(guardada);
+
+        } catch (error) {
+
+          if (!activo) return;
+
+          if (
+            error instanceof ErrorAPI &&
+            (
+              error.estado === 401 ||
+              error.estado === 403
+            )
+          ) {
+
+            await salirDeEsteDispositivo();
+
+            if (!activo) return;
+
+            setSesion(null);
+
+            setMensajeLogin(
+              'Tu sesiÃ³n ya no es vÃ¡lida. ' +
+              'Inicia sesiÃ³n nuevamente.'
+            );
+
+            setEstado('LOGIN');
+            return;
+          }
+
+          // MODO SIN CONEXION
+          if (
+            error instanceof ErrorAPI &&
+            error.estado === 0 &&
+            tokenVigente(guardada)
+          ) {
+
+            const local =
+              await leerCatalogoLocal(
+                guardada.usuario.id
+              ).catch(() => null);
+
+            if (!activo) return;
+
+            setSesion(guardada);
+
+            setAvisoCatalogo(
+              local
+                ? 'Se utilizarÃ¡ el catÃ¡logo local guardado.'
+                : 'No hay un catÃ¡logo oficial descargado.'
+            );
+
+            setEstado('SIN_CONEXION');
+            return;
+          }
+
+          setMensajeLogin(
+            'No se pudo verificar la sesiÃ³n. ' +
+            'Intenta iniciar sesiÃ³n nuevamente.'
+          );
+
+          setEstado('LOGIN');
+          return;
+        }
+
+        // ACTUALIZAR CATALOGO
+        let aviso = '';
+
+        try {
+          aviso = await actualizarCatalogo(
+            guardada
+          );
+
+        } catch (error) {
+
+          if (
+            error instanceof ErrorAPI &&
+            (
+              error.estado === 401 ||
+              error.estado === 403
+            )
+          ) {
+
+            await salirDeEsteDispositivo();
+
+            if (!activo) return;
+
+            setSesion(null);
+
+            setMensajeLogin(
+              'El servidor rechazÃ³ tu sesiÃ³n. ' +
+              'Debes iniciar sesiÃ³n nuevamente.'
+            );
+
+            setEstado('LOGIN');
+            return;
+          }
+
+          aviso =
+            'No se pudo comprobar el catÃ¡logo oficial.';
+        }
+
+        if (!activo) return;
+
+        setSesion(guardada);
+        setAvisoCatalogo(aviso);
+        setEstado('AUTENTICADO');
+
+      } catch {
+
+        if (!activo) return;
+
+        setMensajeLogin(
+          'No se pudo recuperar la sesiÃ³n guardada.'
+        );
+
+        setEstado('LOGIN');
+      }
+    };
+
+    void recuperarSesion();
+
+    return () => {
+      activo = false;
+    };
+
+  }, []);
+
+  // ========================================
+  // INICIAR SESION
+  // ========================================
+
+  const ingresar = async (
+    email: string,
+    password: string
+  ): Promise<void> => {
+
+    const nuevaSesion = await iniciarSesion(
+      email,
+      password
+    );
+
+    let aviso = '';
+
+    try {
+
+      aviso = await actualizarCatalogo(
+        nuevaSesion
+      );
+
+    } catch (error) {
+
+      await salirDeEsteDispositivo();
+
+      if (
+        error instanceof ErrorAPI &&
+        (
+          error.estado === 401 ||
+          error.estado === 403
+        )
+      ) {
+        throw new Error(
+          'El servidor rechazÃ³ la sesiÃ³n al ' +
+          'consultar el catÃ¡logo.'
+        );
+      }
+
+      throw error;
+    }
+
+    setSesion(nuevaSesion);
+    setMensajeLogin('');
+    setAvisoCatalogo(aviso);
+    setEstado('AUTENTICADO');
+  };
+
+  // ========================================
+  // REINTENTAR CONEXION
+  // ========================================
+
+  const reintentarConexion = async () => {
+
+    if (!sesion) return;
+
+    setEstado('CARGANDO');
+
+    try {
+
+      await verificarUsuario(sesion);
+
+      const aviso = await actualizarCatalogo(
+        sesion
+      );
+
+      setAvisoCatalogo(aviso);
+      setEstado('AUTENTICADO');
+
+    } catch (error) {
+
+      if (
+        !tokenVigente(sesion) ||
+        (
+          error instanceof ErrorAPI &&
+          (
+            error.estado === 401 ||
+            error.estado === 403
+          )
+        )
+      ) {
+
+        try {
+          await salirDeEsteDispositivo();
+        } catch {
+          // No habilitar una sesiÃ³n invÃ¡lida.
+        }
+
+        setSesion(null);
+
+        setMensajeLogin(
+          'Tu sesiÃ³n ya no es vÃ¡lida. ' +
+          'Inicia sesiÃ³n nuevamente.'
+        );
+
+        setEstado('LOGIN');
+        return;
+      }
+
+      if (
+        error instanceof ErrorAPI &&
+        error.estado === 0
+      ) {
+
+        setEstado('SIN_CONEXION');
+
+        Alert.alert(
+          'Sin conexiÃ³n',
+          'FastAPI no estÃ¡ disponible. ' +
+          'Tus registros locales se conservan.'
+        );
+
+        return;
+      }
+
+      setEstado('SIN_CONEXION');
+
+      Alert.alert(
+        'No se pudo verificar',
+        'No fue posible comprobar el servidor.'
+      );
+    }
+  };
+
+  // ========================================
+  // CERRAR SESION LOCAL
+  // ========================================
+
+  const cerrarSesion = () => {
+
+    Alert.alert(
+      'Cerrar sesiÃ³n',
+      'Se cerrarÃ¡ la sesiÃ³n en este dispositivo. ' +
+      'Los registros SQLite no se eliminarÃ¡n.',
+      [
+        {
+          text: 'Cancelar',
+          style: 'cancel',
+        },
+        {
+          text: 'Cerrar sesiÃ³n',
+          style: 'destructive',
+
+          onPress: () => {
+
+            void (async () => {
+
+              try {
+
+                await salirDeEsteDispositivo();
+
+                setSesion(null);
+                setAvisoCatalogo('');
+                setMensajeLogin('');
+                setEstado('LOGIN');
+
+              } catch {
+
+                Alert.alert(
+                  'Error',
+                  'No fue posible cerrar la sesiÃ³n.'
+                );
+              }
+
+            })();
+          },
+        },
+      ]
+    );
+  };
+
+  // ========================================
+  // PANTALLA DE CARGA
+  // ========================================
+
+  if (estado === 'CARGANDO') {
+
+    return (
+      <View style={styles.cargando}>
+
+        <ActivityIndicator
+          size="large"
+          color="#FBBF24"
+        />
+
+        <Text style={styles.cargandoTexto}>
+          Comprobando sesiÃ³n y catÃ¡logo...
+        </Text>
+
+      </View>
+    );
+  }
+
+  // ========================================
+  // PANTALLA DE LOGIN
+  // ========================================
+
+  if (
+    estado === 'LOGIN' ||
+    !sesion
+  ) {
+
+    return (
+      <Login
+        onIngresar={ingresar}
+        mensaje={mensajeLogin}
+      />
+    );
+  }
+
+  // ========================================
+  // APLICACION AUTENTICADA
+  // ========================================
+
+  return (
+    <SafeAreaView style={styles.contenedor}>
+
+      <App
+        usuario={sesion.usuario}
+        sinConexion={estado === 'SIN_CONEXION'}
+        avisoCatalogo={avisoCatalogo}
+        onReintentarConexion={() => {
+          void reintentarConexion();
+        }}
+        onCerrarSesion={cerrarSesion}
+      />
+
+    </SafeAreaView>
+  );
+}
+
+// ==========================================
+// ESTILOS
+// ==========================================
+
+const styles = StyleSheet.create({
+
+  contenedor: {
+    flex: 1,
+    backgroundColor: '#F1F4FA',
+  },
+
+  cargando: {
+    flex: 1,
+    backgroundColor: '#F1F4FA',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  cargandoTexto: {
+    marginTop: 15,
+    fontSize: 14,
+    color: '#475569',
+  },
+
+});
+
+
+========== .\mobile\InicioModulos.tsx ==========
+
+import React, {
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
+
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  useWindowDimensions,
+} from 'react-native';
+
+import {
+  listarInspeccionesLocales,
+} from './database/inspecciones';
+
+import {
+  leerCatalogoLocal,
+  descargarCatalogo,
+} from './database/catalogo';
+
+import {
+  leerSesionGuardada,
+} from './api/auth';
+
+import {
+  useConexion,
+} from './sincronizacion/conectividad';
+
+import {
+  solicitarAPI,
+} from './api/cliente';
+
+// ==========================================
+// COLMENARES TRES PINOS
+// DASHBOARD MOBILE RESPONSIVE
+// FUNCIONALIDADES EQUIVALENTES A LA WEB
+// ==========================================
+
+type Catalogo = NonNullable<
+  Awaited<ReturnType<typeof leerCatalogoLocal>>
+>;
+
+type ColmenaCatalogo =
+  Catalogo['colmenas'][number];
+
+type ApiarioCatalogo =
+  Catalogo['apiarios'][number];
+
+type InspeccionDashboard = {
+  id?: number;
+  colmena_id: number;
+  fecha_inspeccion: string;
+  estado_general?: string | null;
+  signos_enfermedad?: boolean | number | string | null;
+  enfermedad_observada?: string | null;
+  estado?: string;
+};
+
+type Prioridad = 'alta' | 'media';
+
+type AlertaDashboard = {
+  colmena: ColmenaCatalogo;
+  prioridad: Prioridad;
+  motivos: string[];
+  ultima?: InspeccionDashboard;
+};
+
+type Props = {
+  onEscanear: () => void;
+  onInspecciones: () => void;
+  onColmenas: () => void;
+  onTratamientos: () => void;
+  onRevisiones: () => void;
+};
+
+type EstadoServidor =
+  | 'SIN_COMPROBAR'
+  | 'COMPROBANDO'
+  | 'DISPONIBLE'
+  | 'NO_DISPONIBLE';
+
+type RespuestaHealth = {
+  status: string;
+};
+
+type ClaveDistribucion =
+  | 'COMPLETA'
+  | 'EN_DESARROLLO'
+  | 'DONANTE'
+  | 'DEBIL'
+  | 'REQUIERE_REVISION'
+  | 'ANTERIOR'
+  | 'SIN';
+
+// ==========================================
+// CONFIGURACIÃ“N DEL DASHBOARD
+// ==========================================
+
+const DIAS_SIN_INSPECCION = 30;
+
+const ESTADOS_ACTUALES = [
+  'COMPLETA',
+  'EN_DESARROLLO',
+  'DONANTE',
+  'DEBIL',
+  'REQUIERE_REVISION',
+];
+
+const DISTRIBUCION: {
+  clave: ClaveDistribucion;
+  texto: string;
+  color: string;
+  soloSiHay?: boolean;
+}[] = [
+  {
+    clave: 'COMPLETA',
+    texto: 'Completa',
+    color: '#10B981',
+  },
+  {
+    clave: 'EN_DESARROLLO',
+    texto: 'En desarrollo',
+    color: '#0EA5E9',
+  },
+  {
+    clave: 'DONANTE',
+    texto: 'Donante',
+    color: '#14B8A6',
+  },
+  {
+    clave: 'DEBIL',
+    texto: 'DÃ©bil',
+    color: '#FBBF24',
+  },
+  {
+    clave: 'REQUIERE_REVISION',
+    texto: 'Requiere revisiÃ³n',
+    color: '#EF4444',
+  },
+  {
+    clave: 'ANTERIOR',
+    texto: 'Escala anterior',
+    color: '#94A3B8',
+    soloSiHay: true,
+  },
+  {
+    clave: 'SIN',
+    texto: 'Sin inspecciÃ³n',
+    color: '#CBD5E1',
+  },
+];
+
+// ==========================================
+// FUNCIONES DE ALERTAS
+// MISMAS REGLAS QUE LA WEB
+// ==========================================
+
+function colmenaOperativa(
+  colmena: ColmenaCatalogo
+): boolean {
+  return (
+    colmena.estado !== 'INACTIVA' &&
+    colmena.estado !== 'BAJA'
+  );
+}
+
+function obtenerFecha(
+  fecha?: string | null
+): number {
+  if (!fecha) return 0;
+
+  const resultado = Date.parse(fecha);
+
+  return Number.isFinite(resultado)
+    ? resultado
+    : 0;
+}
+
+function diasDesde(
+  fecha?: string | null
+): number | null {
+  if (!fecha) return null;
+
+  const partes = fecha
+    .slice(0, 10)
+    .split('-')
+    .map(Number);
+
+  let fechaInspeccion: Date;
+
+  if (
+    partes.length === 3 &&
+    partes.every(Number.isFinite)
+  ) {
+    fechaInspeccion = new Date(
+      partes[0],
+      partes[1] - 1,
+      partes[2]
+    );
+  } else {
+    const fechaParseada = new Date(fecha);
+
+    if (!Number.isFinite(fechaParseada.getTime())) {
+      return null;
+    }
+
+    fechaInspeccion = new Date(
+      fechaParseada.getFullYear(),
+      fechaParseada.getMonth(),
+      fechaParseada.getDate()
+    );
+  }
+
+  const hoy = new Date();
+
+  hoy.setHours(0, 0, 0, 0);
+
+  fechaInspeccion.setHours(0, 0, 0, 0);
+
+  return Math.floor(
+    (hoy.getTime() - fechaInspeccion.getTime()) /
+      86400000
+  );
+}
+
+// ==========================================
+// ÃšLTIMA INSPECCIÃ“N POR COLMENA
+// ==========================================
+
+function ultimaInspeccionPorColmena(
+  inspecciones: InspeccionDashboard[]
+): Map<number, InspeccionDashboard> {
+
+  const ultimas = new Map<
+    number,
+    InspeccionDashboard
+  >();
+
+  for (const inspeccion of inspecciones) {
+
+    const actual = ultimas.get(
+      inspeccion.colmena_id
+    );
+
+    if (
+      !actual ||
+      obtenerFecha(inspeccion.fecha_inspeccion) >
+        obtenerFecha(actual.fecha_inspeccion)
+    ) {
+      ultimas.set(
+        inspeccion.colmena_id,
+        inspeccion
+      );
+    }
+  }
+
+  return ultimas;
+}
+
+// ==========================================
+// CALCULAR ALERTAS
+// ==========================================
+
+function calcularAlertas(
+  colmenas: ColmenaCatalogo[],
+  inspecciones: InspeccionDashboard[]
+): AlertaDashboard[] {
+
+  const ultimas =
+    ultimaInspeccionPorColmena(inspecciones);
+
+  const alertas: AlertaDashboard[] = [];
+
+  for (const colmena of colmenas) {
+
+    if (!colmenaOperativa(colmena)) {
+      continue;
+    }
+
+    const ultima = ultimas.get(colmena.id);
+
+    const motivos: string[] = [];
+
+    let prioridad: Prioridad | null = null;
+
+    // REQUIERE REVISIÃ“N O CRÃTICO
+
+    if (
+      ultima?.estado_general ===
+        'REQUIERE_REVISION' ||
+      ultima?.estado_general === 'CRITICO'
+    ) {
+
+      motivos.push(
+        ultima.estado_general === 'CRITICO'
+          ? 'Ãšltima inspecciÃ³n en estado crÃ­tico'
+          : 'Ãšltima inspecciÃ³n: requiere revisiÃ³n'
+      );
+
+      prioridad = 'alta';
+    }
+
+    // SIGNOS DE ENFERMEDAD
+
+    const tieneSignos =
+      ultima?.signos_enfermedad === true ||
+      ultima?.signos_enfermedad === 1 ||
+      ultima?.signos_enfermedad === '1' ||
+      ultima?.signos_enfermedad === 'true';
+
+    if (tieneSignos && ultima) {
+
+      motivos.push(
+        ultima.enfermedad_observada
+          ? `Signos de enfermedad: ${ultima.enfermedad_observada}`
+          : 'Signos de enfermedad'
+      );
+
+      prioridad = 'alta';
+    }
+
+    // ESTADOS DÃ‰BILES O REGULARES
+
+    if (
+      ultima?.estado_general === 'DEBIL' ||
+      ultima?.estado_general === 'REGULAR'
+    ) {
+
+      motivos.push(
+        ultima.estado_general === 'REGULAR'
+          ? 'Ãšltima inspecciÃ³n en estado regular'
+          : 'Ãšltima inspecciÃ³n: colmena dÃ©bil'
+      );
+
+      prioridad ??= 'media';
+    }
+
+    // EN OBSERVACIÃ“N
+
+    if (colmena.estado === 'EN_OBSERVACION') {
+
+      motivos.push('Marcada en observaciÃ³n');
+
+      prioridad ??= 'media';
+    }
+
+    // SIN INSPECCIONES
+
+    if (!ultima) {
+
+      motivos.push('Sin inspecciones registradas');
+
+      prioridad ??= 'media';
+
+    } else {
+
+      const dias = diasDesde(
+        ultima.fecha_inspeccion
+      );
+
+      if (
+        dias !== null &&
+        dias > DIAS_SIN_INSPECCION
+      ) {
+
+        motivos.push(
+          `Sin inspecciÃ³n hace ${dias} dÃ­as`
+        );
+
+        prioridad ??= 'media';
+      }
+    }
+
+    if (motivos.length > 0 && prioridad) {
+
+      alertas.push({
+        colmena,
+        prioridad,
+        motivos,
+        ultima,
+      });
+    }
+  }
+
+  return alertas.sort(
+    (a, b) =>
+      (a.prioridad === 'alta' ? 0 : 1) -
+      (b.prioridad === 'alta' ? 0 : 1)
+  );
+}
+
+// ==========================================
+// COMPONENTE PRINCIPAL
+// ==========================================
+
+export default function InicioModulos(_props: Props) {
+
+  // ========================================
+  // RESPONSIVE
+  // ========================================
+
+  const { width } = useWindowDimensions();
+
+  const esTablet = width >= 768;
+
+  const [anchoContenedor, setAnchoContenedor] =
+    useState(0);
+
+  const anchoDisponible =
+    anchoContenedor > 0
+      ? anchoContenedor
+      : width;
+
+  const paddingHorizontal =
+    esTablet ? 28 : 18;
+
+  const anchoBase = Math.min(
+    anchoDisponible,
+    1280
+  );
+
+  const anchoContenido = Math.max(
+    anchoBase - paddingHorizontal * 2,
+    0
+  );
+
+  const anchoEstadistica =
+    anchoContenido >= 1100
+      ? '23.5%'
+      : anchoContenido >= 340
+        ? '48.5%'
+        : '100%';
+
+  const anchoEstado =
+    anchoContenido >= 620
+      ? '48.8%'
+      : '100%';
+
+  const dashboardEnFila =
+    anchoContenido >= 980;
+
+  // ========================================
+  // DATOS DEL DASHBOARD
+  // ========================================
+
+  const [catalogo, setCatalogo] =
+    useState<Catalogo | null>(null);
+
+  const [inspecciones, setInspecciones] =
+    useState<InspeccionDashboard[]>([]);
+
+  const [cargandoDashboard, setCargandoDashboard] =
+    useState(true);
+
+  const [errorInspecciones, setErrorInspecciones] =
+    useState(false);
+
+  const [avisoCatalogo, setAvisoCatalogo] =
+    useState('');
+
+  const [versionDatos, setVersionDatos] =
+    useState(0);
+
+  // ========================================
+  // CONECTIVIDAD
+  // ========================================
+
+  const conexion = useConexion();
+
+  const conInternet =
+    conexion === 'CON_INTERNET';
+
+  const sinInternet =
+    conexion === 'SIN_INTERNET';
+
+  // ========================================
+  // CARGAR CATÃLOGO E INSPECCIONES
+  // ========================================
+
+  useEffect(() => {
+
+    let activo = true;
+
+    const cargarDatos = async () => {
+
+      setCargandoDashboard(true);
+
+      let inspeccionesLocales:
+        InspeccionDashboard[] = [];
+
+      let errorLocal = false;
+
+      let catalogoLocal: Catalogo | null = null;
+
+      let aviso = '';
+
+      // LEER INSPECCIONES SQLITE
+
+      try {
+
+        const items =
+          await listarInspeccionesLocales();
+
+        inspeccionesLocales =
+          items as unknown as InspeccionDashboard[];
+
+      } catch (error) {
+
+        console.error(
+          'Error cargando inspecciones locales:',
+          error
+        );
+
+        errorLocal = true;
+      }
+
+      // RECUPERAR SESIÃ“N Y CATÃLOGO
+
+      try {
+
+        const sesion =
+          await leerSesionGuardada();
+
+        if (!sesion) {
+
+          aviso =
+            'No se encontrÃ³ una sesiÃ³n para consultar el catÃ¡logo.';
+
+        } else {
+
+          // ACTUALIZAR DESDE FASTAPI CUANDO HAY INTERNET
+
+          let descargaCorrecta = false;
+
+          if (conInternet) {
+
+            try {
+
+              await descargarCatalogo(sesion);
+
+              descargaCorrecta = true;
+
+            } catch (error) {
+
+              console.warn(
+                'No se pudo actualizar el catÃ¡logo:',
+                error
+              );
+            }
+          }
+
+          // LEER SQLITE
+
+          catalogoLocal =
+            await leerCatalogoLocal(
+              sesion.usuario.id
+            );
+
+          if (!catalogoLocal) {
+
+            aviso =
+              'No hay un catÃ¡logo oficial descargado para este dispositivo.';
+
+          } else if (
+            conInternet &&
+            !descargaCorrecta
+          ) {
+
+            aviso =
+              'No se pudo actualizar el catÃ¡logo. Se utiliza la Ãºltima versiÃ³n guardada en SQLite.';
+
+          } else if (sinInternet) {
+
+            aviso =
+              'Se estÃ¡ utilizando el catÃ¡logo local guardado en el dispositivo.';
+          }
+        }
+
+      } catch (error) {
+
+        console.error(
+          'Error consultando catÃ¡logo:',
+          error
+        );
+
+        aviso =
+          'No se pudo consultar el catÃ¡logo local.';
+      }
+
+      if (!activo) return;
+
+      setInspecciones(inspeccionesLocales);
+
+      setCatalogo(catalogoLocal);
+
+      setErrorInspecciones(errorLocal);
+
+      setAvisoCatalogo(aviso);
+
+      setCargandoDashboard(false);
+    };
+
+    void cargarDatos();
+
+    return () => {
+      activo = false;
+    };
+
+  }, [conexion, versionDatos]);
+    // ========================================
+  // ESTADÃSTICAS DE INSPECCIONES LOCALES
+  // ========================================
+
+  const total = inspecciones.length;
+
+  const pendientes = inspecciones.filter(
+    item => item.estado !== 'SINCRONIZADO'
+  ).length;
+
+  const sincronizadas = Math.max(
+    total - pendientes,
+    0
+  );
+
+  // ========================================
+  // ESTADO FASTAPI
+  // ========================================
+
+  const [
+    estadoServidor,
+    setEstadoServidor,
+  ] = useState<EstadoServidor>(
+    'SIN_COMPROBAR'
+  );
+
+  const [
+    reintentoServidor,
+    setReintentoServidor,
+  ] = useState(0);
+
+  // ========================================
+  // COMPROBAR FASTAPI
+  // ========================================
+
+  useEffect(() => {
+
+    let activo = true;
+
+    if (!conInternet) {
+
+      setEstadoServidor('SIN_COMPROBAR');
+
+      return () => {
+        activo = false;
+      };
+    }
+
+    setEstadoServidor('COMPROBANDO');
+
+    void solicitarAPI<RespuestaHealth>(
+      '/health',
+      {
+        method: 'GET',
+      }
+    )
+      .then(respuesta => {
+
+        if (!activo) return;
+
+        setEstadoServidor(
+          respuesta.status === 'ok'
+            ? 'DISPONIBLE'
+            : 'NO_DISPONIBLE'
+        );
+      })
+      .catch(error => {
+
+        if (!activo) return;
+
+        console.warn(
+          'FastAPI no disponible:',
+          error
+        );
+
+        setEstadoServidor('NO_DISPONIBLE');
+      });
+
+    return () => {
+      activo = false;
+    };
+
+  }, [conexion, reintentoServidor]);
+
+  // ========================================
+  // ACTUALIZAR DASHBOARD
+  // ========================================
+
+  const actualizarDashboard = () => {
+
+    setVersionDatos(actual => actual + 1);
+
+    setReintentoServidor(actual => actual + 1);
+  };
+
+  // ========================================
+  // APIARIOS ORDENADOS
+  // ========================================
+
+  const apiariosOrdenados = useMemo(
+    () =>
+      [...(catalogo?.apiarios ?? [])].sort(
+        (a, b) =>
+          a.nombre.localeCompare(b.nombre, 'es')
+      ),
+    [catalogo]
+  );
+
+  // "" = todos los apiarios
+
+  const [apiarioId, setApiarioId] =
+    useState('');
+
+  const apiarioElegido =
+    apiariosOrdenados.find(
+      apiario =>
+        String(apiario.id) === apiarioId
+    ) ?? null;
+
+  // ========================================
+  // RESUMEN GENERAL
+  // MISMA LÃ“GICA QUE DASHBOARD WEB
+  // ========================================
+
+  const resumen = useMemo(() => {
+
+    const colmenas =
+      catalogo?.colmenas ?? [];
+
+    const todasOperativas =
+      colmenas.filter(colmenaOperativa);
+
+    const todasAlertas =
+      calcularAlertas(
+        colmenas,
+        inspecciones
+      );
+
+    const delApiario = (
+      colmena: ColmenaCatalogo
+    ) =>
+      !apiarioId ||
+      String(colmena.apiario_id) === apiarioId;
+
+    const operativas =
+      todasOperativas.filter(delApiario);
+
+    const alertas =
+      todasAlertas.filter(
+        alerta =>
+          delApiario(alerta.colmena)
+      );
+
+    const ultimas =
+      ultimaInspeccionPorColmena(
+        inspecciones
+      );
+
+    // CONTEO DE ESTADOS
+
+    const conteo: Record<
+      ClaveDistribucion,
+      number
+    > = {
+      COMPLETA: 0,
+      EN_DESARROLLO: 0,
+      DONANTE: 0,
+      DEBIL: 0,
+      REQUIERE_REVISION: 0,
+      ANTERIOR: 0,
+      SIN: 0,
+    };
+
+    for (const colmena of operativas) {
+
+      const estado =
+        ultimas.get(colmena.id)?.estado_general;
+
+      if (!estado) {
+
+        conteo.SIN += 1;
+
+      } else if (
+        ESTADOS_ACTUALES.includes(estado)
+      ) {
+
+        conteo[estado as ClaveDistribucion] += 1;
+
+      } else {
+
+        // ESCALA ANTERIOR:
+        // BUENO, REGULAR, CRÃTICO U OTRO ESTADO.
+
+        conteo.ANTERIOR += 1;
+      }
+    }
+
+    // RESUMEN POR APIARIO
+    // SIEMPRE SE MUESTRAN TODOS.
+
+    const porApiario =
+      apiariosOrdenados.map(apiario => {
+
+        const colmenasApiario =
+          todasOperativas.filter(
+            colmena =>
+              colmena.apiario_id === apiario.id
+          );
+
+        const alertasApiario =
+          todasAlertas.filter(
+            alerta =>
+              alerta.colmena.apiario_id === apiario.id
+          );
+
+        return {
+          apiario,
+          colmenas: colmenasApiario.length,
+          alertas: alertasApiario.length,
+        };
+      });
+
+    // TRATAMIENTOS EN CURSO
+
+    const idsColmenas = new Set(
+      colmenas
+        .filter(delApiario)
+        .map(colmena => colmena.id)
+    );
+
+    const tratamientosEnCurso =
+      (
+        catalogo?.tratamientos_en_curso ?? []
+      ).filter(
+        tratamiento =>
+          idsColmenas.has(
+            tratamiento.colmena_id
+          )
+      ).length;
+
+    return {
+      operativas,
+      alertas,
+      conteo,
+      porApiario,
+      tratamientosEnCurso,
+    };
+
+  }, [
+    catalogo,
+    inspecciones,
+    apiarioId,
+    apiariosOrdenados,
+  ]);
+
+  const prioridadAlta =
+    resumen.alertas.filter(
+      alerta => alerta.prioridad === 'alta'
+    ).length;
+
+  // ========================================
+  // TEXTOS DE CONECTIVIDAD
+  // ========================================
+
+  const textoConexion = conInternet
+    ? 'Internet disponible'
+    : sinInternet
+      ? 'Sin conexiÃ³n a internet'
+      : 'Comprobando conexiÃ³n';
+
+  const detalleConexion = conInternet
+    ? 'El dispositivo detecta acceso a internet.'
+    : sinInternet
+      ? 'Los registros locales permanecen guardados.'
+      : 'Verificando la conectividad del dispositivo.';
+
+  // ========================================
+  // TEXTOS FASTAPI
+  // ========================================
+
+  const textoServidor =
+    estadoServidor === 'DISPONIBLE'
+      ? 'FastAPI disponible'
+      : estadoServidor === 'COMPROBANDO'
+        ? 'Comprobando FastAPI'
+        : estadoServidor === 'NO_DISPONIBLE'
+          ? 'FastAPI no disponible'
+          : 'FastAPI sin comprobar';
+
+  const detalleServidor =
+    estadoServidor === 'DISPONIBLE'
+      ? 'El servidor respondiÃ³ correctamente.'
+      : estadoServidor === 'COMPROBANDO'
+        ? 'Consultando la ruta /health.'
+        : estadoServidor === 'NO_DISPONIBLE'
+          ? 'La API configurada no respondiÃ³. Revisa el servidor.'
+          : sinInternet
+            ? 'Se comprobarÃ¡ cuando vuelva internet.'
+            : 'Esperando conexiÃ³n para comprobar el servidor.';
+
+  // ========================================
+  // INTERFAZ PRINCIPAL
+  // ========================================
+
+  return (
+    <ScrollView
+      style={styles.pantalla}
+      onLayout={evento => {
+
+        const nuevoAncho =
+          evento.nativeEvent.layout.width;
+
+        setAnchoContenedor(actual =>
+          Math.abs(actual - nuevoAncho) > 1
+            ? nuevoAncho
+            : actual
+        );
+      }}
+      contentContainerStyle={[
+        styles.contenido,
+        {
+          paddingHorizontal,
+        },
+      ]}
+      showsVerticalScrollIndicator={false}
+    >
+
+      {/* =================================
+          ENCABEZADO
+      ================================= */}
+
+      <View style={styles.encabezadoSuperior}>
+
+        <View style={styles.encabezadoTextos}>
+
+          <Text
+            style={[
+              styles.titulo,
+              esTablet && styles.tituloTablet,
+            ]}
+          >
+            Dashboard
+          </Text>
+
+          <Text style={styles.introduccion}>
+            Colmenares Tres Pinos
+          </Text>
+
+        </View>
+
+        <Pressable
+          onPress={actualizarDashboard}
+          disabled={cargandoDashboard}
+          style={({ pressed }) => [
+            styles.botonActualizar,
+            pressed && styles.elementoPresionado,
+            cargandoDashboard && styles.deshabilitado,
+          ]}
+        >
+          {cargandoDashboard
+            ? (
+              <ActivityIndicator
+                size="small"
+                color="#92400E"
+              />
+            )
+            : (
+              <Text style={styles.botonActualizarTexto}>
+                â†» Actualizar
+              </Text>
+            )}
+        </Pressable>
+
+      </View>
+
+      {/* =================================
+          AVISO DEL CATÃLOGO
+      ================================= */}
+
+      {Boolean(avisoCatalogo) && (
+        <View style={styles.avisoCatalogo}>
+          <Text style={styles.avisoCatalogoTexto}>
+            {avisoCatalogo}
+          </Text>
+        </View>
+      )}
+
+      {/* =================================
+          FILTRO POR APIARIO
+      ================================= */}
+
+      <View style={styles.filtroSeccion}>
+
+        <Text style={styles.filtroTitulo}>
+          Ver:
+        </Text>
+
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filtroLista}
+        >
+
+          <Pressable
+            onPress={() => setApiarioId('')}
+            style={[
+              styles.filtroBoton,
+              apiarioId === '' &&
+                styles.filtroBotonActivo,
+            ]}
+          >
+            <Text
+              style={[
+                styles.filtroTexto,
+                apiarioId === '' &&
+                  styles.filtroTextoActivo,
+              ]}
+            >
+              Todos los apiarios
+            </Text>
+          </Pressable>
+
+          {apiariosOrdenados.map(apiario => {
+
+            const activo =
+              apiarioId === String(apiario.id);
+
+            return (
+              <Pressable
+                key={apiario.id}
+                onPress={() =>
+                  setApiarioId(String(apiario.id))
+                }
+                style={[
+                  styles.filtroBoton,
+                  activo && styles.filtroBotonActivo,
+                ]}
+              >
+                <Text
+                  style={[
+                    styles.filtroTexto,
+                    activo && styles.filtroTextoActivo,
+                  ]}
+                >
+                  {apiario.nombre}
+                </Text>
+              </Pressable>
+            );
+          })}
+
+        </ScrollView>
+      </View>
+
+      {/* =================================
+          INDICADORES PRINCIPALES
+      ================================= */}
+
+      <View style={styles.estadisticas}>
+
+        {/* APIARIOS */}
+
+        <View
+          style={[
+            styles.indicador,
+            {
+              width: anchoEstadistica,
+            },
+          ]}
+        >
+
+          <View style={styles.indicadorCabecera}>
+            <Text style={styles.indicadorEtiqueta}>
+              {apiarioElegido
+                ? 'Apiario'
+                : 'Apiarios'}
+            </Text>
+
+            <Text style={styles.indicadorIcono}>
+              ðŸ“
+            </Text>
+          </View>
+
+          <Text
+            style={[
+              styles.indicadorCifra,
+              apiarioElegido && styles.indicadorNombre,
+            ]}
+            numberOfLines={2}
+          >
+            {catalogo
+              ? apiarioElegido?.nombre ??
+                catalogo.apiarios.length
+              : 'â€”'}
+          </Text>
+
+          <Text style={styles.indicadorDetalle}>
+            {apiarioElegido
+              ? apiarioElegido.ubicacion || 'Sin ubicaciÃ³n'
+              : 'Registrados en el sistema'}
+          </Text>
+
+        </View>
+
+        {/* COLMENAS OPERATIVAS */}
+
+        <View
+          style={[
+            styles.indicador,
+            {
+              width: anchoEstadistica,
+            },
+          ]}
+        >
+
+          <View style={styles.indicadorCabecera}>
+            <Text style={styles.indicadorEtiqueta}>
+              Colmenas en operaciÃ³n
+            </Text>
+
+            <Text style={styles.indicadorIcono}>
+              ðŸ
+            </Text>
+          </View>
+
+          <Text style={styles.indicadorCifra}>
+            {catalogo
+              ? resumen.operativas.length
+              : 'â€”'}
+          </Text>
+
+          <Text style={styles.indicadorDetalle}>
+            Colmenas activas
+          </Text>
+
+        </View>
+
+        {/* ALERTAS */}
+
+        <View
+          style={[
+            styles.indicador,
+            {
+              width: anchoEstadistica,
+            },
+            prioridadAlta > 0 &&
+              styles.indicadorAlerta,
+          ]}
+        >
+
+          <View style={styles.indicadorCabecera}>
+            <Text style={styles.indicadorEtiqueta}>
+              Requieren atenciÃ³n
+            </Text>
+
+            <Text style={styles.indicadorIcono}>
+              âš ï¸
+            </Text>
+          </View>
+
+          <Text
+            style={[
+              styles.indicadorCifra,
+              prioridadAlta > 0 &&
+                styles.cifraAlerta,
+            ]}
+          >
+            {catalogo
+              ? resumen.alertas.length
+              : 'â€”'}
+          </Text>
+
+          <Text style={styles.indicadorDetalle}>
+            {prioridadAlta > 0
+              ? `${prioridadAlta} con prioridad alta`
+              : 'SegÃºn Ãºltima inspecciÃ³n'}
+          </Text>
+
+        </View>
+                {/* TRATAMIENTOS */}
+
+        <View
+          style={[
+            styles.indicador,
+            {
+              width: anchoEstadistica,
+            },
+          ]}
+        >
+
+          <View style={styles.indicadorCabecera}>
+            <Text style={styles.indicadorEtiqueta}>
+              Tratamientos en curso
+            </Text>
+
+            <Text style={styles.indicadorIcono}>
+              ðŸ’Š
+            </Text>
+          </View>
+
+          <Text style={styles.indicadorCifra}>
+            {catalogo
+              ? resumen.tratamientosEnCurso
+              : 'â€”'}
+          </Text>
+
+          <Text style={styles.indicadorDetalle}>
+            Tratamientos activos
+          </Text>
+
+        </View>
+
+      </View>
+
+      {/* =================================
+          ALERTAS Y DISTRIBUCIÃ“N
+      ================================= */}
+
+      <View
+        style={[
+          styles.panelesDashboard,
+          {
+            flexDirection: dashboardEnFila
+              ? 'row'
+              : 'column',
+          },
+        ]}
+      >
+
+        {/* COLMENAS QUE REQUIEREN ATENCIÃ“N */}
+
+        <View
+          style={[
+            styles.panel,
+            {
+              width: dashboardEnFila
+                ? '64.5%'
+                : '100%',
+            },
+          ]}
+        >
+
+          <View style={styles.panelCabecera}>
+
+            <Text style={styles.panelTitulo}>
+              Colmenas que requieren atenciÃ³n
+            </Text>
+
+            <Text style={styles.panelDescripcion}>
+              SegÃºn su Ãºltima inspecciÃ³n, su estado o mÃ¡s de {DIAS_SIN_INSPECCION} dÃ­as sin revisar.
+            </Text>
+
+          </View>
+
+          {cargandoDashboard ? (
+
+            <View style={styles.estadoVacio}>
+              <ActivityIndicator
+                size="small"
+                color="#D9A323"
+              />
+              <Text style={styles.estadoVacioTexto}>
+                Cargando alertas...
+              </Text>
+            </View>
+
+          ) : !catalogo ? (
+
+            <View style={styles.estadoVacio}>
+              <Text style={styles.estadoVacioTexto}>
+                No hay un catÃ¡logo disponible para consultar las alertas.
+              </Text>
+            </View>
+
+          ) : resumen.alertas.length === 0 ? (
+
+            <View style={styles.estadoVacio}>
+              <Text style={styles.estadoVacioIcono}>
+                âœ“
+              </Text>
+
+              <Text style={styles.estadoVacioTexto}>
+                Todas las colmenas estÃ¡n al dÃ­a.
+              </Text>
+            </View>
+
+          ) : (
+
+            <View>
+
+              {resumen.alertas
+                .slice(0, 10)
+                .map(({ colmena, prioridad, motivos }) => {
+
+                  const apiario =
+                    apiariosOrdenados.find(
+                      item =>
+                        item.id === colmena.apiario_id
+                    );
+
+                  const alta = prioridad === 'alta';
+
+                  return (
+                    <View
+                      key={colmena.id}
+                      style={styles.alertaFila}
+                    >
+
+                      <View style={styles.alertaContenido}>
+
+                        <View style={styles.alertaTituloFila}>
+
+                          <Text style={styles.alertaCodigo}>
+                            {colmena.codigo}
+                          </Text>
+
+                          <Text style={styles.alertaApiario}>
+                            {apiario?.nombre ?? 'Sin apiario'}
+                          </Text>
+
+                          <View
+                            style={[
+                              styles.insignia,
+                              alta
+                                ? styles.insigniaAlta
+                                : styles.insigniaMedia,
+                            ]}
+                          >
+                            <Text
+                              style={[
+                                styles.insigniaTexto,
+                                alta
+                                  ? styles.insigniaTextoAlta
+                                  : styles.insigniaTextoMedia,
+                              ]}
+                            >
+                              {alta
+                                ? 'Prioridad alta'
+                                : 'Revisar'}
+                            </Text>
+                          </View>
+
+                        </View>
+
+                        <Text style={styles.alertaMotivos}>
+                          {motivos.join(' Â· ')}
+                        </Text>
+
+                      </View>
+
+                      <Text style={styles.alertaFlecha}>
+                        â€º
+                      </Text>
+
+                    </View>
+                  );
+                })}
+
+              {resumen.alertas.length > 10 && (
+                <Text style={styles.alertasRestantes}>
+                  Y {resumen.alertas.length - 10} colmenas mÃ¡s. RevÃ­salas en el mÃ³dulo Colmenas.
+                </Text>
+              )}
+
+            </View>
+          )}
+
+        </View>
+
+        {/* ESTADO SEGÃšN ÃšLTIMA INSPECCIÃ“N */}
+
+        <View
+          style={[
+            styles.panel,
+            {
+              width: dashboardEnFila
+                ? '33.5%'
+                : '100%',
+            },
+          ]}
+        >
+
+          <View style={styles.panelCabecera}>
+            <Text style={styles.panelTitulo}>
+              Estado segÃºn Ãºltima inspecciÃ³n
+            </Text>
+
+            <Text style={styles.panelDescripcion}>
+              {apiarioElegido
+                ? `${apiarioElegido.nombre} Â· `
+                : ''}
+              {resumen.operativas.length} colmenas en operaciÃ³n
+            </Text>
+          </View>
+
+          {!catalogo ? (
+
+            <View style={styles.estadoVacio}>
+              <Text style={styles.estadoVacioTexto}>
+                Datos no disponibles.
+              </Text>
+            </View>
+
+          ) : (
+
+            <View style={styles.distribucionContenido}>
+
+              {DISTRIBUCION
+                .filter(
+                  fila =>
+                    !fila.soloSiHay ||
+                    resumen.conteo[fila.clave] > 0
+                )
+                .map(fila => {
+
+                  const cantidad =
+                    resumen.conteo[fila.clave];
+
+                  const porcentaje =
+                    resumen.operativas.length > 0
+                      ? Math.round(
+                          (cantidad * 100) /
+                            resumen.operativas.length
+                        )
+                      : 0;
+
+                  return (
+                    <View
+                      key={fila.clave}
+                      style={styles.estadoBarraFila}
+                    >
+
+                      <View style={styles.estadoBarraTitulo}>
+
+                        <Text style={styles.estadoBarraNombre}>
+                          {fila.texto}
+                        </Text>
+
+                        <Text style={styles.estadoBarraCantidad}>
+                          {cantidad}
+                          <Text style={styles.estadoBarraPorcentaje}>
+                            {' '}({porcentaje}%)
+                          </Text>
+                        </Text>
+
+                      </View>
+
+                      <View style={styles.barraFondo}>
+
+                        <View
+                          style={[
+                            styles.barraProgreso,
+                            {
+                              width: `${porcentaje}%`,
+                              backgroundColor: fila.color,
+                            },
+                          ]}
+                        />
+
+                      </View>
+
+                    </View>
+                  );
+                })}
+
+            </View>
+          )}
+
+        </View>
+
+      </View>
+
+      {/* =================================
+          RESUMEN POR APIARIO
+      ================================= */}
+
+      <View style={styles.panel}>
+
+        <View style={styles.panelCabecera}>
+          <Text style={styles.panelTitulo}>
+            Resumen por apiario
+          </Text>
+
+          <Text style={styles.panelDescripcion}>
+            ComparaciÃ³n de colmenas operativas y alertas.
+          </Text>
+        </View>
+
+        {cargandoDashboard ? (
+
+          <View style={styles.estadoVacio}>
+            <ActivityIndicator
+              color="#D9A323"
+            />
+          </View>
+
+        ) : resumen.porApiario.length === 0 ? (
+
+          <View style={styles.estadoVacio}>
+            <Text style={styles.estadoVacioTexto}>
+              No hay apiarios registrados en el catÃ¡logo.
+            </Text>
+          </View>
+
+        ) : (
+
+          resumen.porApiario.map(
+            ({ apiario, colmenas, alertas }) => {
+
+              const activo =
+                apiarioId === String(apiario.id);
+
+              return (
+                <View
+                  key={apiario.id}
+                  style={[
+                    styles.apiarioFila,
+                    activo && styles.apiarioFilaActivo,
+                  ]}
+                >
+
+                  <View style={styles.apiarioDatos}>
+
+                    <Text style={styles.apiarioNombre}>
+                      {apiario.nombre}
+                    </Text>
+
+                    <Text style={styles.apiarioUbicacion}>
+                      {apiario.ubicacion || 'Sin registrar'}
+                    </Text>
+
+                    <View style={styles.apiarioIndicadores}>
+
+                      <Text style={styles.apiarioDato}>
+                        ðŸ {colmenas} colmenas
+                      </Text>
+
+                      <View
+                        style={[
+                          styles.insignia,
+                          styles.insigniaMedia,
+                        ]}
+                      >
+                        <Text style={styles.insigniaTextoMedia}>
+                          {alertas} requieren atenciÃ³n
+                        </Text>
+                      </View>
+
+                    </View>
+
+                  </View>
+
+                  <View style={styles.apiarioAcciones}>
+
+                    <Pressable
+                      onPress={() =>
+                        setApiarioId(String(apiario.id))
+                      }
+                      style={styles.botonApiario}
+                    >
+                      <Text style={styles.botonApiarioTexto}>
+                        Ver en panel
+                      </Text>
+                    </Pressable>
+
+                  </View>
+
+                </View>
+              );
+            }
+          )
+        )}
+
+      </View>
+
+      {/* =================================
+          ESTADO DEL SISTEMA
+      ================================= */}
+
+      <Text style={styles.seccion}>
+        Estado del sistema
+      </Text>
+
+      <View style={styles.estadoGrid}>
+
+        {/* INTERNET */}
+
+        <View
+          style={[
+            styles.tarjetaEstado,
+            {
+              width: anchoEstado,
+            },
+            conInternet
+              ? styles.tarjetaOnline
+              : sinInternet
+                ? styles.tarjetaOffline
+                : styles.tarjetaVerificando,
+          ]}
+        >
+
+          <View style={styles.estadoFila}>
+
+            <View
+              style={[
+                styles.puntoEstado,
+                conInternet
+                  ? styles.puntoOnline
+                  : sinInternet
+                    ? styles.puntoOffline
+                    : styles.puntoNeutral,
+              ]}
+            />
+
+            <Text style={styles.conexionTitulo}>
+              {textoConexion}
+            </Text>
+
+          </View>
+
+          <Text style={styles.conexionDetalle}>
+            {detalleConexion}
+          </Text>
+
+        </View>
+
+        {/* FASTAPI */}
+
+        <View
+          style={[
+            styles.tarjetaEstado,
+            {
+              width: anchoEstado,
+            },
+            estadoServidor === 'DISPONIBLE'
+              ? styles.tarjetaOnline
+              : estadoServidor === 'NO_DISPONIBLE'
+                ? styles.tarjetaError
+                : styles.tarjetaVerificando,
+          ]}
+        >
+
+          <View style={styles.estadoFila}>
+
+            <View
+              style={[
+                styles.puntoEstado,
+                estadoServidor === 'DISPONIBLE'
+                  ? styles.puntoOnline
+                  : estadoServidor === 'NO_DISPONIBLE'
+                    ? styles.puntoOffline
+                    : styles.puntoNeutral,
+              ]}
+            />
+
+            <Text style={styles.conexionTitulo}>
+              {textoServidor}
+            </Text>
+
+          </View>
+
+          <Text style={styles.conexionDetalle}>
+            {detalleServidor}
+          </Text>
+
+          <Pressable
+            style={[
+              styles.botonRevisar,
+              (
+                !conInternet ||
+                estadoServidor === 'COMPROBANDO'
+              ) && styles.deshabilitado,
+            ]}
+            disabled={
+              !conInternet ||
+              estadoServidor === 'COMPROBANDO'
+            }
+            onPress={() =>
+              setReintentoServidor(
+                actual => actual + 1
+              )
+            }
+          >
+            <Text style={styles.textoRevisar}>
+              Comprobar servidor
+            </Text>
+          </Pressable>
+
+        </View>
+
+      </View>
+
+      {/* =================================
+          RESUMEN DE ACTIVIDAD LOCAL
+      ================================= */}
+
+      <Text style={styles.seccion}>
+        Resumen de actividad
+      </Text>
+
+      <View style={styles.estadisticas}>
+
+        <View
+          style={[
+            styles.estadistica,
+            {
+              width: anchoEstadistica,
+            },
+          ]}
+        >
+          <Text style={styles.estadisticaEtiqueta}>
+            TOTAL REGISTRADAS
+          </Text>
+
+          <Text style={styles.cifra}>
+            {errorInspecciones ? '!' : total}
+          </Text>
+
+          <Text style={styles.estadisticaDetalle}>
+            Inspecciones locales
+          </Text>
+        </View>
+
+        <View
+          style={[
+            styles.estadistica,
+            {
+              width: anchoEstadistica,
+            },
+          ]}
+        >
+          <Text style={styles.estadisticaEtiqueta}>
+            PENDIENTES
+          </Text>
+
+          <Text style={styles.cifraPendiente}>
+            {errorInspecciones ? '!' : pendientes}
+          </Text>
+
+          <Text style={styles.estadisticaDetalle}>
+            Pendientes de sincronizaciÃ³n
+          </Text>
+        </View>
+
+        <View
+          style={[
+            styles.estadistica,
+            {
+              width: anchoEstadistica,
+            },
+          ]}
+        >
+          <Text style={styles.estadisticaEtiqueta}>
+            SINCRONIZADAS
+          </Text>
+
+          <Text style={styles.cifraSincronizada}>
+            {errorInspecciones ? '!' : sincronizadas}
+          </Text>
+
+          <Text style={styles.estadisticaDetalle}>
+            Confirmadas localmente
+          </Text>
+        </View>
+
+      </View>
+
+      {errorInspecciones && (
+        <Text style={styles.error}>
+          No fue posible cargar el resumen de inspecciones locales.
+        </Text>
+      )}
+
+      {/* =================================
+          PIE
+      ================================= */}
+
+      <View style={styles.pie}>
+
+        <View style={styles.pieLinea} />
+
+        <Text style={styles.pieTexto}>
+          Colmenares Tres Pinos
+        </Text>
+
+        <Text style={styles.pieDetalle}>
+          AplicaciÃ³n mÃ³vil Â· Expo + SQLite
+        </Text>
+
+      </View>
+
+    </ScrollView>
+  );
+}
+// ==========================================
+// ESTILOS
+// ==========================================
+
+const styles = StyleSheet.create({
+
+  pantalla: {
+    flex: 1,
+    backgroundColor: '#F1F5F9',
+  },
+
+  contenido: {
+    width: '100%',
+    maxWidth: 1600,
+    alignSelf: 'center',
+    paddingTop: 22,
+    paddingBottom: 45,
+  },
+
+  // ENCABEZADO
+
+  encabezadoSuperior: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 8,
+    marginBottom: 22,
+  },
+
+  encabezadoTextos: {
+    flex: 1,
+    marginRight: 10,
+  },
+
+  titulo: {
+    color: '#0F172A',
+    fontWeight: '900',
+    fontSize: 26,
+  },
+
+  tituloTablet: {
+    fontSize: 32,
+  },
+
+  introduccion: {
+    color: '#64748B',
+    fontSize: 14,
+    marginTop: 5,
+  },
+
+  botonActualizar: {
+    minHeight: 42,
+    paddingHorizontal: 13,
+    borderRadius: 11,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  botonActualizarTexto: {
+    color: '#92400E',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+
+  elementoPresionado: {
+    opacity: 0.75,
+    borderColor: '#D9A323',
+  },
+
+  avisoCatalogo: {
+    padding: 13,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#FDE68A',
+    backgroundColor: '#FFFBEB',
+    marginBottom: 15,
+  },
+
+  avisoCatalogoTexto: {
+    color: '#92400E',
+    fontSize: 12,
+    lineHeight: 19,
+  },
+
+  // FILTRO
+
+  filtroSeccion: {
+    marginBottom: 19,
+  },
+
+  filtroTitulo: {
+    color: '#475569',
+    fontSize: 13,
+    fontWeight: '800',
+    marginBottom: 10,
+  },
+
+  filtroLista: {
+    alignItems: 'center',
+    paddingRight: 10,
+  },
+
+  filtroBoton: {
+    paddingHorizontal: 17,
+    paddingVertical: 10,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    backgroundColor: '#FFFFFF',
+    marginRight: 9,
+  },
+
+  filtroBotonActivo: {
+    backgroundColor: '#FBBF24',
+    borderColor: '#FBBF24',
+  },
+
+  filtroTexto: {
+    fontSize: 12,
+    color: '#475569',
+    fontWeight: '600',
+  },
+
+  filtroTextoActivo: {
+    color: '#422006',
+    fontWeight: '800',
+  },
+
+  // INDICADORES
+
+  estadisticas: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+
+  indicador: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    padding: 16,
+    marginBottom: 13,
+    minHeight: 125,
+    justifyContent: 'center',
+  },
+
+  indicadorAlerta: {
+    borderColor: '#FECACA',
+  },
+
+  indicadorCabecera: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+
+  indicadorEtiqueta: {
+    flex: 1,
+    fontSize: 12,
+    color: '#64748B',
+    fontWeight: '600',
+  },
+
+  indicadorIcono: {
+    fontSize: 21,
+    marginLeft: 5,
+  },
+
+  indicadorCifra: {
+    fontSize: 32,
+    fontWeight: '900',
+    color: '#0F172A',
+    marginTop: 7,
+  },
+
+  indicadorNombre: {
+    fontSize: 19,
+  },
+
+  cifraAlerta: {
+    color: '#DC2626',
+  },
+
+  indicadorDetalle: {
+    color: '#64748B',
+    fontSize: 11,
+    marginTop: 4,
+  },
+
+  // PANELES
+
+  panelesDashboard: {
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginTop: 5,
+  },
+
+  panel: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 16,
+    overflow: 'hidden',
+    marginBottom: 17,
+  },
+
+  panelCabecera: {
+    padding: 17,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+
+  panelTitulo: {
+    fontSize: 15,
+    fontWeight: '900',
+    color: '#0F172A',
+  },
+
+  panelDescripcion: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 5,
+    lineHeight: 18,
+  },
+
+  estadoVacio: {
+    padding: 25,
+    minHeight: 95,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  estadoVacioIcono: {
+    fontSize: 28,
+    fontWeight: '900',
+    color: '#16A34A',
+    marginBottom: 7,
+  },
+
+  estadoVacioTexto: {
+    fontSize: 13,
+    color: '#64748B',
+    textAlign: 'center',
+    marginTop: 8,
+  },
+
+  // ALERTAS
+
+  alertaFila: {
+    paddingHorizontal: 15,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  alertaContenido: {
+    flex: 1,
+  },
+
+  alertaTituloFila: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+  },
+
+  alertaCodigo: {
+    color: '#0F172A',
+    fontSize: 13,
+    fontWeight: '900',
+    marginRight: 8,
+  },
+
+  alertaApiario: {
+    color: '#64748B',
+    fontSize: 11,
+    marginRight: 8,
+  },
+
+  alertaMotivos: {
+    color: '#475569',
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 7,
+  },
+
+  alertaFlecha: {
+    fontSize: 26,
+    color: '#94A3B8',
+    marginLeft: 7,
+  },
+
+  alertasRestantes: {
+    padding: 14,
+    color: '#64748B',
+    fontSize: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#E2E8F0',
+  },
+
+  insignia: {
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 8,
+  },
+
+  insigniaAlta: {
+    backgroundColor: '#FEF2F2',
+  },
+
+  insigniaMedia: {
+    backgroundColor: '#FFFBEB',
+  },
+
+  insigniaTexto: {
+    fontSize: 10,
+    fontWeight: '800',
+  },
+
+  insigniaTextoAlta: {
+    color: '#B91C1C',
+  },
+
+  insigniaTextoMedia: {
+    color: '#92400E',
+  },
+
+  // DISTRIBUCIÃ“N
+
+  distribucionContenido: {
+    padding: 17,
+  },
+
+  estadoBarraFila: {
+    marginBottom: 19,
+  },
+
+  estadoBarraTitulo: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 7,
+  },
+
+  estadoBarraNombre: {
+    color: '#475569',
+    fontSize: 12,
+    flex: 1,
+  },
+
+  estadoBarraCantidad: {
+    color: '#0F172A',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+
+  estadoBarraPorcentaje: {
+    color: '#94A3B8',
+    fontWeight: '400',
+  },
+
+  barraFondo: {
+    height: 9,
+    width: '100%',
+    backgroundColor: '#F1F5F9',
+    borderRadius: 10,
+    overflow: 'hidden',
+  },
+
+  barraProgreso: {
+    height: '100%',
+    borderRadius: 10,
+  },
+
+  // RESUMEN APIARIOS
+
+  apiarioFila: {
+    padding: 17,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+
+  apiarioFilaActivo: {
+    backgroundColor: '#FFFBEB',
+  },
+
+  apiarioDatos: {
+    marginBottom: 12,
+  },
+
+  apiarioNombre: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#0F172A',
+  },
+
+  apiarioUbicacion: {
+    color: '#64748B',
+    fontSize: 12,
+    marginTop: 4,
+  },
+
+  apiarioIndicadores: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    marginTop: 11,
+  },
+
+  apiarioDato: {
+    color: '#475569',
+    fontSize: 11,
+    fontWeight: '700',
+    marginRight: 10,
+    marginBottom: 5,
+  },
+
+  apiarioAcciones: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+
+  botonApiario: {
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 9,
+    marginRight: 8,
+    marginBottom: 5,
+  },
+
+  botonApiarioTexto: {
+    color: '#475569',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+
+  // TÃTULOS DE SECCIÃ“N
+
+  seccion: {
+    marginTop: 23,
+    marginBottom: 13,
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#0F172A',
+  },
+
+  // CONECTIVIDAD
+
+  estadoGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+
+  tarjetaEstado: {
+    padding: 16,
+    borderRadius: 14,
+    borderWidth: 1,
+    minHeight: 112,
+    marginBottom: 12,
+  },
+
+  tarjetaOnline: {
+    backgroundColor: '#F0FDF4',
+    borderColor: '#BBF7D0',
+  },
+
+  tarjetaOffline: {
+    backgroundColor: '#FFF7ED',
+    borderColor: '#FDBA74',
+  },
+
+  tarjetaError: {
+    backgroundColor: '#FEF2F2',
+    borderColor: '#FECACA',
+  },
+
+  tarjetaVerificando: {
+    backgroundColor: '#F1F5F9',
+    borderColor: '#CBD5E1',
+  },
+
+  estadoFila: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  puntoEstado: {
+    width: 9,
+    height: 9,
+    borderRadius: 5,
+    marginRight: 9,
+  },
+
+  puntoOnline: {
+    backgroundColor: '#16A34A',
+  },
+
+  puntoOffline: {
+    backgroundColor: '#EA580C',
+  },
+
+  puntoNeutral: {
+    backgroundColor: '#94A3B8',
+  },
+
+  conexionTitulo: {
+    color: '#0F172A',
+    fontSize: 13,
+    fontWeight: '800',
+    flexShrink: 1,
+  },
+
+  conexionDetalle: {
+    color: '#64748B',
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 9,
+  },
+
+  botonRevisar: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 13,
+    paddingVertical: 9,
+    backgroundColor: '#0F172A',
+    borderRadius: 8,
+    marginTop: 12,
+  },
+
+  textoRevisar: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+
+  deshabilitado: {
+    opacity: 0.4,
+  },
+
+  // ACTIVIDAD LOCAL
+
+  estadistica: {
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    borderRadius: 15,
+    padding: 17,
+    marginBottom: 12,
+    minHeight: 115,
+    justifyContent: 'center',
+  },
+
+  estadisticaEtiqueta: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#94A3B8',
+    letterSpacing: 0.7,
+  },
+
+  cifra: {
+    fontSize: 32,
+    fontWeight: '900',
+    color: '#0F172A',
+    marginTop: 7,
+  },
+
+  cifraPendiente: {
+    fontSize: 32,
+    fontWeight: '900',
+    color: '#D97706',
+    marginTop: 7,
+  },
+
+  cifraSincronizada: {
+    fontSize: 32,
+    fontWeight: '900',
+    color: '#16A34A',
+    marginTop: 7,
+  },
+
+  estadisticaDetalle: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 3,
+  },
+
+  error: {
+    color: '#B91C1C',
+    fontSize: 12,
+    marginTop: 8,
+  },
+
+  // PIE
+
+  pie: {
+    alignItems: 'center',
+    marginTop: 30,
+  },
+
+  pieLinea: {
+    width: '100%',
+    height: 1,
+    backgroundColor: '#E2E8F0',
+    marginBottom: 18,
+  },
+
+  pieTexto: {
+    color: '#475569',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+
+  pieDetalle: {
+    color: '#94A3B8',
+    fontSize: 11,
+    marginTop: 5,
+  },
+
+});
+
+========== .\mobile\api\auth.ts ==========
+
+
+import * as SecureStore from 'expo-secure-store';
+
+import {
+  ErrorAPI,
+  solicitarAPI,
+} from './cliente';
+
+// ==========================================
+// COLMENARES TRES PINOS
+// AUTENTICACION MOVIL CON FASTAPI
+// ==========================================
+
+const CLAVE_SESION =
+  'colmenares_tres_pinos_sesion_v1';
+
+export type UsuarioMovil = {
+  id: number;
+  nombre: string;
+  email: string;
+  rol: string;
+};
+
+export type SesionMovil = {
+  accessToken: string;
+  expiraEn: number;
+  usuario: UsuarioMovil;
+};
+
+type RespuestaLogin = {
+  access_token: string;
+  token_type: string;
+  expira_en: number;
+  usuario: UsuarioMovil;
+};
+
+// ==========================================
+// VALIDACIONES
+// ==========================================
+
+const ROLES_PERMITIDOS = [
+  'ADMIN',
+  'APICULTOR',
+];
+
+function usuarioValido(
+  valor: unknown
+): valor is UsuarioMovil {
+  if (
+    !valor ||
+    typeof valor !== 'object'
+  ) {
+    return false;
+  }
+
+  const usuario =
+    valor as Partial<UsuarioMovil>;
+
+  return (
+    typeof usuario.id === 'number' &&
+    Number.isInteger(usuario.id) &&
+    usuario.id > 0 &&
+    typeof usuario.nombre === 'string' &&
+    usuario.nombre.trim().length > 0 &&
+    typeof usuario.email === 'string' &&
+    usuario.email.trim().length > 0 &&
+    typeof usuario.rol === 'string' &&
+    ROLES_PERMITIDOS.includes(usuario.rol)
+  );
+}
+
+export function tokenVigente(
+  sesion: SesionMovil
+): boolean {
+  // Margen de seguridad de 30 segundos.
+  return Date.now() < sesion.expiraEn - 30000;
+}
+
+// ==========================================
+// INICIAR SESION
+// POST /auth/token
+// ==========================================
+
+export async function iniciarSesion(
+  correoIngresado: string,
+  password: string
+): Promise<SesionMovil> {
+  const email = correoIngresado
+    .trim()
+    .toLowerCase();
+
+  // Validar correo.
+  if (
+    email.length < 5 ||
+    email.length > 150 ||
+    !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+  ) {
+    throw new Error(
+      'Ingresa un correo electrÃ³nico vÃ¡lido.'
+    );
+  }
+
+  // Validar contraseÃ±a.
+  if (
+    password.length < 8 ||
+    password.length > 128
+  ) {
+    throw new Error(
+      'La contraseÃ±a debe tener entre 8 y 128 caracteres.'
+    );
+  }
+
+  let respuesta: RespuestaLogin;
+
+  try {
+    respuesta =
+      await solicitarAPI<RespuestaLogin>(
+        '/auth/token',
+        {
+          method: 'POST',
+          body: {
+            email,
+            password,
+          },
+        }
+      );
+  } catch (error) {
+    if (
+      error instanceof ErrorAPI &&
+      error.estado === 404
+    ) {
+      throw new Error(
+        'El servidor conectado no tiene disponible /auth/token. Debe utilizarse el backend actualizado del equipo.'
+      );
+    }
+
+    throw error;
+  }
+
+  // ========================================
+  // VALIDAR RESPUESTA DEL SERVIDOR
+  // ========================================
+
+  if (
+    !respuesta ||
+    typeof respuesta.access_token !==
+      'string' ||
+    respuesta.access_token.length === 0 ||
+    respuesta.token_type?.toLowerCase() !==
+      'bearer' ||
+    !Number.isInteger(respuesta.expira_en) ||
+    respuesta.expira_en <= 0 ||
+    !usuarioValido(respuesta.usuario)
+  ) {
+    throw new Error(
+      'El servidor devolviÃ³ una respuesta de autenticaciÃ³n invÃ¡lida.'
+    );
+  }
+
+  // ========================================
+  // CREAR SESION
+  // ========================================
+
+  const sesion: SesionMovil = {
+    accessToken: respuesta.access_token,
+    expiraEn:
+      Date.now() +
+      respuesta.expira_en * 1000,
+    usuario: respuesta.usuario,
+  };
+
+  // Guardar token y datos de sesion
+  // en almacenamiento seguro.
+  await SecureStore.setItemAsync(
+    CLAVE_SESION,
+    JSON.stringify(sesion)
+  );
+
+  return sesion;
+}
+
+// ==========================================
+// RECUPERAR SESION GUARDADA
+// ==========================================
+
+export async function leerSesionGuardada():
+  Promise<SesionMovil | null> {
+  const texto =
+    await SecureStore.getItemAsync(
+      CLAVE_SESION
+    );
+
+  if (!texto) {
+    return null;
+  }
+
+  try {
+    const datos: unknown =
+      JSON.parse(texto);
+
+    if (
+      !datos ||
+      typeof datos !== 'object'
+    ) {
+      return null;
+    }
+
+    const sesion =
+      datos as Partial<SesionMovil>;
+
+    if (
+      typeof sesion.accessToken !==
+        'string' ||
+      !sesion.accessToken ||
+      typeof sesion.expiraEn !==
+        'number' ||
+      !Number.isFinite(sesion.expiraEn) ||
+      !usuarioValido(sesion.usuario)
+    ) {
+      return null;
+    }
+
+    return sesion as SesionMovil;
+  } catch {
+    return null;
+  }
+}
+
+// ==========================================
+// VERIFICAR USUARIO CON FASTAPI
+// GET /auth/me
+// ==========================================
+
+export async function verificarUsuario(
+  sesion: SesionMovil
+): Promise<void> {
+  if (!tokenVigente(sesion)) {
+    throw new ErrorAPI(
+      401,
+      'El token ha vencido.'
+    );
+  }
+
+  const usuario =
+    await solicitarAPI<UsuarioMovil>(
+      '/auth/me',
+      {
+        token: sesion.accessToken,
+      }
+    );
+
+  if (
+    !usuarioValido(usuario) ||
+    usuario.id !== sesion.usuario.id
+  ) {
+    throw new ErrorAPI(
+      401,
+      'La identidad de la sesiÃ³n no coincide.'
+    );
+  }
+}
+
+// ==========================================
+// COMPROBAR DISPONIBILIDAD DE FASTAPI
+// GET /health
+// ==========================================
+
+export async function comprobarServidor():
+  Promise<boolean> {
+  try {
+    const resultado =
+      await solicitarAPI<{
+        status: string;
+      }>('/health');
+
+    return resultado.status === 'ok';
+  } catch {
+    return false;
+  }
+}
+
+// ==========================================
+// CERRAR SESION EN ESTE DISPOSITIVO
+// ==========================================
+
+export async function salirDeEsteDispositivo():
+  Promise<void> {
+  await SecureStore.deleteItemAsync(
+    CLAVE_SESION
+  );
+
+  // No se eliminan inspecciones,
+  // tratamientos ni registros SQLite.
+}
+
+
+========== .\mobile\api\cliente.ts ==========
+
+
+import * as Crypto from 'expo-crypto';
+
+import {
+  API_BASE_URL,
+  API_TIMEOUT_MS,
+} from './config';
+
+// ============================================
+// COLMENARES TRES PINOS
+// CLIENTE DE COMUNICACIÃ“N CON FASTAPI
+// ============================================
+
+export class ErrorAPI extends Error {
+  constructor(
+    public readonly estado: number,
+    mensaje: string
+  ) {
+    super(mensaje);
+    this.name = 'ErrorAPI';
+  }
+}
+
+type OpcionesPeticion = {
+method?: 'GET' | 'POST' | 'PATCH' | 'DELETE';
+  body?: unknown;
+  token?: string;
+};
+
+// ============================================
+// OBTENER MENSAJES DE ERROR DEL BACKEND
+// ============================================
+
+function obtenerDetalle(datos: unknown): string | null {
+  if (
+    !datos ||
+    typeof datos !== 'object' ||
+    !('detail' in datos)
+  ) {
+    return null;
+  }
+
+  const detalle = (datos as { detail: unknown }).detail;
+
+  if (typeof detalle === 'string') {
+    return detalle;
+  }
+
+  return null;
+}
+
+// ============================================
+// REALIZAR PETICIONES A FASTAPI
+// ============================================
+
+export async function solicitarAPI<T>(
+  ruta: string,
+  opciones: OpcionesPeticion = {}
+): Promise<T> {
+  const controller = new AbortController();
+
+  const temporizador = setTimeout(() => {
+    controller.abort();
+  }, API_TIMEOUT_MS);
+
+  const headers: Record<string, string> = {
+    Accept: 'application/json',
+    'X-Correlation-ID': Crypto.randomUUID(),
+  };
+
+  // Enviar datos JSON cuando corresponda.
+  if (opciones.body !== undefined) {
+    headers['Content-Type'] = 'application/json';
+  }
+
+  // Incluir autenticaciÃ³n cuando exista un token.
+  if (opciones.token) {
+    headers.Authorization = `Bearer ${opciones.token}`;
+  }
+
+  try {
+    const respuesta = await fetch(
+      `${API_BASE_URL}${ruta}`,
+      {
+        method: opciones.method ?? 'GET',
+        headers,
+        body:
+          opciones.body === undefined
+            ? undefined
+            : JSON.stringify(opciones.body),
+        signal: controller.signal,
+      }
+    );
+
+    const datos: unknown = await respuesta
+      .json()
+      .catch(() => null);
+
+    // ========================================
+    // MANEJO DE ERRORES HTTP
+    // ========================================
+
+    if (!respuesta.ok) {
+      const detalle = obtenerDetalle(datos);
+
+      let mensaje =
+        detalle ??
+        `Error del servidor (${respuesta.status}).`;
+
+      if (respuesta.status === 401) {
+        mensaje =
+          'Credenciales incorrectas o sesiÃ³n vencida.';
+      } else if (respuesta.status === 403) {
+        mensaje =
+          detalle ??
+          'No tienes permisos para realizar esta acciÃ³n.';
+      } else if (respuesta.status === 422) {
+        mensaje =
+          'El servidor rechazÃ³ los datos ingresados.';
+      } else if (respuesta.status >= 500) {
+        mensaje =
+          'El servidor presentÃ³ un problema. Intenta nuevamente.';
+      }
+
+      throw new ErrorAPI(
+        respuesta.status,
+        mensaje
+      );
+    }
+
+    if (datos === null) {
+      throw new ErrorAPI(
+        0,
+        'El servidor no devolviÃ³ una respuesta JSON vÃ¡lida.'
+      );
+    }
+
+    return datos as T;
+
+  } catch (error) {
+    if (error instanceof ErrorAPI) {
+      throw error;
+    }
+
+    if (
+      error instanceof Error &&
+      error.name === 'AbortError'
+    ) {
+      throw new ErrorAPI(
+        0,
+        'La conexiÃ³n con FastAPI tardÃ³ demasiado.'
+      );
+    }
+
+    throw new ErrorAPI(
+      0,
+      'No fue posible conectar con FastAPI. Comprueba la IP, el puerto y la conexiÃ³n.'
+    );
+
+  } finally {
+    clearTimeout(temporizador);
+  }
+}
+
+
+========== .\mobile\package.json ==========
+
+{
+  "name": "mobile",
+  "version": "1.0.0",
+  "main": "index.ts",
+  "dependencies": {
+    "@react-native-community/datetimepicker": "9.2.1",
+    "@react-native-community/netinfo": "12.0.1",
+    "expo": "~58.0.19",
+    "expo-camera": "~58.0.12",
+    "expo-crypto": "~58.0.7",
+    "expo-secure-store": "~58.0.2",
+    "expo-sqlite": "~58.0.14",
+    "expo-status-bar": "~58.0.4",
+    "react": "19.3.0",
+    "react-native": "0.88.0"
+  },
+  "devDependencies": {
+    "@types/react": "~19.3.0",
+    "typescript": "~6.0.3"
+  },
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web"
+  },
+  "private": true
+}
+
+
+========== BUSQUEDA DE ALMACENAMIENTO Y SESION ==========
+
+  mobile\ApiariosLocales.tsx:23:
+  mobile\ApiariosLocales.tsx:24:import {
+> mobile\ApiariosLocales.tsx:25:  leerSesionGuardada,
+  mobile\ApiariosLocales.tsx:26:  tokenVigente,
+  mobile\ApiariosLocales.tsx:27:} from './api/auth';
+  mobile\ApiariosLocales.tsx:28:
+  mobile\ApiariosLocales.tsx:29:import {
+  mobile\ApiariosLocales.tsx:51:
+  mobile\ApiariosLocales.tsx:52:async function obtenerTokenAdmin(): Promise<string> {
+> mobile\ApiariosLocales.tsx:53:  const sesion = await leerSesionGuardada();
+  mobile\ApiariosLocales.tsx:54:
+  mobile\ApiariosLocales.tsx:55:  if (!sesion || !tokenVigente(sesion)) {
+  mobile\ApiariosLocales.tsx:56:    throw new Error(
+  mobile\ApiariosLocales.tsx:57:      'Tu sesión ha vencido. Inicia sesión nuevamente.'
+  mobile\app.json:23:    },
+  mobile\app.json:24:    "plugins": [
+> mobile\app.json:25:      "expo-sqlite",
+  mobile\app.json:26:      "expo-secure-store",
+  mobile\app.json:27:      "expo-status-bar",
+  mobile\app.json:28:      "@react-native-community/datetimepicker"
+  mobile\app.json:29:    ]
+  mobile\App.tsx:42:
+  mobile\App.tsx:43:import {
+> mobile\App.tsx:44:  leerSesionGuardada,
+  mobile\App.tsx:45:} from './api/auth';
+  mobile\App.tsx:46:
+  mobile\App.tsx:47:import type {
+  mobile\App.tsx:48:  UsuarioMovil,
+  mobile\App.tsx:234:// ==========================================
+  mobile\App.tsx:235:
+> mobile\App.tsx:236:function menuParaRol(rol: string): ItemMenu[] {
+  mobile\App.tsx:237:  return MENU.filter(item =>
+  mobile\App.tsx:238:    item.roles.includes(rol as Rol)
+  mobile\App.tsx:239:  );
+  mobile\App.tsx:240:}
+  mobile\App.tsx:366:    useState(false);
+  mobile\App.tsx:367:
+> mobile\App.tsx:368:  const itemsMenu = menuParaRol(usuario.rol);
+  mobile\App.tsx:369:
+  mobile\App.tsx:370:  const moduloActivo =
+  mobile\App.tsx:371:    obtenerModuloActivo(pantalla);
+  mobile\App.tsx:372:
+  mobile\App.tsx:564:      // IDENTIFICAR USUARIO
+  mobile\App.tsx:565:      const sesion =
+> mobile\App.tsx:566:        await leerSesionGuardada();
+  mobile\App.tsx:567:
+  mobile\App.tsx:568:      if (!sesion) {
+  mobile\App.tsx:569:
+  mobile\App.tsx:570:        mostrarErrorEscaneo(
+  mobile\App.tsx:576:      }
+  mobile\App.tsx:577:
+> mobile\App.tsx:578:      // CONSULTAR SQLITE
+  mobile\App.tsx:579:      const catalogo =
+  mobile\App.tsx:580:        await leerCatalogoLocal(
+> mobile\App.tsx:581:          sesion.usuario.id
+  mobile\App.tsx:582:        );
+  mobile\App.tsx:583:
+  mobile\App.tsx:584:      if (!catalogo) {
+  mobile\App.tsx:585:
+  mobile\AppAutenticado.tsx:16:import {
+  mobile\AppAutenticado.tsx:17:  iniciarSesion,
+> mobile\AppAutenticado.tsx:18:  leerSesionGuardada,
+  mobile\AppAutenticado.tsx:19:  salirDeEsteDispositivo,
+  mobile\AppAutenticado.tsx:20:  tokenVigente,
+  mobile\AppAutenticado.tsx:21:  verificarUsuario,
+  mobile\AppAutenticado.tsx:22:} from './api/auth';
+  mobile\AppAutenticado.tsx:64:    const catalogoLocal =
+  mobile\AppAutenticado.tsx:65:      await leerCatalogoLocal(
+> mobile\AppAutenticado.tsx:66:        sesion.usuario.id
+  mobile\AppAutenticado.tsx:67:      ).catch(() => null);
+  mobile\AppAutenticado.tsx:68:
+  mobile\AppAutenticado.tsx:69:    if (
+  mobile\AppAutenticado.tsx:70:      error instanceof ErrorAPI &&
+  mobile\AppAutenticado.tsx:82:        'No se pudo actualizar el catálogo. ' +
+  mobile\AppAutenticado.tsx:83:        'Se conserva la última versión guardada ' +
+> mobile\AppAutenticado.tsx:84:        'en SQLite.'
+  mobile\AppAutenticado.tsx:85:      );
+  mobile\AppAutenticado.tsx:86:    }
+  mobile\AppAutenticado.tsx:87:
+  mobile\AppAutenticado.tsx:88:    return (
+  mobile\AppAutenticado.tsx:124:      try {
+  mobile\AppAutenticado.tsx:125:        const guardada =
+> mobile\AppAutenticado.tsx:126:          await leerSesionGuardada();
+  mobile\AppAutenticado.tsx:127:
+  mobile\AppAutenticado.tsx:128:        if (!activo) return;
+  mobile\AppAutenticado.tsx:129:
+  mobile\AppAutenticado.tsx:130:        if (!guardada) {
+  mobile\AppAutenticado.tsx:188:            const local =
+  mobile\AppAutenticado.tsx:189:              await leerCatalogoLocal(
+> mobile\AppAutenticado.tsx:190:                guardada.usuario.id
+  mobile\AppAutenticado.tsx:191:              ).catch(() => null);
+  mobile\AppAutenticado.tsx:192:
+  mobile\AppAutenticado.tsx:193:            if (!activo) return;
+  mobile\AppAutenticado.tsx:194:
+  mobile\AppAutenticado.tsx:410:      'Cerrar sesión',
+  mobile\AppAutenticado.tsx:411:      'Se cerrará la sesión en este dispositivo. ' +
+> mobile\AppAutenticado.tsx:412:      'Los registros SQLite no se eliminarán.',
+  mobile\AppAutenticado.tsx:413:      [
+  mobile\AppAutenticado.tsx:414:        {
+  mobile\AppAutenticado.tsx:415:          text: 'Cancelar',
+  mobile\AppAutenticado.tsx:416:          style: 'cancel',
+  mobile\AuditoriaLocales.tsx:19:
+  mobile\AuditoriaLocales.tsx:20:import {
+> mobile\AuditoriaLocales.tsx:21:  leerSesionGuardada,
+  mobile\AuditoriaLocales.tsx:22:} from './api/auth';
+  mobile\AuditoriaLocales.tsx:23:
+  mobile\AuditoriaLocales.tsx:24:import type {
+  mobile\AuditoriaLocales.tsx:25:  SesionMovil,
+  mobile\AuditoriaLocales.tsx:236:
+  mobile\AuditoriaLocales.tsx:237:        const guardada =
+> mobile\AuditoriaLocales.tsx:238:          await leerSesionGuardada();
+  mobile\AuditoriaLocales.tsx:239:
+  mobile\AuditoriaLocales.tsx:240:        if (!guardada) {
+  mobile\AuditoriaLocales.tsx:241:          setError(
+  mobile\AuditoriaLocales.tsx:242:            'No existe una sesión activa. Inicia sesión nuevamente.'
+  mobile\ColmenasLocales.tsx:109:
+  mobile\ColmenasLocales.tsx:110:  // ==========================================
+> mobile\ColmenasLocales.tsx:111:  // CARGAR DATOS DESDE SQLITE
+  mobile\ColmenasLocales.tsx:112:  // ==========================================
+  mobile\ColmenasLocales.tsx:113:
+  mobile\ColmenasLocales.tsx:114:  const cargarDatos = useCallback(async () => {
+  mobile\ColmenasLocales.tsx:115:    setCargando(true);
+  mobile\ColmenasLocales.tsx:120:      setRegistros(datos);
+  mobile\ColmenasLocales.tsx:121:    } catch (err) {
+> mobile\ColmenasLocales.tsx:122:      console.error('Error al consultar SQLite:', err);
+  mobile\ColmenasLocales.tsx:123:
+  mobile\ColmenasLocales.tsx:124:      setError(
+  mobile\ColmenasLocales.tsx:125:        'No se pudieron consultar los registros locales.'
+  mobile\ColmenasLocales.tsx:126:      );
+  mobile\ColmenasLocales.tsx:417:
+  mobile\ColmenasLocales.tsx:418:        <Text style={styles.pie}>
+> mobile\ColmenasLocales.tsx:419:          Datos almacenados localmente en SQLite.
+  mobile\ColmenasLocales.tsx:420:        </Text>
+  mobile\ColmenasLocales.tsx:421:      </ScrollView>
+  mobile\ColmenasLocales.tsx:422:    );
+  mobile\ColmenasLocales.tsx:423:  }
+  mobile\DiagnosticoCola.tsx:45://
+  mobile\DiagnosticoCola.tsx:46:// El botón "Preparar cola" solamente
+> mobile\DiagnosticoCola.tsx:47:// actualiza la cola local en SQLite.
+  mobile\DiagnosticoCola.tsx:48:// ==========================================
+  mobile\DiagnosticoCola.tsx:49:
+  mobile\DiagnosticoCola.tsx:50:type Props = {
+  mobile\DiagnosticoCola.tsx:51:  children: React.ReactNode;
+  mobile\DiagnosticoCola.tsx:271:                Este módulo solo consulta y
+  mobile\DiagnosticoCola.tsx:272:                prepara operaciones locales
+> mobile\DiagnosticoCola.tsx:273:                en SQLite.
+  mobile\DiagnosticoCola.tsx:274:
+  mobile\DiagnosticoCola.tsx:275:                {'\n\n'}
+  mobile\DiagnosticoCola.tsx:276:
+  mobile\DiagnosticoCola.tsx:277:                Los envíos reales a FastAPI
+  mobile\DiagnosticoCola.tsx:310:            >
+  mobile\DiagnosticoCola.tsx:311:              <Text style={styles.textoSecundario}>
+> mobile\DiagnosticoCola.tsx:312:                Preparar cola SQLite
+  mobile\DiagnosticoCola.tsx:313:              </Text>
+  mobile\DiagnosticoCola.tsx:314:            </Pressable>
+  mobile\DiagnosticoCola.tsx:315:
+  mobile\DiagnosticoCola.tsx:316:            {cargando && (
+  mobile\DiagnosticoCola.tsx:527:              Diagnóstico local de desarrollo
+  mobile\DiagnosticoCola.tsx:528:              {'\n'}
+> mobile\DiagnosticoCola.tsx:529:              Expo + SQLite
+  mobile\DiagnosticoCola.tsx:530:              {'\n'}
+  mobile\DiagnosticoCola.tsx:531:              Sin envío HTTP
+  mobile\DiagnosticoCola.tsx:532:            </Text>
+  mobile\DiagnosticoCola.tsx:533:
+  mobile\FormularioInspeccion.tsx:38:
+  mobile\FormularioInspeccion.tsx:39:import {
+> mobile\FormularioInspeccion.tsx:40:  leerSesionGuardada,
+  mobile\FormularioInspeccion.tsx:41:} from './api/auth';
+  mobile\FormularioInspeccion.tsx:42:
+  mobile\FormularioInspeccion.tsx:43:import {
+  mobile\FormularioInspeccion.tsx:44:  leerCatalogoLocal,
+  mobile\FormularioInspeccion.tsx:251:
+  mobile\FormularioInspeccion.tsx:252:        const sesion =
+> mobile\FormularioInspeccion.tsx:253:          await leerSesionGuardada();
+  mobile\FormularioInspeccion.tsx:254:
+  mobile\FormularioInspeccion.tsx:255:        const catalogo = sesion
+  mobile\FormularioInspeccion.tsx:256:          ? await leerCatalogoLocal(
+> mobile\FormularioInspeccion.tsx:257:              sesion.usuario.id
+  mobile\FormularioInspeccion.tsx:258:            )
+  mobile\FormularioInspeccion.tsx:259:          : null;
+  mobile\FormularioInspeccion.tsx:260:
+  mobile\FormularioInspeccion.tsx:261:        const opciones: Destino[] =
+  mobile\FormularioInspeccion.tsx:467:        esRevision
+  mobile\FormularioInspeccion.tsx:468:          ? 'La inspección quedó guardada y vinculada a la revisión. Continuaremos con la siguiente colmena disponible.'
+> mobile\FormularioInspeccion.tsx:469:          : 'La inspección quedó guardada en SQLite, pendiente de sincronización.',
+  mobile\FormularioInspeccion.tsx:470:        [
+  mobile\FormularioInspeccion.tsx:471:          {
+  mobile\FormularioInspeccion.tsx:472:            text: esRevision
+  mobile\FormularioInspeccion.tsx:473:              ? 'Guardar y siguiente'
+  mobile\FormularioInspeccion.tsx:1232:      <Text style={styles.pie}>
+  mobile\FormularioInspeccion.tsx:1233:        Colmenares Tres Pinos ·
+> mobile\FormularioInspeccion.tsx:1234:        Registro local SQLite
+  mobile\FormularioInspeccion.tsx:1235:      </Text>
+  mobile\FormularioInspeccion.tsx:1236:    </ScrollView>
+  mobile\FormularioInspeccion.tsx:1237:  );
+  mobile\FormularioInspeccion.tsx:1238:}
+  mobile\InicioModulos.tsx:25:
+  mobile\InicioModulos.tsx:26:import {
+> mobile\InicioModulos.tsx:27:  leerSesionGuardada,
+  mobile\InicioModulos.tsx:28:} from './api/auth';
+  mobile\InicioModulos.tsx:29:
+  mobile\InicioModulos.tsx:30:import {
+  mobile\InicioModulos.tsx:31:  useConexion,
+  mobile\InicioModulos.tsx:500:      let aviso = '';
+  mobile\InicioModulos.tsx:501:
+> mobile\InicioModulos.tsx:502:      // LEER INSPECCIONES SQLITE
+  mobile\InicioModulos.tsx:503:
+  mobile\InicioModulos.tsx:504:      try {
+  mobile\InicioModulos.tsx:505:
+  mobile\InicioModulos.tsx:506:        const items =
+  mobile\InicioModulos.tsx:525:
+  mobile\InicioModulos.tsx:526:        const sesion =
+> mobile\InicioModulos.tsx:527:          await leerSesionGuardada();
+  mobile\InicioModulos.tsx:528:
+  mobile\InicioModulos.tsx:529:        if (!sesion) {
+  mobile\InicioModulos.tsx:530:
+  mobile\InicioModulos.tsx:531:          aviso =
+  mobile\InicioModulos.tsx:555:          }
+  mobile\InicioModulos.tsx:556:
+> mobile\InicioModulos.tsx:557:          // LEER SQLITE
+  mobile\InicioModulos.tsx:558:
+  mobile\InicioModulos.tsx:559:          catalogoLocal =
+  mobile\InicioModulos.tsx:560:            await leerCatalogoLocal(
+> mobile\InicioModulos.tsx:561:              sesion.usuario.id
+  mobile\InicioModulos.tsx:562:            );
+  mobile\InicioModulos.tsx:563:
+  mobile\InicioModulos.tsx:564:          if (!catalogoLocal) {
+  mobile\InicioModulos.tsx:565:
+  mobile\InicioModulos.tsx:573:
+  mobile\InicioModulos.tsx:574:            aviso =
+> mobile\InicioModulos.tsx:575:              'No se pudo actualizar el catálogo. Se utiliza la última versión guardada en SQLite.';
+  mobile\InicioModulos.tsx:576:
+  mobile\InicioModulos.tsx:577:          } else if (sinInternet) {
+  mobile\InicioModulos.tsx:578:
+  mobile\InicioModulos.tsx:579:            aviso =
+  mobile\InicioModulos.tsx:1798:
+  mobile\InicioModulos.tsx:1799:        <Text style={styles.pieDetalle}>
+> mobile\InicioModulos.tsx:1800:          Aplicación móvil · Expo + SQLite
+  mobile\InicioModulos.tsx:1801:        </Text>
+  mobile\InicioModulos.tsx:1802:
+  mobile\InicioModulos.tsx:1803:      </View>
+  mobile\InicioModulos.tsx:1804:
+  mobile\MisInspecciones.tsx:57:  const [error, setError] = useState('');
+  mobile\MisInspecciones.tsx:58:
+> mobile\MisInspecciones.tsx:59:  // CONSULTAR SQLITE
+  mobile\MisInspecciones.tsx:60:  const cargarInspecciones = useCallback(async () => {
+  mobile\MisInspecciones.tsx:61:    setCargando(true);
+  mobile\MisInspecciones.tsx:62:    setError('');
+  mobile\MisInspecciones.tsx:63:
+  mobile\MisInspecciones.tsx:66:      setInspecciones(registros);
+  mobile\MisInspecciones.tsx:67:    } catch (err) {
+> mobile\MisInspecciones.tsx:68:      console.error('Error consultando SQLite:', err);
+  mobile\MisInspecciones.tsx:69:
+  mobile\MisInspecciones.tsx:70:      setError(
+  mobile\MisInspecciones.tsx:71:        'No se pudieron cargar las inspecciones guardadas.'
+  mobile\MisInspecciones.tsx:72:      );
+  mobile\MisInspecciones.tsx:162:      ) : error ? (
+  mobile\MisInspecciones.tsx:163:
+> mobile\MisInspecciones.tsx:164:        // ERROR DE SQLITE
+  mobile\MisInspecciones.tsx:165:        <View style={styles.card}>
+  mobile\MisInspecciones.tsx:166:          <Text style={styles.error}>
+  mobile\MisInspecciones.tsx:167:            {error}
+  mobile\MisInspecciones.tsx:168:          </Text>
+  mobile\package-lock.json:15:        "expo-crypto": "~58.0.7",
+  mobile\package-lock.json:16:        "expo-secure-store": "~58.0.2",
+> mobile\package-lock.json:17:        "expo-sqlite": "~58.0.14",
+  mobile\package-lock.json:18:        "expo-status-bar": "~58.0.4",
+  mobile\package-lock.json:19:        "react": "19.3.0",
+  mobile\package-lock.json:20:        "react-native": "0.88.0"
+  mobile\package-lock.json:21:      },
+  mobile\package-lock.json:3003:      }
+  mobile\package-lock.json:3004:    },
+> mobile\package-lock.json:3005:    "node_modules/expo-sqlite": {
+  mobile\package-lock.json:3006:      "version": "58.0.14",
+> mobile\package-lock.json:3007:      "resolved": "https://registry.npmjs.org/expo-sqlite/-/expo-sqlite-58.0.14.tgz",
+  mobile\package-lock.json:3008:      "integrity": "sha512-OEZsNXYYOzWDkMORprUYRblJVfhO/TKloMWHm5bLzIhYMgs8UcdQZ/RFIMLQFciiaMoYZDsCZbveG47OKcDRXg==",
+  mobile\package-lock.json:3009:      "license": "MIT",
+  mobile\package-lock.json:3010:      "dependencies": {
+  mobile\package-lock.json:3011:        "await-lock": "^2.2.2"
+  mobile\package.json:10:    "expo-crypto": "~58.0.7",
+  mobile\package.json:11:    "expo-secure-store": "~58.0.2",
+> mobile\package.json:12:    "expo-sqlite": "~58.0.14",
+  mobile\package.json:13:    "expo-status-bar": "~58.0.4",
+  mobile\package.json:14:    "react": "19.3.0",
+  mobile\package.json:15:    "react-native": "0.88.0"
+  mobile\package.json:16:  },
+  mobile\RevisionesGrupos.tsx:26:
+  mobile\RevisionesGrupos.tsx:27:import {
+> mobile\RevisionesGrupos.tsx:28:  leerSesionGuardada,
+  mobile\RevisionesGrupos.tsx:29:} from './api/auth';
+  mobile\RevisionesGrupos.tsx:30:
+  mobile\RevisionesGrupos.tsx:31:import {
+  mobile\RevisionesGrupos.tsx:32:  leerCatalogoLocal,
+  mobile\RevisionesGrupos.tsx:174:      <Text style={styles.aviso}>
+  mobile\RevisionesGrupos.tsx:175:        Solo lectura. Este diagnóstico no
+> mobile\RevisionesGrupos.tsx:176:        envía información ni modifica SQLite.
+  mobile\RevisionesGrupos.tsx:177:      </Text>
+  mobile\RevisionesGrupos.tsx:178:
+  mobile\RevisionesGrupos.tsx:179:      <Boton
+  mobile\RevisionesGrupos.tsx:180:        titulo={
+  mobile\RevisionesGrupos.tsx:432:    try {
+  mobile\RevisionesGrupos.tsx:433:      const sesion =
+> mobile\RevisionesGrupos.tsx:434:        await leerSesionGuardada();
+  mobile\RevisionesGrupos.tsx:435:
+  mobile\RevisionesGrupos.tsx:436:      setSesionDisponible(Boolean(sesion));
+  mobile\RevisionesGrupos.tsx:437:
+  mobile\RevisionesGrupos.tsx:438:      if (!sesion) {
+  mobile\RevisionesGrupos.tsx:445:      const [catalogoLocal, registros] =
+  mobile\RevisionesGrupos.tsx:446:        await Promise.all([
+> mobile\RevisionesGrupos.tsx:447:          leerCatalogoLocal(sesion.usuario.id),
+  mobile\RevisionesGrupos.tsx:448:          listarRevisionesLocales(),
+  mobile\RevisionesGrupos.tsx:449:        ]);
+  mobile\RevisionesGrupos.tsx:450:
+  mobile\RevisionesGrupos.tsx:451:      setCatalogo(catalogoLocal);
+  mobile\RevisionesGrupos.tsx:745:        Ejemplo visual. No representa
+  mobile\RevisionesGrupos.tsx:746:        colmenas reales y no guarda
+> mobile\RevisionesGrupos.tsx:747:        información en SQLite.
+  mobile\RevisionesGrupos.tsx:748:      </Text>
+  mobile\RevisionesGrupos.tsx:749:
+  mobile\RevisionesGrupos.tsx:750:      <Text style={styles.subtitulo}>
+  mobile\RevisionesGrupos.tsx:751:        Progreso de ejemplo: 2 de 5 revisadas
+  mobile\RevisionesGrupos.tsx:1116:      <Text style={styles.subtitulo}>
+  mobile\RevisionesGrupos.tsx:1117:        Recorre las colmenas de un grupo
+> mobile\RevisionesGrupos.tsx:1118:        y conserva su progreso en SQLite.
+  mobile\RevisionesGrupos.tsx:1119:      </Text>
+  mobile\RevisionesGrupos.tsx:1120:
+  mobile\RevisionesGrupos.tsx:1121:      {/* DIAGNÓSTICO DE SINCRONIZACIÓN */}
+  mobile\RevisionesGrupos.tsx:1122:
+  mobile\StockLocales.tsx:22:
+  mobile\StockLocales.tsx:23:import {
+> mobile\StockLocales.tsx:24:  leerSesionGuardada,
+  mobile\StockLocales.tsx:25:  tokenVigente,
+  mobile\StockLocales.tsx:26:} from './api/auth';
+  mobile\StockLocales.tsx:27:
+  mobile\StockLocales.tsx:28:import { ErrorAPI } from './api/cliente';
+  mobile\StockLocales.tsx:227:async function obtenerToken(): Promise<string> {
+  mobile\StockLocales.tsx:228:
+> mobile\StockLocales.tsx:229:  const sesion = await leerSesionGuardada();
+  mobile\StockLocales.tsx:230:
+  mobile\StockLocales.tsx:231:  if (
+  mobile\StockLocales.tsx:232:    !sesion ||
+  mobile\StockLocales.tsx:233:    !tokenVigente(sesion)
+  mobile\TransferenciasLocales.tsx:21:
+  mobile\TransferenciasLocales.tsx:22:import {
+> mobile\TransferenciasLocales.tsx:23:  leerSesionGuardada,
+  mobile\TransferenciasLocales.tsx:24:} from './api/auth';
+  mobile\TransferenciasLocales.tsx:25:
+  mobile\TransferenciasLocales.tsx:26:import {
+  mobile\TransferenciasLocales.tsx:27:  listarTransferencias,
+  mobile\TransferenciasLocales.tsx:235:
+  mobile\TransferenciasLocales.tsx:236:        const sesion =
+> mobile\TransferenciasLocales.tsx:237:          await leerSesionGuardada();
+  mobile\TransferenciasLocales.tsx:238:
+  mobile\TransferenciasLocales.tsx:239:        if (!sesion) {
+  mobile\TransferenciasLocales.tsx:240:          throw new Error(
+  mobile\TransferenciasLocales.tsx:241:            'No existe una sesión activa.'
+  mobile\TratamientosLocales.tsx:50:
+  mobile\TratamientosLocales.tsx:51:import {
+> mobile\TratamientosLocales.tsx:52:  leerSesionGuardada,
+  mobile\TratamientosLocales.tsx:53:} from './api/auth';
+  mobile\TratamientosLocales.tsx:54:
+  mobile\TratamientosLocales.tsx:55:import {
+  mobile\TratamientosLocales.tsx:56:  leerCatalogoLocal,
+  mobile\TratamientosLocales.tsx:395:
+  mobile\TratamientosLocales.tsx:396:  // ========================================
+> mobile\TratamientosLocales.tsx:397:  // CARGAR SQLITE Y CATÁLOGO
+  mobile\TratamientosLocales.tsx:398:  // ========================================
+  mobile\TratamientosLocales.tsx:399:
+  mobile\TratamientosLocales.tsx:400:  const recargar = useCallback(
+  mobile\TratamientosLocales.tsx:401:    async () => {
+  mobile\TratamientosLocales.tsx:407:
+  mobile\TratamientosLocales.tsx:408:        const sesion =
+> mobile\TratamientosLocales.tsx:409:          await leerSesionGuardada();
+  mobile\TratamientosLocales.tsx:410:
+  mobile\TratamientosLocales.tsx:411:        // Inicializar primero las tablas
+  mobile\TratamientosLocales.tsx:412:        // de inspecciones.
+  mobile\TratamientosLocales.tsx:413:
+  mobile\TratamientosLocales.tsx:420:
+  mobile\TratamientosLocales.tsx:421:          sesion
+> mobile\TratamientosLocales.tsx:422:            ? leerCatalogoLocal(sesion.usuario.id)
+  mobile\TratamientosLocales.tsx:423:            : Promise.resolve(null),
+  mobile\TratamientosLocales.tsx:424:
+  mobile\TratamientosLocales.tsx:425:        ]);
+  mobile\TratamientosLocales.tsx:426:
+  mobile\TratamientosLocales.tsx:432:            sesion
+  mobile\TratamientosLocales.tsx:433:              ? registro.usuario_local_id ===
+> mobile\TratamientosLocales.tsx:434:                sesion.usuario.id
+  mobile\TratamientosLocales.tsx:435:              : registro.usuario_local_id === null
+  mobile\TratamientosLocales.tsx:436:        );
+  mobile\TratamientosLocales.tsx:437:
+  mobile\TratamientosLocales.tsx:438:        setTratamientos(propios);
+  mobile\TratamientosLocales.tsx:442:            sesion
+  mobile\TratamientosLocales.tsx:443:              ? registro.usuario_local_id ===
+> mobile\TratamientosLocales.tsx:444:                sesion.usuario.id
+  mobile\TratamientosLocales.tsx:445:              : registro.usuario_local_id === null
+  mobile\TratamientosLocales.tsx:446:          )
+  mobile\TratamientosLocales.tsx:447:        );
+  mobile\TratamientosLocales.tsx:448:
+  mobile\TratamientosLocales.tsx:452:
+  mobile\TratamientosLocales.tsx:453:        console.error(
+> mobile\TratamientosLocales.tsx:454:          'Error SQLite:',
+  mobile\TratamientosLocales.tsx:455:          e
+  mobile\TratamientosLocales.tsx:456:        );
+  mobile\TratamientosLocales.tsx:457:
+  mobile\TratamientosLocales.tsx:458:        setError(
+  mobile\TratamientosLocales.tsx:715:
+  mobile\TratamientosLocales.tsx:716:      // ------------------------------------
+> mobile\TratamientosLocales.tsx:717:      // GUARDAR EN SQLITE
+  mobile\TratamientosLocales.tsx:718:      // ------------------------------------
+  mobile\TratamientosLocales.tsx:719:
+  mobile\TratamientosLocales.tsx:720:      if (editandoId === null) {
+  mobile\TratamientosLocales.tsx:721:
+  mobile\TratamientosLocales.tsx:775:      Alert.alert(
+  mobile\TratamientosLocales.tsx:776:        'Tratamiento guardado',
+> mobile\TratamientosLocales.tsx:777:        `El registro se guardó correctamente en SQLite.\n\n${mensajeSincronizacion}`
+  mobile\TratamientosLocales.tsx:778:      );
+  mobile\TratamientosLocales.tsx:779:
+  mobile\TratamientosLocales.tsx:780:    } catch (e) {
+  mobile\TratamientosLocales.tsx:781:
+  mobile\UsuariosLocales.tsx:21:
+  mobile\UsuariosLocales.tsx:22:import {
+> mobile\UsuariosLocales.tsx:23:  leerSesionGuardada,
+  mobile\UsuariosLocales.tsx:24:} from './api/auth';
+  mobile\UsuariosLocales.tsx:25:
+  mobile\UsuariosLocales.tsx:26:import type {
+  mobile\UsuariosLocales.tsx:27:  SesionMovil,
+  mobile\UsuariosLocales.tsx:252:
+  mobile\UsuariosLocales.tsx:253:        const guardada =
+> mobile\UsuariosLocales.tsx:254:          await leerSesionGuardada();
+  mobile\UsuariosLocales.tsx:255:
+  mobile\UsuariosLocales.tsx:256:        if (!guardada) {
+  mobile\UsuariosLocales.tsx:257:          throw new Error(
+  mobile\UsuariosLocales.tsx:258:            'No se encontró una sesión. Inicia sesión nuevamente.'
+  mobile\UsuariosLocales.tsx:350:          usuario.apellido ?? '',
+  mobile\UsuariosLocales.tsx:351:          usuario.email,
+> mobile\UsuariosLocales.tsx:352:          String(usuario.id),
+  mobile\UsuariosLocales.tsx:353:        ]
+  mobile\UsuariosLocales.tsx:354:          .join(' ')
+  mobile\UsuariosLocales.tsx:355:          .toLowerCase()
+  mobile\UsuariosLocales.tsx:356:          .includes(texto);
+  mobile\UsuariosLocales.tsx:386:        await obtenerUsuario(
+  mobile\UsuariosLocales.tsx:387:          sesion.accessToken,
+> mobile\UsuariosLocales.tsx:388:          usuario.id
+  mobile\UsuariosLocales.tsx:389:        );
+  mobile\UsuariosLocales.tsx:390:
+  mobile\UsuariosLocales.tsx:391:      setSeleccionado(detalle);
+  mobile\UsuariosLocales.tsx:392:
+  mobile\UsuariosLocales.tsx:587:      await desactivarUsuario(
+  mobile\UsuariosLocales.tsx:588:        sesion.accessToken,
+> mobile\UsuariosLocales.tsx:589:        usuario.id
+  mobile\UsuariosLocales.tsx:590:      );
+  mobile\UsuariosLocales.tsx:591:
+  mobile\UsuariosLocales.tsx:592:      setUsuarios((actuales) =>
+  mobile\UsuariosLocales.tsx:593:        actuales.filter(
+> mobile\UsuariosLocales.tsx:594:          (u) => u.id !== usuario.id
+  mobile\UsuariosLocales.tsx:595:        )
+  mobile\UsuariosLocales.tsx:596:      );
+  mobile\UsuariosLocales.tsx:597:
+  mobile\UsuariosLocales.tsx:598:      setSeleccionado(null);
+  mobile\UsuariosLocales.tsx:1022:
+  mobile\UsuariosLocales.tsx:1023:            <Pressable
+> mobile\UsuariosLocales.tsx:1024:              key={usuario.id}
+  mobile\UsuariosLocales.tsx:1025:              style={styles.usuarioCard}
+  mobile\UsuariosLocales.tsx:1026:              onPress={() => {
+  mobile\UsuariosLocales.tsx:1027:                void abrirDetalle(usuario);
+  mobile\UsuariosLocales.tsx:1028:              }}
+  mobile\UsuariosLocales.tsx:1063:
+  mobile\UsuariosLocales.tsx:1064:                <Text style={styles.usuarioMetaTexto}>
+> mobile\UsuariosLocales.tsx:1065:                  Usuario #{usuario.id}
+  mobile\UsuariosLocales.tsx:1066:                </Text>
+  mobile\UsuariosLocales.tsx:1067:
+  mobile\UsuariosLocales.tsx:1068:                <Text style={styles.usuarioMetaTexto}>
+  mobile\UsuariosLocales.tsx:1069:                  Creado: {formatearFecha(
+  mobile\api\auth.ts:1:
+> mobile\api\auth.ts:2:import * as SecureStore from 'expo-secure-store';
+  mobile\api\auth.ts:3:
+  mobile\api\auth.ts:4:import {
+  mobile\api\auth.ts:5:  ErrorAPI,
+  mobile\api\auth.ts:6:  solicitarAPI,
+  mobile\api\auth.ts:58:
+  mobile\api\auth.ts:59:  return (
+> mobile\api\auth.ts:60:    typeof usuario.id === 'number' &&
+> mobile\api\auth.ts:61:    Number.isInteger(usuario.id) &&
+> mobile\api\auth.ts:62:    usuario.id > 0 &&
+  mobile\api\auth.ts:63:    typeof usuario.nombre === 'string' &&
+  mobile\api\auth.ts:64:    usuario.nombre.trim().length > 0 &&
+  mobile\api\auth.ts:65:    typeof usuario.email === 'string' &&
+  mobile\api\auth.ts:66:    usuario.email.trim().length > 0 &&
+  mobile\api\auth.ts:172:  // Guardar token y datos de sesion
+  mobile\api\auth.ts:173:  // en almacenamiento seguro.
+> mobile\api\auth.ts:174:  await SecureStore.setItemAsync(
+  mobile\api\auth.ts:175:    CLAVE_SESION,
+  mobile\api\auth.ts:176:    JSON.stringify(sesion)
+  mobile\api\auth.ts:177:  );
+  mobile\api\auth.ts:178:
+  mobile\api\auth.ts:184:// ==========================================
+  mobile\api\auth.ts:185:
+> mobile\api\auth.ts:186:export async function leerSesionGuardada():
+  mobile\api\auth.ts:187:  Promise<SesionMovil | null> {
+  mobile\api\auth.ts:188:  const texto =
+> mobile\api\auth.ts:189:    await SecureStore.getItemAsync(
+  mobile\api\auth.ts:190:      CLAVE_SESION
+  mobile\api\auth.ts:191:    );
+  mobile\api\auth.ts:192:
+  mobile\api\auth.ts:193:  if (!texto) {
+  mobile\api\auth.ts:252:  if (
+  mobile\api\auth.ts:253:    !usuarioValido(usuario) ||
+> mobile\api\auth.ts:254:    usuario.id !== sesion.usuario.id
+  mobile\api\auth.ts:255:  ) {
+  mobile\api\auth.ts:256:    throw new ErrorAPI(
+  mobile\api\auth.ts:257:      401,
+  mobile\api\auth.ts:258:      'La identidad de la sesión no coincide.'
+  mobile\api\auth.ts:286:export async function salirDeEsteDispositivo():
+  mobile\api\auth.ts:287:  Promise<void> {
+> mobile\api\auth.ts:288:  await SecureStore.deleteItemAsync(
+  mobile\api\auth.ts:289:    CLAVE_SESION
+  mobile\api\auth.ts:290:  );
+  mobile\api\auth.ts:291:
+  mobile\api\auth.ts:292:  // No se eliminan inspecciones,
+> mobile\api\auth.ts:293:  // tratamientos ni registros SQLite.
+  mobile\api\auth.ts:294:}
+  mobile\api\transferencias.ts:242:    colmena_destino_id: datos.colmenaDestinoId,
+  mobile\api\transferencias.ts:243:
+> mobile\api\transferencias.ts:244:    usuario_id: sesion.usuario.id,
+  mobile\api\transferencias.ts:245:
+  mobile\api\transferencias.ts:246:    cantidad_marcos: datos.cantidadMarcos,
+  mobile\api\transferencias.ts:247:
+  mobile\api\transferencias.ts:248:    tipo_marco: datos.tipoMarco ?? null,
+  mobile\database\catalogo.ts:1:
+> mobile\database\catalogo.ts:2:import * as SQLite from 'expo-sqlite';
+  mobile\database\catalogo.ts:3:
+  mobile\database\catalogo.ts:4:import { solicitarAPI } from '../api/cliente';
+  mobile\database\catalogo.ts:5:
+  mobile\database\catalogo.ts:6:import {
+  mobile\database\catalogo.ts:145:  if (
+  mobile\database\catalogo.ts:146:    !esObjeto(usuario) ||
+> mobile\database\catalogo.ts:147:    !esId(usuario.id) ||
+> mobile\database\catalogo.ts:148:    usuario.id !== usuarioId ||
+  mobile\database\catalogo.ts:149:    !esTexto(usuario.nombre) ||
+  mobile\database\catalogo.ts:150:    !['ADMIN', 'APICULTOR'].includes(
+  mobile\database\catalogo.ts:151:      String(usuario.rol)
+  mobile\database\catalogo.ts:152:    )
+  mobile\database\catalogo.ts:291:
+  mobile\database\catalogo.ts:292:// ==========================================
+> mobile\database\catalogo.ts:293:// BASE DE DATOS SQLITE
+  mobile\database\catalogo.ts:294:// ==========================================
+  mobile\database\catalogo.ts:295:
+  mobile\database\catalogo.ts:296:let conexion:
+> mobile\database\catalogo.ts:297:  Promise<SQLite.SQLiteDatabase> | null = null;
+  mobile\database\catalogo.ts:298:
+  mobile\database\catalogo.ts:299:async function obtenerBD() {
+  mobile\database\catalogo.ts:300:  if (!conexion) {
+  mobile\database\catalogo.ts:301:    conexion = (async () => {
+  mobile\database\catalogo.ts:302:
+> mobile\database\catalogo.ts:303:      const db = await SQLite.openDatabaseAsync(
+  mobile\database\catalogo.ts:304:        'colmenas.db'
+  mobile\database\catalogo.ts:305:      );
+  mobile\database\catalogo.ts:306:
+  mobile\database\catalogo.ts:307:      await db.execAsync(`
+> mobile\database\catalogo.ts:308:        CREATE TABLE IF NOT EXISTS catalogos_moviles (
+  mobile\database\catalogo.ts:309:          usuario_id INTEGER PRIMARY KEY,
+  mobile\database\catalogo.ts:310:          generado_en TEXT NOT NULL,
+  mobile\database\catalogo.ts:311:          contenido TEXT NOT NULL,
+  mobile\database\catalogo.ts:312:          guardado_en TEXT NOT NULL
+  mobile\database\catalogo.ts:350:  validarCatalogo(
+  mobile\database\catalogo.ts:351:    respuesta,
+> mobile\database\catalogo.ts:352:    sesion.usuario.id
+  mobile\database\catalogo.ts:353:  );
+  mobile\database\catalogo.ts:354:
+  mobile\database\catalogo.ts:355:  const db = await obtenerBD();
+  mobile\database\catalogo.ts:356:
+  mobile\database\catalogo.ts:372:      guardado_en = excluded.guardado_en`,
+  mobile\database\catalogo.ts:373:    [
+> mobile\database\catalogo.ts:374:      sesion.usuario.id,
+  mobile\database\catalogo.ts:375:      respuesta.generado_en,
+  mobile\database\catalogo.ts:376:      JSON.stringify(respuesta),
+  mobile\database\catalogo.ts:377:      new Date().toISOString(),
+  mobile\database\catalogo.ts:378:    ]
+  mobile\database\guardarYSiguiente.ts:103:  // Se utiliza la función existente,
+  mobile\database\guardarYSiguiente.ts:104:  // que valida y guarda los datos
+> mobile\database\guardarYSiguiente.ts:105:  // en SQLite.
+  mobile\database\guardarYSiguiente.ts:106:  const inspeccionLocalId =
+  mobile\database\guardarYSiguiente.ts:107:    await guardarInspeccionAvanzada(datos);
+  mobile\database\guardarYSiguiente.ts:108:
+  mobile\database\guardarYSiguiente.ts:109:  // 5. Vincular la inspección al grupo.
+  mobile\database\inspecciones.ts:1:
+> mobile\database\inspecciones.ts:2:import * as SQLite from 'expo-sqlite';
+  mobile\database\inspecciones.ts:3:import * as Crypto from 'expo-crypto';
+  mobile\database\inspecciones.ts:4:
+  mobile\database\inspecciones.ts:5:// ==========================================
+  mobile\database\inspecciones.ts:6:// COLMENARES TRES PINOS
+  mobile\database\inspecciones.ts:42:
+  mobile\database\inspecciones.ts:43:// ==========================================
+> mobile\database\inspecciones.ts:44:// CONEXIÓN SQLITE
+  mobile\database\inspecciones.ts:45:// ==========================================
+  mobile\database\inspecciones.ts:46:
+  mobile\database\inspecciones.ts:47:let conexion:
+> mobile\database\inspecciones.ts:48:  Promise<SQLite.SQLiteDatabase> | null = null;
+  mobile\database\inspecciones.ts:49:
+  mobile\database\inspecciones.ts:50:async function iniciarBaseDeDatos() {
+> mobile\database\inspecciones.ts:51:  const db = await SQLite.openDatabaseAsync(
+  mobile\database\inspecciones.ts:52:    'colmenas.db'
+  mobile\database\inspecciones.ts:53:  );
+  mobile\database\inspecciones.ts:54:
+  mobile\database\inspecciones.ts:55:  await db.execAsync(`
+  mobile\database\inspecciones.ts:56:    PRAGMA journal_mode = WAL;
+  mobile\database\inspecciones.ts:57:
+> mobile\database\inspecciones.ts:58:    CREATE TABLE IF NOT EXISTS inspecciones_locales (
+  mobile\database\inspecciones.ts:59:      id INTEGER PRIMARY KEY AUTOINCREMENT,
+  mobile\database\inspecciones.ts:60:      codigo_qr TEXT NOT NULL,
+  mobile\database\inspecciones.ts:61:
+  mobile\database\inspecciones.ts:62:      marcos_totales INTEGER NOT NULL
+  mobile\database\inspeccionesAvanzadas.ts:1:
+> mobile\database\inspeccionesAvanzadas.ts:2:import * as SQLite from 'expo-sqlite';
+  mobile\database\inspeccionesAvanzadas.ts:3:
+  mobile\database\inspeccionesAvanzadas.ts:4:import {
+> mobile\database\inspeccionesAvanzadas.ts:5:  leerSesionGuardada,
+  mobile\database\inspeccionesAvanzadas.ts:6:  tokenVigente,
+  mobile\database\inspeccionesAvanzadas.ts:7:} from '../api/auth';
+  mobile\database\inspeccionesAvanzadas.ts:8:
+  mobile\database\inspeccionesAvanzadas.ts:9:import {
+  mobile\database\inspeccionesAvanzadas.ts:184:
+  mobile\database\inspeccionesAvanzadas.ts:185:async function obtenerContextoAutorizado() {
+> mobile\database\inspeccionesAvanzadas.ts:186:  const sesion = await leerSesionGuardada();
+  mobile\database\inspeccionesAvanzadas.ts:187:
+  mobile\database\inspeccionesAvanzadas.ts:188:  if (!sesion) {
+  mobile\database\inspeccionesAvanzadas.ts:189:    throw new Error(
+  mobile\database\inspeccionesAvanzadas.ts:190:      'Debes iniciar sesión para registrar una inspección oficial.'
+  mobile\database\inspeccionesAvanzadas.ts:199:
+  mobile\database\inspeccionesAvanzadas.ts:200:  const catalogo = await leerCatalogoLocal(
+> mobile\database\inspeccionesAvanzadas.ts:201:    sesion.usuario.id
+  mobile\database\inspeccionesAvanzadas.ts:202:  );
+  mobile\database\inspeccionesAvanzadas.ts:203:
+  mobile\database\inspeccionesAvanzadas.ts:204:  if (!catalogo) {
+  mobile\database\inspeccionesAvanzadas.ts:205:    throw new Error(
+  mobile\database\inspeccionesAvanzadas.ts:556:
+  mobile\database\inspeccionesAvanzadas.ts:557:// ==========================================
+> mobile\database\inspeccionesAvanzadas.ts:558:// SQLITE
+  mobile\database\inspeccionesAvanzadas.ts:559:// ==========================================
+  mobile\database\inspeccionesAvanzadas.ts:560:
+  mobile\database\inspeccionesAvanzadas.ts:561:let conexion:
+> mobile\database\inspeccionesAvanzadas.ts:562:  Promise<SQLite.SQLiteDatabase> | null = null;
+  mobile\database\inspeccionesAvanzadas.ts:563:
+  mobile\database\inspeccionesAvanzadas.ts:564:async function iniciarBD() {
+> mobile\database\inspeccionesAvanzadas.ts:565:  const db = await SQLite.openDatabaseAsync(
+  mobile\database\inspeccionesAvanzadas.ts:566:    'colmenas.db'
+  mobile\database\inspeccionesAvanzadas.ts:567:  );
+  mobile\database\inspeccionesAvanzadas.ts:568:
+  mobile\database\inspeccionesAvanzadas.ts:569:  await db.execAsync(`
+  mobile\database\inspeccionesAvanzadas.ts:570:    PRAGMA foreign_keys = ON;
+  mobile\database\inspeccionesAvanzadas.ts:571:
+> mobile\database\inspeccionesAvanzadas.ts:572:    CREATE TABLE IF NOT EXISTS inspecciones_detalle_local (
+  mobile\database\inspeccionesAvanzadas.ts:573:      inspeccion_local_id INTEGER PRIMARY KEY
+  mobile\database\inspeccionesAvanzadas.ts:574:        REFERENCES inspecciones_locales(id),
+  mobile\database\inspeccionesAvanzadas.ts:575:      estado_general TEXT NOT NULL,
+  mobile\database\inspeccionesAvanzadas.ts:576:      reina_observada INTEGER,
+  mobile\database\inspeccionesAvanzadas.ts:587:    );
+  mobile\database\inspeccionesAvanzadas.ts:588:
+> mobile\database\inspeccionesAvanzadas.ts:589:    CREATE TABLE IF NOT EXISTS marcos_inspeccion_local (
+  mobile\database\inspeccionesAvanzadas.ts:590:      id INTEGER PRIMARY KEY AUTOINCREMENT,
+  mobile\database\inspeccionesAvanzadas.ts:591:      inspeccion_local_id INTEGER NOT NULL
+  mobile\database\inspeccionesAvanzadas.ts:592:        REFERENCES inspecciones_locales(id),
+  mobile\database\inspeccionesAvanzadas.ts:593:      ubicacion TEXT NOT NULL
+  mobile\database\inspeccionesAvanzadas.ts:710:
+  mobile\database\inspeccionesAvanzadas.ts:711:  // 8. Guardar toda la inspección en una
+> mobile\database\inspeccionesAvanzadas.ts:712:  // sola transacción SQLite.
+  mobile\database\inspeccionesAvanzadas.ts:713:  await db.withExclusiveTransactionAsync(
+  mobile\database\inspeccionesAvanzadas.ts:714:    async tx => {
+  mobile\database\inspeccionesAvanzadas.ts:715:      const resultado = await tx.runAsync(
+  mobile\database\inspeccionesAvanzadas.ts:716:        `INSERT INTO inspecciones_locales (
+  mobile\database\inspeccionesAvanzadas.ts:739:          fechaReal,
+  mobile\database\inspeccionesAvanzadas.ts:740:          idCliente,
+> mobile\database\inspeccionesAvanzadas.ts:741:          sesion.usuario.id,
+  mobile\database\inspeccionesAvanzadas.ts:742:        ]
+  mobile\database\inspeccionesAvanzadas.ts:743:      );
+  mobile\database\inspeccionesAvanzadas.ts:744:
+  mobile\database\inspeccionesAvanzadas.ts:745:      nuevoId = resultado.lastInsertRowId;
+  mobile\database\revisiones.ts:1:
+> mobile\database\revisiones.ts:2:import * as SQLite from 'expo-sqlite';
+  mobile\database\revisiones.ts:3:
+  mobile\database\revisiones.ts:4:import {
+> mobile\database\revisiones.ts:5:  leerSesionGuardada,
+  mobile\database\revisiones.ts:6:} from '../api/auth';
+  mobile\database\revisiones.ts:7:
+  mobile\database\revisiones.ts:8:import {
+  mobile\database\revisiones.ts:9:  leerCatalogoLocal,
+  mobile\database\revisiones.ts:17:// ==========================================
+  mobile\database\revisiones.ts:18:// COLMENARES TRES PINOS
+> mobile\database\revisiones.ts:19:// REVISIONES POR GRUPO - SQLITE
+  mobile\database\revisiones.ts:20:// ==========================================
+  mobile\database\revisiones.ts:21:
+  mobile\database\revisiones.ts:22:export type EstadoRevision =
+  mobile\database\revisiones.ts:23:  | 'EN_CURSO'
+  mobile\database\revisiones.ts:70:
+  mobile\database\revisiones.ts:71:// ==========================================
+> mobile\database\revisiones.ts:72:// CONEXIÓN SQLITE
+  mobile\database\revisiones.ts:73:// ==========================================
+  mobile\database\revisiones.ts:74:
+  mobile\database\revisiones.ts:75:let conexion:
+> mobile\database\revisiones.ts:76:  Promise<SQLite.SQLiteDatabase> | null = null;
+  mobile\database\revisiones.ts:77:
+  mobile\database\revisiones.ts:78:async function iniciarBD() {
+  mobile\database\revisiones.ts:79:  // La tabla de inspecciones debe existir
+  mobile\database\revisiones.ts:80:  // antes de crear referencias hacia ella.
+  mobile\database\revisiones.ts:81:  await listarInspeccionesLocales();
+  mobile\database\revisiones.ts:82:
+> mobile\database\revisiones.ts:83:  const db = await SQLite.openDatabaseAsync(
+  mobile\database\revisiones.ts:84:    'colmenas.db'
+  mobile\database\revisiones.ts:85:  );
+  mobile\database\revisiones.ts:86:
+  mobile\database\revisiones.ts:87:  await db.execAsync(`
+  mobile\database\revisiones.ts:89:    PRAGMA journal_mode = WAL;
+  mobile\database\revisiones.ts:90:
+> mobile\database\revisiones.ts:91:    CREATE TABLE IF NOT EXISTS revisiones_locales (
+  mobile\database\revisiones.ts:92:      id INTEGER PRIMARY KEY AUTOINCREMENT,
+  mobile\database\revisiones.ts:93:
+  mobile\database\revisiones.ts:94:      id_cliente TEXT NOT NULL UNIQUE,
+  mobile\database\revisiones.ts:95:      servidor_id INTEGER,
+  mobile\database\revisiones.ts:112:    );
+  mobile\database\revisiones.ts:113:
+> mobile\database\revisiones.ts:114:    CREATE TABLE IF NOT EXISTS revision_colmenas_locales (
+  mobile\database\revisiones.ts:115:      id INTEGER PRIMARY KEY AUTOINCREMENT,
+  mobile\database\revisiones.ts:116:
+  mobile\database\revisiones.ts:117:      revision_local_id INTEGER NOT NULL
+  mobile\database\revisiones.ts:118:        REFERENCES revisiones_locales(id),
+  mobile\database\revisiones.ts:193:async function obtenerUsuarioId():
+  mobile\database\revisiones.ts:194:  Promise<number> {
+> mobile\database\revisiones.ts:195:  const sesion = await leerSesionGuardada();
+  mobile\database\revisiones.ts:196:
+  mobile\database\revisiones.ts:197:  if (!sesion) {
+  mobile\database\revisiones.ts:198:    throw new Error(
+  mobile\database\revisiones.ts:199:      'Debes iniciar sesión para trabajar con revisiones oficiales.'
+  mobile\database\revisiones.ts:202:
+  mobile\database\revisiones.ts:203:  if (
+> mobile\database\revisiones.ts:204:    !Number.isSafeInteger(sesion.usuario.id) ||
+> mobile\database\revisiones.ts:205:    sesion.usuario.id <= 0
+  mobile\database\revisiones.ts:206:  ) {
+  mobile\database\revisiones.ts:207:    throw new Error(
+  mobile\database\revisiones.ts:208:      'La sesión no tiene un usuario válido.'
+  mobile\database\revisiones.ts:209:    );
+  mobile\database\revisiones.ts:216:  // El token sí se validará al sincronizar.
+  mobile\database\revisiones.ts:217:
+> mobile\database\revisiones.ts:218:  return sesion.usuario.id;
+  mobile\database\revisiones.ts:219:}
+  mobile\database\revisiones.ts:220:
+  mobile\database\revisiones.ts:221:// ==========================================
+  mobile\database\revisiones.ts:222:// VALIDAR IDENTIFICADORES
+  mobile\database\revisiones.ts:427:export async function listarRevisionesLocales():
+  mobile\database\revisiones.ts:428:  Promise<RevisionGuardada[]> {
+> mobile\database\revisiones.ts:429:  const sesion = await leerSesionGuardada();
+  mobile\database\revisiones.ts:430:
+  mobile\database\revisiones.ts:431:  // No mostrar registros de otro usuario.
+  mobile\database\revisiones.ts:432:  if (!sesion) {
+  mobile\database\revisiones.ts:433:    return [];
+  mobile\database\revisiones.ts:441:     WHERE usuario_local_id = ?
+  mobile\database\revisiones.ts:442:     ORDER BY id DESC`,
+> mobile\database\revisiones.ts:443:    [sesion.usuario.id]
+  mobile\database\revisiones.ts:444:  );
+  mobile\database\revisiones.ts:445:}
+  mobile\database\revisiones.ts:446:
+  mobile\database\revisiones.ts:447:// ==========================================
+  mobile\database\revisiones.ts:607://
+  mobile\database\revisiones.ts:608:// Solo marca REVISADA cuando ya existe
+> mobile\database\revisiones.ts:609:// una inspección real en SQLite.
+  mobile\database\revisiones.ts:610:// Nunca inventa una inspección.
+  mobile\database\revisiones.ts:611:// ==========================================
+  mobile\database\revisiones.ts:612:
+  mobile\database\revisiones.ts:613:export async function vincularInspeccionARevision(
+  mobile\database\tratamientos.ts:1:
+> mobile\database\tratamientos.ts:2:import * as SQLite from 'expo-sqlite';
+  mobile\database\tratamientos.ts:3:
+> mobile\database\tratamientos.ts:4:import { leerSesionGuardada } from '../api/auth';
+  mobile\database\tratamientos.ts:5:import { leerCatalogoLocal } from './catalogo';
+  mobile\database\tratamientos.ts:6:import {
+  mobile\database\tratamientos.ts:7:  crearIdCliente,
+  mobile\database\tratamientos.ts:8:  listarInspeccionesLocales,
+  mobile\database\tratamientos.ts:306:
+  mobile\database\tratamientos.ts:307:let conexion:
+> mobile\database\tratamientos.ts:308:  Promise<SQLite.SQLiteDatabase> | null = null;
+  mobile\database\tratamientos.ts:309:
+  mobile\database\tratamientos.ts:310:async function iniciarBD() {
+> mobile\database\tratamientos.ts:311:  const db = await SQLite.openDatabaseAsync('colmenas.db');
+  mobile\database\tratamientos.ts:312:
+  mobile\database\tratamientos.ts:313:  await db.execAsync(`
+  mobile\database\tratamientos.ts:314:    PRAGMA journal_mode = WAL;
+  mobile\database\tratamientos.ts:315:
+> mobile\database\tratamientos.ts:316:    CREATE TABLE IF NOT EXISTS tratamientos_locales (
+  mobile\database\tratamientos.ts:317:      id INTEGER PRIMARY KEY AUTOINCREMENT,
+  mobile\database\tratamientos.ts:318:      codigo_qr TEXT NOT NULL,
+  mobile\database\tratamientos.ts:319:      inspeccion_local_id INTEGER,
+  mobile\database\tratamientos.ts:320:      tipo_tratamiento TEXT NOT NULL,
+  mobile\database\tratamientos.ts:423:
+  mobile\database\tratamientos.ts:424:async function validarReferencias(
+> mobile\database\tratamientos.ts:425:  db: SQLite.SQLiteDatabase,
+  mobile\database\tratamientos.ts:426:  datos: DatosTratamiento
+  mobile\database\tratamientos.ts:427:): Promise<number> {
+> mobile\database\tratamientos.ts:428:  const sesion = await leerSesionGuardada();
+  mobile\database\tratamientos.ts:429:
+  mobile\database\tratamientos.ts:430:  if (!sesion) {
+  mobile\database\tratamientos.ts:431:    throw new Error(
+  mobile\database\tratamientos.ts:432:      'Debes iniciar sesión para registrar tratamientos oficiales.'
+  mobile\database\tratamientos.ts:435:
+  mobile\database\tratamientos.ts:436:  const catalogo = await leerCatalogoLocal(
+> mobile\database\tratamientos.ts:437:    sesion.usuario.id
+  mobile\database\tratamientos.ts:438:  );
+  mobile\database\tratamientos.ts:439:
+  mobile\database\tratamientos.ts:440:  if (!catalogo) {
+  mobile\database\tratamientos.ts:441:    throw new Error(
+  mobile\database\tratamientos.ts:473:        datos.inspeccionLocalId,
+  mobile\database\tratamientos.ts:474:        codigo,
+> mobile\database\tratamientos.ts:475:        sesion.usuario.id,
+  mobile\database\tratamientos.ts:476:      ]
+  mobile\database\tratamientos.ts:477:    );
+  mobile\database\tratamientos.ts:478:
+  mobile\database\tratamientos.ts:479:    if (!inspeccion) {
+  mobile\database\tratamientos.ts:484:  }
+  mobile\database\tratamientos.ts:485:
+> mobile\database\tratamientos.ts:486:  return sesion.usuario.id;
+  mobile\database\tratamientos.ts:487:}
+  mobile\database\tratamientos.ts:488:
+  mobile\database\tratamientos.ts:489:// ==========================================
+  mobile\database\tratamientos.ts:490:// GUARDAR
+  mobile\database\tratamientos.ts:688:  }
+  mobile\database\tratamientos.ts:689:
+> mobile\database\tratamientos.ts:690:  const sesion = await leerSesionGuardada();
+  mobile\database\tratamientos.ts:691:
+  mobile\database\tratamientos.ts:692:  if (
+  mobile\database\tratamientos.ts:693:    !sesion ||
+> mobile\database\tratamientos.ts:694:    actual.usuario_local_id !== sesion.usuario.id
+  mobile\database\tratamientos.ts:695:  ) {
+  mobile\database\tratamientos.ts:696:    throw new Error(
+  mobile\database\tratamientos.ts:697:      'No puedes modificar un tratamiento de otro usuario.'
+  mobile\database\tratamientos.ts:698:    );
+  mobile\database\tratamientos.ts:733:      new Date().toISOString(),
+  mobile\database\tratamientos.ts:734:      id,
+> mobile\database\tratamientos.ts:735:      sesion.usuario.id,
+  mobile\database\tratamientos.ts:736:    ]
+  mobile\database\tratamientos.ts:737:  );
+  mobile\database\tratamientos.ts:738:
+  mobile\database\tratamientos.ts:739:  if (resultado.changes !== 1) {
+  mobile\sincronizacion\colaRevisiones.ts:1:
+> mobile\sincronizacion\colaRevisiones.ts:2:import * as SQLite from 'expo-sqlite';
+  mobile\sincronizacion\colaRevisiones.ts:3:
+  mobile\sincronizacion\colaRevisiones.ts:4:import {
+> mobile\sincronizacion\colaRevisiones.ts:5:  leerSesionGuardada,
+  mobile\sincronizacion\colaRevisiones.ts:6:} from '../api/auth';
+  mobile\sincronizacion\colaRevisiones.ts:7:
+  mobile\sincronizacion\colaRevisiones.ts:8:import {
+  mobile\sincronizacion\colaRevisiones.ts:9:  generarPlanRevisiones,
+  mobile\sincronizacion\colaRevisiones.ts:77:
+  mobile\sincronizacion\colaRevisiones.ts:78:let conexion:
+> mobile\sincronizacion\colaRevisiones.ts:79:  Promise<SQLite.SQLiteDatabase> | null =
+  mobile\sincronizacion\colaRevisiones.ts:80:  null;
+  mobile\sincronizacion\colaRevisiones.ts:81:
+  mobile\sincronizacion\colaRevisiones.ts:82:async function inicializarBD():
+> mobile\sincronizacion\colaRevisiones.ts:83:  Promise<SQLite.SQLiteDatabase> {
+  mobile\sincronizacion\colaRevisiones.ts:84:
+  mobile\sincronizacion\colaRevisiones.ts:85:  const db =
+> mobile\sincronizacion\colaRevisiones.ts:86:    await SQLite.openDatabaseAsync(
+  mobile\sincronizacion\colaRevisiones.ts:87:      'colmenas.db'
+  mobile\sincronizacion\colaRevisiones.ts:88:    );
+  mobile\sincronizacion\colaRevisiones.ts:89:
+  mobile\sincronizacion\colaRevisiones.ts:90:  await db.execAsync(`
+  mobile\sincronizacion\colaRevisiones.ts:91:    PRAGMA journal_mode = WAL;
+  mobile\sincronizacion\colaRevisiones.ts:92:
+> mobile\sincronizacion\colaRevisiones.ts:93:    CREATE TABLE IF NOT EXISTS
+  mobile\sincronizacion\colaRevisiones.ts:94:      cola_revision_operaciones (
+  mobile\sincronizacion\colaRevisiones.ts:95:        clave TEXT PRIMARY KEY,
+  mobile\sincronizacion\colaRevisiones.ts:96:
+  mobile\sincronizacion\colaRevisiones.ts:97:        usuario_local_id INTEGER NOT NULL,
+  mobile\sincronizacion\colaRevisiones.ts:158:
+  mobile\sincronizacion\colaRevisiones.ts:159:function obtenerBD():
+> mobile\sincronizacion\colaRevisiones.ts:160:  Promise<SQLite.SQLiteDatabase> {
+  mobile\sincronizacion\colaRevisiones.ts:161:
+  mobile\sincronizacion\colaRevisiones.ts:162:  if (!conexion) {
+  mobile\sincronizacion\colaRevisiones.ts:163:    conexion = inicializarBD().catch(
+  mobile\sincronizacion\colaRevisiones.ts:164:      error => {
+  mobile\sincronizacion\colaRevisiones.ts:180:
+  mobile\sincronizacion\colaRevisiones.ts:181:  const sesion =
+> mobile\sincronizacion\colaRevisiones.ts:182:    await leerSesionGuardada();
+  mobile\sincronizacion\colaRevisiones.ts:183:
+  mobile\sincronizacion\colaRevisiones.ts:184:  if (!sesion) {
+  mobile\sincronizacion\colaRevisiones.ts:185:    return null;
+  mobile\sincronizacion\colaRevisiones.ts:186:  }
+  mobile\sincronizacion\colaRevisiones.ts:187:
+> mobile\sincronizacion\colaRevisiones.ts:188:  const id = sesion.usuario.id;
+  mobile\sincronizacion\colaRevisiones.ts:189:
+  mobile\sincronizacion\colaRevisiones.ts:190:  if (
+  mobile\sincronizacion\colaRevisiones.ts:191:    !Number.isSafeInteger(id) ||
+  mobile\sincronizacion\colaRevisiones.ts:192:    id <= 0
+  mobile\sincronizacion\colaRevisiones.ts:355:  }
+  mobile\sincronizacion\colaRevisiones.ts:356:
+> mobile\sincronizacion\colaRevisiones.ts:357:  // 2. Generar plan desde SQLite.
+  mobile\sincronizacion\colaRevisiones.ts:358:  const plan =
+  mobile\sincronizacion\colaRevisiones.ts:359:    await generarPlanRevisiones();
+  mobile\sincronizacion\colaRevisiones.ts:360:
+  mobile\sincronizacion\colaRevisiones.ts:361:  const db = await obtenerBD();
+  mobile\sincronizacion\controlador.ts:12:
+  mobile\sincronizacion\controlador.ts:13:import {
+> mobile\sincronizacion\controlador.ts:14:  leerSesionGuardada,
+  mobile\sincronizacion\controlador.ts:15:  tokenVigente,
+  mobile\sincronizacion\controlador.ts:16:} from '../api/auth';
+  mobile\sincronizacion\controlador.ts:17:
+  mobile\sincronizacion\controlador.ts:18:import {
+  mobile\sincronizacion\controlador.ts:130:        estado: 'SIN_INTERNET',
+  mobile\sincronizacion\controlador.ts:131:        mensaje:
+> mobile\sincronizacion\controlador.ts:132:          'Sin conexión. Los datos permanecen en SQLite.',
+  mobile\sincronizacion\controlador.ts:133:      };
+  mobile\sincronizacion\controlador.ts:134:
+  mobile\sincronizacion\controlador.ts:135:    }
+  mobile\sincronizacion\controlador.ts:136:
+  mobile\sincronizacion\controlador.ts:139:    // ======================================
+  mobile\sincronizacion\controlador.ts:140:
+> mobile\sincronizacion\controlador.ts:141:    const sesion = await leerSesionGuardada();
+  mobile\sincronizacion\controlador.ts:142:
+  mobile\sincronizacion\controlador.ts:143:    if (!sesion) {
+  mobile\sincronizacion\controlador.ts:144:
+  mobile\sincronizacion\controlador.ts:145:      return {
+  mobile\sincronizacion\controlador.ts:170:
+  mobile\sincronizacion\controlador.ts:171:    const catalogo = await leerCatalogoLocal(
+> mobile\sincronizacion\controlador.ts:172:      sesion.usuario.id
+  mobile\sincronizacion\controlador.ts:173:    );
+  mobile\sincronizacion\controlador.ts:174:
+  mobile\sincronizacion\controlador.ts:175:    if (!catalogo) {
+  mobile\sincronizacion\controlador.ts:176:
+  mobile\sincronizacion\controlador.ts:219:
+  mobile\sincronizacion\controlador.ts:220:    // ======================================
+> mobile\sincronizacion\controlador.ts:221:    // 6. LEER SQLITE
+  mobile\sincronizacion\controlador.ts:222:    // ======================================
+  mobile\sincronizacion\controlador.ts:223:
+  mobile\sincronizacion\controlador.ts:224:    // Se inicializan las tablas en orden.
+  mobile\sincronizacion\controlador.ts:225:
+  mobile\sincronizacion\controlador.ts:240:          inspeccion.servidor_id === null &&
+  mobile\sincronizacion\controlador.ts:241:          inspeccion.usuario_local_id ===
+> mobile\sincronizacion\controlador.ts:242:            sesion.usuario.id
+  mobile\sincronizacion\controlador.ts:243:      );
+  mobile\sincronizacion\controlador.ts:244:
+  mobile\sincronizacion\controlador.ts:245:    // ======================================
+  mobile\sincronizacion\controlador.ts:246:    // 8. PENDIENTES DE TRATAMIENTOS
+  mobile\sincronizacion\controlador.ts:253:          tratamiento.servidor_id === null &&
+  mobile\sincronizacion\controlador.ts:254:          tratamiento.usuario_local_id ===
+> mobile\sincronizacion\controlador.ts:255:            sesion.usuario.id
+  mobile\sincronizacion\controlador.ts:256:      );
+  mobile\sincronizacion\controlador.ts:257:
+  mobile\sincronizacion\controlador.ts:258:    const totalPendientes =
+  mobile\sincronizacion\controlador.ts:259:      pendientesInspecciones.length +
+  mobile\sincronizacion\controlador.ts:261:
+  mobile\sincronizacion\controlador.ts:262:    // ======================================
+> mobile\sincronizacion\controlador.ts:263:    // 9. DIAGNÓSTICO SQLITE
+  mobile\sincronizacion\controlador.ts:264:    // ======================================
+  mobile\sincronizacion\controlador.ts:265:
+  mobile\sincronizacion\controlador.ts:266:    console.info(
+  mobile\sincronizacion\controlador.ts:267:      '[Colmenares] DIAGNÓSTICO DE SINCRONIZACIÓN:',
+  mobile\sincronizacion\controlador.ts:268:      {
+> mobile\sincronizacion\controlador.ts:269:        usuarioSesion: sesion.usuario.id,
+  mobile\sincronizacion\controlador.ts:270:
+  mobile\sincronizacion\controlador.ts:271:        inspecciones: {
+  mobile\sincronizacion\controlador.ts:272:          total: inspecciones.length,
+  mobile\sincronizacion\controlador.ts:273:          pendientes: pendientesInspecciones.length,
+  mobile\sincronizacion\inspecciones.ts:1:
+> mobile\sincronizacion\inspecciones.ts:2:import * as SQLite from 'expo-sqlite';
+  mobile\sincronizacion\inspecciones.ts:3:
+  mobile\sincronizacion\inspecciones.ts:4:import {
+> mobile\sincronizacion\inspecciones.ts:5:  leerSesionGuardada,
+  mobile\sincronizacion\inspecciones.ts:6:  tokenVigente,
+  mobile\sincronizacion\inspecciones.ts:7:} from '../api/auth';
+  mobile\sincronizacion\inspecciones.ts:8:
+  mobile\sincronizacion\inspecciones.ts:9:import {
+  mobile\sincronizacion\inspecciones.ts:151:  if (valor !== 0 && valor !== 1) {
+  mobile\sincronizacion\inspecciones.ts:152:    throw new Error(
+> mobile\sincronizacion\inspecciones.ts:153:      'Se encontró un valor booleano inválido en SQLite.'
+  mobile\sincronizacion\inspecciones.ts:154:    );
+  mobile\sincronizacion\inspecciones.ts:155:  }
+  mobile\sincronizacion\inspecciones.ts:156:
+  mobile\sincronizacion\inspecciones.ts:157:  return valor === 1;
+  mobile\sincronizacion\inspecciones.ts:284:
+  mobile\sincronizacion\inspecciones.ts:285:async function leerDetalle(
+> mobile\sincronizacion\inspecciones.ts:286:  db: SQLite.SQLiteDatabase,
+  mobile\sincronizacion\inspecciones.ts:287:  inspeccionId: number
+  mobile\sincronizacion\inspecciones.ts:288:): Promise<{
+  mobile\sincronizacion\inspecciones.ts:289:  detalle: DetalleLocal;
+  mobile\sincronizacion\inspecciones.ts:290:  marcos: MarcoLocal[];
+  mobile\sincronizacion\inspecciones.ts:293:    await db.getFirstAsync<{ name: string }>(
+  mobile\sincronizacion\inspecciones.ts:294:      `SELECT name
+> mobile\sincronizacion\inspecciones.ts:295:       FROM sqlite_master
+  mobile\sincronizacion\inspecciones.ts:296:       WHERE type = 'table'
+  mobile\sincronizacion\inspecciones.ts:297:         AND name = 'inspecciones_detalle_local'`
+  mobile\sincronizacion\inspecciones.ts:298:    );
+  mobile\sincronizacion\inspecciones.ts:299:
+  mobile\sincronizacion\inspecciones.ts:301:    await db.getFirstAsync<{ name: string }>(
+  mobile\sincronizacion\inspecciones.ts:302:      `SELECT name
+> mobile\sincronizacion\inspecciones.ts:303:       FROM sqlite_master
+  mobile\sincronizacion\inspecciones.ts:304:       WHERE type = 'table'
+  mobile\sincronizacion\inspecciones.ts:305:         AND name = 'marcos_inspeccion_local'`
+  mobile\sincronizacion\inspecciones.ts:306:    );
+  mobile\sincronizacion\inspecciones.ts:307:
+  mobile\sincronizacion\inspecciones.ts:360:
+  mobile\sincronizacion\inspecciones.ts:361:async function prepararInspeccion(
+> mobile\sincronizacion\inspecciones.ts:362:  db: SQLite.SQLiteDatabase,
+  mobile\sincronizacion\inspecciones.ts:363:  inspeccion: InspeccionGuardada,
+  mobile\sincronizacion\inspecciones.ts:364:  usuarioId: number,
+  mobile\sincronizacion\inspecciones.ts:365:  catalogo: Catalogo
+  mobile\sincronizacion\inspecciones.ts:366:): Promise<InspeccionParaAPI> {
+  mobile\sincronizacion\inspecciones.ts:574:
+  mobile\sincronizacion\inspecciones.ts:575:  try {
+> mobile\sincronizacion\inspecciones.ts:576:    const sesion = await leerSesionGuardada();
+  mobile\sincronizacion\inspecciones.ts:577:
+  mobile\sincronizacion\inspecciones.ts:578:    if (!sesion || !tokenVigente(sesion)) {
+  mobile\sincronizacion\inspecciones.ts:579:      throw new Error(
+  mobile\sincronizacion\inspecciones.ts:580:        'No existe una sesión válida para sincronizar.'
+  mobile\sincronizacion\inspecciones.ts:583:
+  mobile\sincronizacion\inspecciones.ts:584:    const catalogo = await leerCatalogoLocal(
+> mobile\sincronizacion\inspecciones.ts:585:      sesion.usuario.id
+  mobile\sincronizacion\inspecciones.ts:586:    );
+  mobile\sincronizacion\inspecciones.ts:587:
+  mobile\sincronizacion\inspecciones.ts:588:    if (!catalogo) {
+  mobile\sincronizacion\inspecciones.ts:589:      throw new Error(
+  mobile\sincronizacion\inspecciones.ts:592:    }
+  mobile\sincronizacion\inspecciones.ts:593:
+> mobile\sincronizacion\inspecciones.ts:594:    // Inicializar migraciones de SQLite.
+  mobile\sincronizacion\inspecciones.ts:595:    await listarInspeccionesLocales();
+  mobile\sincronizacion\inspecciones.ts:596:
+> mobile\sincronizacion\inspecciones.ts:597:    const db = await SQLite.openDatabaseAsync(
+  mobile\sincronizacion\inspecciones.ts:598:      'colmenas.db'
+  mobile\sincronizacion\inspecciones.ts:599:    );
+  mobile\sincronizacion\inspecciones.ts:600:
+  mobile\sincronizacion\inspecciones.ts:601:    // Solo registros pendientes del usuario.
+  mobile\sincronizacion\inspecciones.ts:610:           AND usuario_local_id = ?
+  mobile\sincronizacion\inspecciones.ts:611:         ORDER BY id ASC`,
+> mobile\sincronizacion\inspecciones.ts:612:        [sesion.usuario.id]
+  mobile\sincronizacion\inspecciones.ts:613:      );
+  mobile\sincronizacion\inspecciones.ts:614:
+  mobile\sincronizacion\inspecciones.ts:615:    for (const inspeccion of pendientes) {
+  mobile\sincronizacion\inspecciones.ts:616:      // Volver a comprobar el vencimiento
+  mobile\sincronizacion\inspecciones.ts:631:          db,
+  mobile\sincronizacion\inspecciones.ts:632:          inspeccion,
+> mobile\sincronizacion\inspecciones.ts:633:          sesion.usuario.id,
+  mobile\sincronizacion\inspecciones.ts:634:          catalogo
+  mobile\sincronizacion\inspecciones.ts:635:        );
+  mobile\sincronizacion\inspecciones.ts:636:
+  mobile\sincronizacion\inspecciones.ts:637:        // El backend admite id_cliente para
+  mobile\sincronizacion\inspecciones.ts:657:            normalizarCodigo(inspeccion.id_cliente) ||
+  mobile\sincronizacion\inspecciones.ts:658:          respuesta.colmena_id !== datos.colmena_id ||
+> mobile\sincronizacion\inspecciones.ts:659:          respuesta.usuario_id !== sesion.usuario.id
+  mobile\sincronizacion\inspecciones.ts:660:        ) {
+  mobile\sincronizacion\inspecciones.ts:661:          throw new Error(
+  mobile\sincronizacion\inspecciones.ts:662:            'La respuesta del servidor no coincide con la inspección enviada.'
+  mobile\sincronizacion\inspecciones.ts:663:          );
+  mobile\sincronizacion\inspecciones.ts:677:            inspeccion.id,
+  mobile\sincronizacion\inspecciones.ts:678:            inspeccion.id_cliente,
+> mobile\sincronizacion\inspecciones.ts:679:            sesion.usuario.id,
+  mobile\sincronizacion\inspecciones.ts:680:          ]
+  mobile\sincronizacion\inspecciones.ts:681:        );
+  mobile\sincronizacion\inspecciones.ts:682:
+  mobile\sincronizacion\inspecciones.ts:683:        if (cambio.changes !== 1) {
+  mobile\sincronizacion\inspecciones.ts:684:          throw new Error(
+> mobile\sincronizacion\inspecciones.ts:685:            'El servidor confirmó el registro, pero SQLite no pudo marcarlo como sincronizado.'
+  mobile\sincronizacion\inspecciones.ts:686:          );
+  mobile\sincronizacion\inspecciones.ts:687:        }
+  mobile\sincronizacion\inspecciones.ts:688:
+  mobile\sincronizacion\inspecciones.ts:689:        resultado.sincronizadas++;
+  mobile\sincronizacion\ordenEjecucionRevisiones.ts:1:
+  mobile\sincronizacion\ordenEjecucionRevisiones.ts:2:import {
+> mobile\sincronizacion\ordenEjecucionRevisiones.ts:3:  leerSesionGuardada,
+  mobile\sincronizacion\ordenEjecucionRevisiones.ts:4:  tokenVigente,
+  mobile\sincronizacion\ordenEjecucionRevisiones.ts:5:} from '../api/auth';
+  mobile\sincronizacion\ordenEjecucionRevisiones.ts:6:
+  mobile\sincronizacion\ordenEjecucionRevisiones.ts:7:import {
+  mobile\sincronizacion\ordenEjecucionRevisiones.ts:30://
+  mobile\sincronizacion\ordenEjecucionRevisiones.ts:31:// - No envía solicitudes HTTP.
+> mobile\sincronizacion\ordenEjecucionRevisiones.ts:32:// - No cambia registros de SQLite.
+  mobile\sincronizacion\ordenEjecucionRevisiones.ts:33:// - No marca operaciones como confirmadas.
+  mobile\sincronizacion\ordenEjecucionRevisiones.ts:34:// - No elimina información.
+  mobile\sincronizacion\ordenEjecucionRevisiones.ts:35:// - No activa la sincronización real.
+  mobile\sincronizacion\ordenEjecucionRevisiones.ts:36://
+  mobile\sincronizacion\ordenEjecucionRevisiones.ts:152:
+  mobile\sincronizacion\ordenEjecucionRevisiones.ts:153:  const sesion =
+> mobile\sincronizacion\ordenEjecucionRevisiones.ts:154:    await leerSesionGuardada();
+  mobile\sincronizacion\ordenEjecucionRevisiones.ts:155:
+  mobile\sincronizacion\ordenEjecucionRevisiones.ts:156:  if (!sesion) {
+  mobile\sincronizacion\ordenEjecucionRevisiones.ts:157:    return construirResultado(
+  mobile\sincronizacion\ordenEjecucionRevisiones.ts:158:      'SIN_SESION',
+  mobile\sincronizacion\ordenEjecucionRevisiones.ts:163:
+  mobile\sincronizacion\ordenEjecucionRevisiones.ts:164:  const usuarioId =
+> mobile\sincronizacion\ordenEjecucionRevisiones.ts:165:    sesion.usuario.id;
+  mobile\sincronizacion\ordenEjecucionRevisiones.ts:166:
+  mobile\sincronizacion\ordenEjecucionRevisiones.ts:167:  if (!idValido(usuarioId)) {
+  mobile\sincronizacion\ordenEjecucionRevisiones.ts:168:    return construirResultado(
+  mobile\sincronizacion\ordenEjecucionRevisiones.ts:169:      'BLOQUEADA',
+  mobile\sincronizacion\ordenEjecucionRevisiones.ts:385:        return construirResultado(
+  mobile\sincronizacion\ordenEjecucionRevisiones.ts:386:          'BLOQUEADA',
+> mobile\sincronizacion\ordenEjecucionRevisiones.ts:387:          `El UUID de la sesión ${revisionId} no coincide con SQLite.`,
+  mobile\sincronizacion\ordenEjecucionRevisiones.ts:388:          operaciones
+  mobile\sincronizacion\ordenEjecucionRevisiones.ts:389:        );
+  mobile\sincronizacion\ordenEjecucionRevisiones.ts:390:      }
+  mobile\sincronizacion\ordenEjecucionRevisiones.ts:391:
+  mobile\sincronizacion\ordenEjecucionRevisiones.ts:653:      // El ID remoto se obtiene de
+  mobile\sincronizacion\ordenEjecucionRevisiones.ts:654:      // la revisión oficial guardada
+> mobile\sincronizacion\ordenEjecucionRevisiones.ts:655:      // en SQLite.
+  mobile\sincronizacion\ordenEjecucionRevisiones.ts:656:      //
+  mobile\sincronizacion\ordenEjecucionRevisiones.ts:657:      // Esto NO cambia la cola.
+  mobile\sincronizacion\ordenEjecucionRevisiones.ts:658:
+  mobile\sincronizacion\ordenEjecucionRevisiones.ts:659:      return construirResultado(
+  mobile\sincronizacion\planificadorRevisiones.ts:15:// ==========================================
+  mobile\sincronizacion\planificadorRevisiones.ts:16:
+> mobile\sincronizacion\planificadorRevisiones.ts:17:// Este archivo SOLO consulta SQLite.
+  mobile\sincronizacion\planificadorRevisiones.ts:18://
+  mobile\sincronizacion\planificadorRevisiones.ts:19:// NO realiza peticiones HTTP.
+  mobile\sincronizacion\planificadorRevisiones.ts:20:// NO cambia estados.
+  mobile\sincronizacion\planificadorRevisiones.ts:21:// NO sincroniza registros.
+  mobile\sincronizacion\planificadorRevisiones.ts:88:    await listarRevisionesLocales();
+  mobile\sincronizacion\planificadorRevisiones.ts:89:
+> mobile\sincronizacion\planificadorRevisiones.ts:90:  // 2. Consultar inspecciones SQLite.
+  mobile\sincronizacion\planificadorRevisiones.ts:91:
+  mobile\sincronizacion\planificadorRevisiones.ts:92:  const inspecciones =
+  mobile\sincronizacion\planificadorRevisiones.ts:93:    await listarInspeccionesLocales();
+  mobile\sincronizacion\planificadorRevisiones.ts:94:
+  mobile\sincronizacion\planificadorRevisiones.ts:413:      // Nunca finalizar automáticamente
+  mobile\sincronizacion\planificadorRevisiones.ts:414:      // una sesión que sigue EN_CURSO
+> mobile\sincronizacion\planificadorRevisiones.ts:415:      // en SQLite.
+  mobile\sincronizacion\planificadorRevisiones.ts:416:
+  mobile\sincronizacion\planificadorRevisiones.ts:417:      if (
+  mobile\sincronizacion\planificadorRevisiones.ts:418:        revision.estado ===
+  mobile\sincronizacion\planificadorRevisiones.ts:419:        'FINALIZADA'
+  mobile\sincronizacion\planRevisiones.ts:1:
+  mobile\sincronizacion\planRevisiones.ts:2:import {
+> mobile\sincronizacion\planRevisiones.ts:3:  leerSesionGuardada,
+  mobile\sincronizacion\planRevisiones.ts:4:} from '../api/auth';
+  mobile\sincronizacion\planRevisiones.ts:5:
+  mobile\sincronizacion\planRevisiones.ts:6:import {
+  mobile\sincronizacion\planRevisiones.ts:7:  listarInspeccionesLocales,
+  mobile\sincronizacion\planRevisiones.ts:21://
+  mobile\sincronizacion\planRevisiones.ts:22:// Este archivo:
+> mobile\sincronizacion\planRevisiones.ts:23:// - Consulta SQLite.
+  mobile\sincronizacion\planRevisiones.ts:24:// - Ordena operaciones pendientes.
+  mobile\sincronizacion\planRevisiones.ts:25:// - Detecta inconsistencias.
+  mobile\sincronizacion\planRevisiones.ts:26:// - No envía datos a FastAPI.
+  mobile\sincronizacion\planRevisiones.ts:27:// - No modifica registros.
+  mobile\sincronizacion\planRevisiones.ts:132:
+  mobile\sincronizacion\planRevisiones.ts:133:  const sesion =
+> mobile\sincronizacion\planRevisiones.ts:134:    await leerSesionGuardada();
+  mobile\sincronizacion\planRevisiones.ts:135:
+  mobile\sincronizacion\planRevisiones.ts:136:  if (!sesion) {
+  mobile\sincronizacion\planRevisiones.ts:137:    return {
+  mobile\sincronizacion\planRevisiones.ts:138:      estado: 'SIN_SESION',
+  mobile\sincronizacion\planRevisiones.ts:150:
+  mobile\sincronizacion\planRevisiones.ts:151:  const usuarioId =
+> mobile\sincronizacion\planRevisiones.ts:152:    sesion.usuario.id;
+  mobile\sincronizacion\planRevisiones.ts:153:
+  mobile\sincronizacion\planRevisiones.ts:154:  // ========================================
+> mobile\sincronizacion\planRevisiones.ts:155:  // 2. CONSULTAR SQLITE
+  mobile\sincronizacion\planRevisiones.ts:156:  // ========================================
+  mobile\sincronizacion\planRevisiones.ts:157:
+  mobile\sincronizacion\planRevisiones.ts:158:  const [
+  mobile\sincronizacion\planRevisiones.ts:159:    revisiones,
+> mobile\sincronizacion\tratamientos.ts:1:import * as SQLite from 'expo-sqlite';
+  mobile\sincronizacion\tratamientos.ts:2:
+  mobile\sincronizacion\tratamientos.ts:3:import {
+  mobile\sincronizacion\tratamientos.ts:4:  ErrorAPI,
+  mobile\sincronizacion\tratamientos.ts:5:  solicitarAPI,
+  mobile\sincronizacion\tratamientos.ts:7:
+  mobile\sincronizacion\tratamientos.ts:8:import {
+> mobile\sincronizacion\tratamientos.ts:9:  leerSesionGuardada,
+  mobile\sincronizacion\tratamientos.ts:10:  tokenVigente,
+  mobile\sincronizacion\tratamientos.ts:11:} from '../api/auth';
+  mobile\sincronizacion\tratamientos.ts:12:
+  mobile\sincronizacion\tratamientos.ts:13:import {
+  mobile\sincronizacion\tratamientos.ts:95:
+  mobile\sincronizacion\tratamientos.ts:96:async function prepararTratamiento(
+> mobile\sincronizacion\tratamientos.ts:97:  db: SQLite.SQLiteDatabase,
+  mobile\sincronizacion\tratamientos.ts:98:  registro: TratamientoGuardado,
+  mobile\sincronizacion\tratamientos.ts:99:  usuarioId: number,
+  mobile\sincronizacion\tratamientos.ts:100:  catalogo: Catalogo
+  mobile\sincronizacion\tratamientos.ts:101:): Promise<{
+  mobile\sincronizacion\tratamientos.ts:279:    // ----------------------------------------
+  mobile\sincronizacion\tratamientos.ts:280:
+> mobile\sincronizacion\tratamientos.ts:281:    const sesion = await leerSesionGuardada();
+  mobile\sincronizacion\tratamientos.ts:282:
+  mobile\sincronizacion\tratamientos.ts:283:    if (!sesion || !tokenVigente(sesion)) {
+  mobile\sincronizacion\tratamientos.ts:284:      throw new Error(
+  mobile\sincronizacion\tratamientos.ts:285:        'No existe una sesión válida para sincronizar.'
+  mobile\sincronizacion\tratamientos.ts:292:
+  mobile\sincronizacion\tratamientos.ts:293:    const catalogo = await leerCatalogoLocal(
+> mobile\sincronizacion\tratamientos.ts:294:      sesion.usuario.id
+  mobile\sincronizacion\tratamientos.ts:295:    );
+  mobile\sincronizacion\tratamientos.ts:296:
+  mobile\sincronizacion\tratamientos.ts:297:    if (!catalogo) {
+  mobile\sincronizacion\tratamientos.ts:298:      throw new Error(
+  mobile\sincronizacion\tratamientos.ts:302:
+  mobile\sincronizacion\tratamientos.ts:303:    // ----------------------------------------
+> mobile\sincronizacion\tratamientos.ts:304:    // 3. INICIALIZAR SQLITE
+  mobile\sincronizacion\tratamientos.ts:305:    // ----------------------------------------
+  mobile\sincronizacion\tratamientos.ts:306:
+  mobile\sincronizacion\tratamientos.ts:307:    await listarInspeccionesLocales();
+  mobile\sincronizacion\tratamientos.ts:308:
+  mobile\sincronizacion\tratamientos.ts:317:        registro.sincronizacion === 'PENDIENTE' &&
+  mobile\sincronizacion\tratamientos.ts:318:        registro.servidor_id === null &&
+> mobile\sincronizacion\tratamientos.ts:319:        registro.usuario_local_id === sesion.usuario.id
+  mobile\sincronizacion\tratamientos.ts:320:    );
+  mobile\sincronizacion\tratamientos.ts:321:
+  mobile\sincronizacion\tratamientos.ts:322:    if (pendientes.length === 0) {
+  mobile\sincronizacion\tratamientos.ts:323:      return resultado;
+  mobile\sincronizacion\tratamientos.ts:328:    // ----------------------------------------
+  mobile\sincronizacion\tratamientos.ts:329:
+> mobile\sincronizacion\tratamientos.ts:330:    const db = await SQLite.openDatabaseAsync(
+  mobile\sincronizacion\tratamientos.ts:331:      'colmenas.db'
+  mobile\sincronizacion\tratamientos.ts:332:    );
+  mobile\sincronizacion\tratamientos.ts:333:
+  mobile\sincronizacion\tratamientos.ts:334:    resultado.revisadas = pendientes.length;
+  mobile\sincronizacion\tratamientos.ts:363:          db,
+  mobile\sincronizacion\tratamientos.ts:364:          registro,
+> mobile\sincronizacion\tratamientos.ts:365:          sesion.usuario.id,
+  mobile\sincronizacion\tratamientos.ts:366:          catalogo
+  mobile\sincronizacion\tratamientos.ts:367:        );
+  mobile\sincronizacion\tratamientos.ts:368:
+  mobile\sincronizacion\tratamientos.ts:369:        // Si la inspección no llegó al servidor,
+  mobile\sincronizacion\tratamientos.ts:408:          respuesta.inspeccion_id !==
+  mobile\sincronizacion\tratamientos.ts:409:            preparado.datos.inspeccion_id ||
+> mobile\sincronizacion\tratamientos.ts:410:          respuesta.usuario_id !== sesion.usuario.id
+  mobile\sincronizacion\tratamientos.ts:411:        ) {
+  mobile\sincronizacion\tratamientos.ts:412:          throw new Error(
+  mobile\sincronizacion\tratamientos.ts:413:            'La respuesta de FastAPI no coincide con el tratamiento enviado.'
+  mobile\sincronizacion\tratamientos.ts:414:          );
+  mobile\sincronizacion\tratamientos.ts:416:
+  mobile\sincronizacion\tratamientos.ts:417:        // --------------------------------------
+> mobile\sincronizacion\tratamientos.ts:418:        // 6.4 ACTUALIZAR SQLITE
+  mobile\sincronizacion\tratamientos.ts:419:        // --------------------------------------
+  mobile\sincronizacion\tratamientos.ts:420:
+  mobile\sincronizacion\tratamientos.ts:421:        // Solo marcar como sincronizado después
+  mobile\sincronizacion\tratamientos.ts:422:        // de confirmar la respuesta del servidor.
+  mobile\sincronizacion\tratamientos.ts:437:            registro.id,
+  mobile\sincronizacion\tratamientos.ts:438:            registro.id_cliente,
+> mobile\sincronizacion\tratamientos.ts:439:            sesion.usuario.id,
+  mobile\sincronizacion\tratamientos.ts:440:          ]
+  mobile\sincronizacion\tratamientos.ts:441:        );
+  mobile\sincronizacion\tratamientos.ts:442:
+  mobile\sincronizacion\tratamientos.ts:443:        if (cambio.changes !== 1) {
+  mobile\sincronizacion\tratamientos.ts:444:          throw new Error(
+> mobile\sincronizacion\tratamientos.ts:445:            'FastAPI confirmó el registro, pero SQLite no pudo actualizar su estado.'
+  mobile\sincronizacion\tratamientos.ts:446:          );
+  mobile\sincronizacion\tratamientos.ts:447:        }
+  mobile\sincronizacion\tratamientos.ts:448:
+  mobile\sincronizacion\tratamientos.ts:449:        resultado.sincronizadas++;
+
+
+

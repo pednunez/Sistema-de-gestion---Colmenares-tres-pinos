@@ -1,4 +1,5 @@
 
+
 import * as SQLite from 'expo-sqlite';
 
 import {
@@ -225,23 +226,24 @@ export async function listarDestinosLocales(
 
   const origenNormalizado = normalizarQR(origen);
 
-  const existeOrigen = catalogo.colmenas.some(
+  const colmenaOrigen = catalogo.colmenas.find(
     colmena =>
       normalizarQR(colmena.codigo_qr) ===
       origenNormalizado
   );
 
-  if (!existeOrigen) {
+  if (!colmenaOrigen) {
     throw new Error(
       'La colmena de origen no existe en el catálogo oficial.'
     );
   }
 
+  // La web limita las transferencias a colmenas del mismo apiario.
   return catalogo.colmenas
     .filter(
       colmena =>
-        normalizarQR(colmena.codigo_qr) !==
-        origenNormalizado
+        colmena.apiario_id === colmenaOrigen.apiario_id &&
+        normalizarQR(colmena.codigo_qr) !== origenNormalizado
     )
     .map(colmena => colmena.codigo_qr);
 }
@@ -658,8 +660,8 @@ export async function guardarInspeccionAvanzada(
   const destinosOficiales = catalogo.colmenas
     .filter(
       colmena =>
-        normalizarQR(colmena.codigo_qr) !==
-        origenQR
+        colmena.apiario_id === origen.apiario_id &&
+        normalizarQR(colmena.codigo_qr) !== origenQR
     )
     .map(colmena => colmena.codigo_qr);
 
@@ -820,6 +822,106 @@ export async function guardarInspeccionAvanzada(
 // ==========================================
 // CONSULTAR TRANSFERENCIAS PREPARADAS
 // ==========================================
+
+export type InspeccionDashboardLocal = {
+  id: number;
+  servidor_id: number | null;
+  codigo_qr: string;
+  fecha_local: string;
+  estado: string;
+  marcos_totales: number;
+  marcos_cria: number;
+  marcos_miel: number;
+  reina: string;
+  observaciones: string;
+  estado_general: string | null;
+  reina_observada: number | null;
+  presencia_cria: number | null;
+  postura: number | null;
+  nivel_poblacion: string | null;
+  reservas_alimento: string | null;
+  miel: string | null;
+  alimentacion_suministrada: string;
+  signos_enfermedad: number | null;
+  enfermedad_observada: string | null;
+  tiras_medicamento: number | null;
+  tiene_alza: number | null;
+  usuario_id: number | null;
+};
+
+export type MarcoInspeccionDetalleLocal = {
+  ubicacion: UbicacionMarco;
+  numero: number;
+  contenido: ContenidoMarco;
+  transferir: number;
+  destino_codigo: string | null;
+};
+
+/**
+ * Devuelve las posiciones de marco guardadas en SQLite para abrir
+ * el detalle de una inspección desde la ficha de la colmena.
+ */
+export async function listarMarcosInspeccionLocal(
+  inspeccionLocalId: number
+): Promise<MarcoInspeccionDetalleLocal[]> {
+  if (!Number.isSafeInteger(inspeccionLocalId) || inspeccionLocalId <= 0) {
+    throw new Error('Identificador de inspección local inválido.');
+  }
+
+  await listarInspeccionesLocales();
+  const db = await obtenerBD();
+
+  return db.getAllAsync<MarcoInspeccionDetalleLocal>(
+    `SELECT ubicacion, numero, contenido, transferir, destino_codigo
+     FROM marcos_inspeccion_local
+     WHERE inspeccion_local_id = ?
+     ORDER BY
+       CASE ubicacion WHEN 'CAMARA_CRIA' THEN 0 ELSE 1 END,
+       numero`,
+    [inspeccionLocalId]
+  );
+}
+
+/**
+ * Consulta el resumen y el detalle de cada inspección local en una sola lectura.
+ * El Dashboard utiliza esta función para conservar estados y alertas offline.
+ */
+export async function listarInspeccionesDashboardLocales(): Promise<InspeccionDashboardLocal[]> {
+  // Garantiza que exista la tabla principal antes de consultar la relación.
+  await listarInspeccionesLocales();
+  const db = await obtenerBD();
+
+  return db.getAllAsync<InspeccionDashboardLocal>(`
+    SELECT
+      i.id,
+      i.servidor_id,
+      i.codigo_qr,
+      i.fecha_local,
+      i.estado,
+      i.marcos_totales,
+      i.marcos_cria,
+      i.marcos_miel,
+      i.reina,
+      i.observaciones,
+      d.estado_general,
+      d.reina_observada,
+      d.presencia_cria,
+      d.postura,
+      d.nivel_poblacion,
+      d.reservas_alimento,
+      d.nivel_miel AS miel,
+      d.alimentacion AS alimentacion_suministrada,
+      d.signos_enfermedad,
+      d.enfermedad_observada,
+      d.tiras_medicamento,
+      d.tiene_alza,
+      i.usuario_local_id AS usuario_id
+    FROM inspecciones_locales AS i
+    LEFT JOIN inspecciones_detalle_local AS d
+      ON d.inspeccion_local_id = i.id
+    ORDER BY i.fecha_local ASC, i.id ASC
+  `);
+}
 
 export async function listarTransferenciasPreparadas() {
   const db = await obtenerBD();

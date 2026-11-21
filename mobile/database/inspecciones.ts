@@ -1,4 +1,3 @@
-
 import * as SQLite from 'expo-sqlite';
 import * as Crypto from 'expo-crypto';
 
@@ -278,4 +277,28 @@ export async function listarInspeccionesLocales():
      FROM inspecciones_locales
      ORDER BY id DESC`
   );
+}
+
+// Anular un registro que todavía no ha salido del dispositivo.
+// Los registros ya sincronizados se anulan mediante DELETE /inspecciones/{id}.
+export async function anularInspeccionLocal(
+  id: number
+): Promise<void> {
+  if (!Number.isSafeInteger(id) || id <= 0) {
+    throw new Error('Identificador de inspección inválido.');
+  }
+
+  const db = await obtenerBaseDeDatos();
+  const resultado = await db.runAsync(
+    `UPDATE inspecciones_locales
+     SET estado = 'ANULADA'
+     WHERE id = ?
+       AND estado = 'PENDIENTE'
+       AND servidor_id IS NULL`,
+    [id]
+  );
+
+  if (resultado.changes !== 1) {
+    throw new Error('La inspección ya fue sincronizada o no se puede anular localmente.');
+  }
 }

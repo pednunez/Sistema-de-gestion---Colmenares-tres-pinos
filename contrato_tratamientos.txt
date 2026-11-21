@@ -1,0 +1,1719 @@
+﻿========== SINCRONIZADOR DE INSPECCIONES ==========
+
+import * as SQLite from 'expo-sqlite';
+
+import {
+  leerSesionGuardada,
+  tokenVigente,
+} from '../api/auth';
+
+import {
+  ErrorAPI,
+  solicitarAPI,
+} from '../api/cliente';
+
+import {
+  leerCatalogoLocal,
+} from '../database/catalogo';
+
+import {
+  listarInspeccionesLocales,
+} from '../database/inspecciones';
+
+import type {
+  InspeccionGuardada,
+} from '../database/inspecciones';
+
+// ==========================================
+// COLMENARES TRES PINOS
+// SINCRONIZACIÃ“N DE INSPECCIONES
+// ==========================================
+
+type DetalleLocal = {
+  estado_general: string;
+  reina_observada: number | null;
+  presencia_cria: number | null;
+  postura: number | null;
+  nivel_poblacion: string | null;
+  reservas_alimento: string | null;
+  nivel_miel: string | null;
+  alimentacion: string;
+  signos_enfermedad: number;
+  enfermedad_observada: string;
+  tiras_medicamento: number | null;
+  tiene_alza: number;
+};
+
+type MarcoLocal = {
+  ubicacion: string;
+  numero: number;
+  contenido: string;
+  transferir: number;
+  destino_codigo: string | null;
+};
+
+type MarcoAPI = {
+  ubicacion: 'CAMARA_CRIA' | 'ALZA';
+  numero: number;
+  contenido: string;
+  transferido_a_colmena_id: number | null;
+};
+
+export type InspeccionParaAPI = {
+  colmena_id: number;
+  usuario_id: number;
+  id_cliente: string;
+  fecha_inspeccion: string;
+  estado_general: string;
+  reina_observada: boolean | null;
+  presencia_cria: boolean | null;
+  postura: boolean | null;
+  nivel_poblacion: string | null;
+  reservas_alimento: string | null;
+  miel: string | null;
+  alimentacion_suministrada: string | null;
+  signos_enfermedad: boolean;
+  enfermedad_observada: string | null;
+  tiras_medicamento: number | null;
+  tiene_alza: boolean;
+  cantidad_marcos: number;
+  marcos: MarcoAPI[];
+  observaciones: string;
+};
+
+type RespuestaInspeccion = {
+  id: number;
+  id_cliente: string | null;
+  colmena_id: number;
+  usuario_id: number;
+};
+
+export type ResultadoSincronizacion = {
+  revisadas: number;
+  sincronizadas: number;
+  fallidas: number;
+  errores: {
+    idLocal: number;
+    mensaje: string;
+  }[];
+};
+
+export type ResumenCola = {
+  total: number;
+  pendientes: number;
+  sincronizadas: number;
+  sinPropietario: number;
+};
+
+type Catalogo = NonNullable<
+  Awaited<ReturnType<typeof leerCatalogoLocal>>
+>;
+
+const ESTADOS_VALIDOS = new Set([
+  'COMPLETA',
+  'EN_DESARROLLO',
+  'DONANTE',
+  'DEBIL',
+  'REQUIERE_REVISION',
+]);
+
+const CONTENIDOS_VALIDOS = new Set([
+  'MIEL_Y_CRIA',
+  'SOLO_CRIA',
+  'SOLO_MIEL',
+  'CERA_ESTIRADA',
+  'CERA_ESTAMPADA',
+  'CERA_UNTADA',
+  'SIN_MARCO',
+]);
+
+const UUID_VALIDO =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+let sincronizacionActiva = false;
+
+// ==========================================
+// FUNCIONES AUXILIARES
+// ==========================================
+
+function normalizarCodigo(
+  valor: string
+): string {
+  return valor.trim().toLowerCase();
+}
+
+function convertirBooleano(
+  valor: number | null
+): boolean | null {
+  if (valor === null) {
+    return null;
+  }
+
+  if (valor !== 0 && valor !== 1) {
+    throw new Error(
+      'Se encontrÃ³ un valor booleano invÃ¡lido en SQLite.'
+    );
+  }
+
+  return valor === 1;
+}
+
+function validarFecha(
+  fecha: string
+): void {
+  // La API exige fecha con zona horaria.
+  if (
+    !/(Z|[+-]\d{2}:\d{2})$/i.test(fecha) ||
+    Number.isNaN(Date.parse(fecha))
+  ) {
+    throw new Error(
+      'La fecha de la inspecciÃ³n no tiene zona horaria vÃ¡lida.'
+    );
+  }
+
+  if (Date.parse(fecha) > Date.now()) {
+    throw new Error(
+      'La fecha de la inspecciÃ³n es futura.'
+    );
+  }
+}
+
+function validarPosiciones(
+  marcos: MarcoLocal[],
+  ubicacion: 'CAMARA_CRIA' | 'ALZA'
+): void {
+  const caja = marcos.filter(
+    marco => marco.ubicacion === ubicacion
+  );
+
+  if (caja.length !== 10) {
+    throw new Error(
+      `${ubicacion}: se necesitan las diez posiciones.`
+    );
+  }
+
+  const posiciones = new Set<number>();
+
+  for (const marco of caja) {
+    if (
+      !Number.isInteger(marco.numero) ||
+      marco.numero < 1 ||
+      marco.numero > 10 ||
+      posiciones.has(marco.numero)
+    ) {
+      throw new Error(
+        `PosiciÃ³n repetida o invÃ¡lida en ${ubicacion}.`
+      );
+    }
+
+    posiciones.add(marco.numero);
+
+    if (!CONTENIDOS_VALIDOS.has(marco.contenido)) {
+      throw new Error(
+        `Contenido invÃ¡lido en ${ubicacion}, posiciÃ³n ${marco.numero}.`
+      );
+    }
+
+    if (
+      marco.transferir !== 0 &&
+      marco.transferir !== 1
+    ) {
+      throw new Error(
+        'Indicador de transferencia invÃ¡lido.'
+      );
+    }
+
+    if (
+      marco.transferir === 1 &&
+      marco.contenido === 'SIN_MARCO'
+    ) {
+      throw new Error(
+        'No se puede transferir una posiciÃ³n vacÃ­a.'
+      );
+    }
+
+    if (
+      marco.transferir === 1 &&
+      !marco.destino_codigo
+    ) {
+      throw new Error(
+        'Hay una transferencia sin colmena de destino.'
+      );
+    }
+
+    if (
+      marco.transferir === 0 &&
+      marco.destino_codigo
+    ) {
+      throw new Error(
+        'Un marco sin transferencia tiene un destino guardado.'
+      );
+    }
+  }
+}
+
+// ==========================================
+// CONSULTAR LA COLA LOCAL
+// NO NECESITA INTERNET NI LOGIN
+// ==========================================
+
+export async function obtenerResumenColaInspecciones():
+  Promise<ResumenCola> {
+  const registros =
+    await listarInspeccionesLocales();
+
+  return {
+    total: registros.length,
+
+    pendientes: registros.filter(
+      registro => registro.estado === 'PENDIENTE'
+    ).length,
+
+    sincronizadas: registros.filter(
+      registro => registro.estado === 'SINCRONIZADO'
+    ).length,
+
+    sinPropietario: registros.filter(
+      registro => registro.usuario_local_id === null
+    ).length,
+  };
+}
+
+// ==========================================
+// LEER DETALLE Y MARCOS
+// ==========================================
+
+async function leerDetalle(
+  db: SQLite.SQLiteDatabase,
+  inspeccionId: number
+): Promise<{
+  detalle: DetalleLocal;
+  marcos: MarcoLocal[];
+}> {
+  const tablaDetalle =
+    await db.getFirstAsync<{ name: string }>(
+      `SELECT name
+       FROM sqlite_master
+       WHERE type = 'table'
+         AND name = 'inspecciones_detalle_local'`
+    );
+
+  const tablaMarcos =
+    await db.getFirstAsync<{ name: string }>(
+      `SELECT name
+       FROM sqlite_master
+       WHERE type = 'table'
+         AND name = 'marcos_inspeccion_local'`
+    );
+
+  if (!tablaDetalle || !tablaMarcos) {
+    throw new Error(
+      'No existen las tablas de inspecciones avanzadas.'
+    );
+  }
+
+  const detalle =
+    await db.getFirstAsync<DetalleLocal>(
+      `SELECT
+         estado_general,
+         reina_observada,
+         presencia_cria,
+         postura,
+         nivel_poblacion,
+         reservas_alimento,
+         nivel_miel,
+         alimentacion,
+         signos_enfermedad,
+         enfermedad_observada,
+         tiras_medicamento,
+         tiene_alza
+       FROM inspecciones_detalle_local
+       WHERE inspeccion_local_id = ?`,
+      [inspeccionId]
+    );
+
+  if (!detalle) {
+    throw new Error(
+      'La inspecciÃ³n no tiene detalle avanzado. Se conserva pendiente.'
+    );
+  }
+
+  const marcos =
+    await db.getAllAsync<MarcoLocal>(
+      `SELECT
+         ubicacion,
+         numero,
+         contenido,
+         transferir,
+         destino_codigo
+       FROM marcos_inspeccion_local
+       WHERE inspeccion_local_id = ?
+       ORDER BY ubicacion, numero`,
+      [inspeccionId]
+    );
+
+  return { detalle, marcos };
+}
+
+// ==========================================
+// PREPARAR DATOS PARA FASTAPI
+// ==========================================
+
+async function prepararInspeccion(
+  db: SQLite.SQLiteDatabase,
+  inspeccion: InspeccionGuardada,
+  usuarioId: number,
+  catalogo: Catalogo
+): Promise<InspeccionParaAPI> {
+  if (inspeccion.usuario_local_id !== usuarioId) {
+    throw new Error(
+      'La inspecciÃ³n no pertenece al usuario actual.'
+    );
+  }
+
+  if (!UUID_VALIDO.test(inspeccion.id_cliente)) {
+    throw new Error(
+      'La inspecciÃ³n no tiene un UUID vÃ¡lido.'
+    );
+  }
+
+  validarFecha(inspeccion.fecha_local);
+
+  const colmena = catalogo.colmenas.find(
+    item =>
+      normalizarCodigo(item.codigo_qr) ===
+      normalizarCodigo(inspeccion.codigo_qr)
+  );
+
+  if (!colmena) {
+    throw new Error(
+      'La colmena no estÃ¡ en el catÃ¡logo oficial.'
+    );
+  }
+
+  const { detalle, marcos } =
+    await leerDetalle(db, inspeccion.id);
+
+  if (
+    !ESTADOS_VALIDOS.has(detalle.estado_general) ||
+    !catalogo.opciones.estado_general.includes(
+      detalle.estado_general
+    )
+  ) {
+    throw new Error(
+      'El estado general no estÃ¡ autorizado.'
+    );
+  }
+
+  const tieneAlza = convertirBooleano(
+    detalle.tiene_alza
+  );
+
+  if (tieneAlza === null) {
+    throw new Error(
+      'No estÃ¡ definida la presencia de alza.'
+    );
+  }
+
+  validarPosiciones(
+    marcos,
+    'CAMARA_CRIA'
+  );
+
+  if (tieneAlza) {
+    validarPosiciones(
+      marcos,
+      'ALZA'
+    );
+  } else if (
+    marcos.some(
+      marco => marco.ubicacion === 'ALZA'
+    )
+  ) {
+    throw new Error(
+      'La inspecciÃ³n contiene marcos de alza, pero estÃ¡ marcada sin alza.'
+    );
+  }
+
+  const cantidadEsperada = tieneAlza ? 20 : 10;
+
+  if (marcos.length !== cantidadEsperada) {
+    throw new Error(
+      'La cantidad de posiciones guardadas no coincide con las cajas.'
+    );
+  }
+
+  const cantidadReal = marcos.filter(
+    marco => marco.contenido !== 'SIN_MARCO'
+  ).length;
+
+  if (cantidadReal !== inspeccion.marcos_totales) {
+    throw new Error(
+      'La cantidad de marcos no coincide con el registro local.'
+    );
+  }
+
+  const marcosAPI: MarcoAPI[] = marcos.map(
+    marco => {
+      if (
+        marco.ubicacion !== 'CAMARA_CRIA' &&
+        marco.ubicacion !== 'ALZA'
+      ) {
+        throw new Error(
+          'UbicaciÃ³n de marco invÃ¡lida.'
+        );
+      }
+
+      let destinoId: number | null = null;
+
+      if (marco.transferir === 1) {
+        const destino = catalogo.colmenas.find(
+          item =>
+            normalizarCodigo(item.codigo_qr) ===
+            normalizarCodigo(
+              marco.destino_codigo ?? ''
+            )
+        );
+
+        if (!destino) {
+          throw new Error(
+            `No existe el destino del marco ${marco.numero}.`
+          );
+        }
+
+        if (destino.id === colmena.id) {
+          throw new Error(
+            'Una colmena no puede transferirse marcos a sÃ­ misma.'
+          );
+        }
+
+        destinoId = destino.id;
+      }
+
+      return {
+        ubicacion: marco.ubicacion,
+        numero: marco.numero,
+        contenido: marco.contenido,
+        transferido_a_colmena_id: destinoId,
+      };
+    }
+  );
+
+  const signos = convertirBooleano(
+    detalle.signos_enfermedad
+  );
+
+  if (signos === null) {
+    throw new Error(
+      'No estÃ¡ definido el campo de signos de enfermedad.'
+    );
+  }
+
+  return {
+    colmena_id: colmena.id,
+    usuario_id: usuarioId,
+    id_cliente: inspeccion.id_cliente,
+    fecha_inspeccion: inspeccion.fecha_local,
+
+    estado_general: detalle.estado_general,
+
+    reina_observada: convertirBooleano(
+      detalle.reina_observada
+    ),
+
+    presencia_cria: convertirBooleano(
+      detalle.presencia_cria
+    ),
+
+    postura: convertirBooleano(
+      detalle.postura
+    ),
+
+    nivel_poblacion: detalle.nivel_poblacion,
+    reservas_alimento: detalle.reservas_alimento,
+    miel: detalle.nivel_miel,
+
+    alimentacion_suministrada:
+      detalle.alimentacion.trim() || null,
+
+    signos_enfermedad: signos,
+
+    enfermedad_observada:
+      detalle.enfermedad_observada.trim() || null,
+
+    tiras_medicamento:
+      detalle.tiras_medicamento,
+
+    tiene_alza: tieneAlza,
+    cantidad_marcos: cantidadReal,
+    marcos: marcosAPI,
+    observaciones: inspeccion.observaciones,
+  };
+}
+
+// ==========================================
+// ENVIAR PENDIENTES A FASTAPI
+// TODAVÃA NO SE LLAMA AUTOMÃTICAMENTE
+// ==========================================
+
+export async function sincronizarInspeccionesPendientes():
+  Promise<ResultadoSincronizacion> {
+  if (sincronizacionActiva) {
+    throw new Error(
+      'Ya hay una sincronizaciÃ³n de inspecciones en curso.'
+    );
+  }
+
+  sincronizacionActiva = true;
+
+  const resultado: ResultadoSincronizacion = {
+    revisadas: 0,
+    sincronizadas: 0,
+    fallidas: 0,
+    errores: [],
+  };
+
+  try {
+    const sesion = await leerSesionGuardada();
+
+    if (!sesion || !tokenVigente(sesion)) {
+      throw new Error(
+        'No existe una sesiÃ³n vÃ¡lida para sincronizar.'
+      );
+    }
+
+    const catalogo = await leerCatalogoLocal(
+      sesion.usuario.id
+    );
+
+    if (!catalogo) {
+      throw new Error(
+        'No hay un catÃ¡logo oficial para sincronizar.'
+      );
+    }
+
+    // Inicializar migraciones de SQLite.
+    await listarInspeccionesLocales();
+
+    const db = await SQLite.openDatabaseAsync(
+      'colmenas.db'
+    );
+
+    // Solo registros pendientes del usuario.
+    // Los registros antiguos sin propietario
+    // no se envÃ­an.
+    const pendientes =
+      await db.getAllAsync<InspeccionGuardada>(
+        `SELECT *
+         FROM inspecciones_locales
+         WHERE estado = 'PENDIENTE'
+           AND servidor_id IS NULL
+           AND usuario_local_id = ?
+         ORDER BY id ASC`,
+        [sesion.usuario.id]
+      );
+
+    for (const inspeccion of pendientes) {
+      // Volver a comprobar el vencimiento
+      // durante sincronizaciones largas.
+      if (!tokenVigente(sesion)) {
+        resultado.errores.push({
+          idLocal: inspeccion.id,
+          mensaje: 'La sesiÃ³n venciÃ³ durante el envÃ­o.',
+        });
+        resultado.fallidas++;
+        break;
+      }
+
+      resultado.revisadas++;
+
+      try {
+        const datos = await prepararInspeccion(
+          db,
+          inspeccion,
+          sesion.usuario.id,
+          catalogo
+        );
+
+        // El backend admite id_cliente para
+        // reintentos seguros: 201 o 200.
+        const respuesta =
+          await solicitarAPI<RespuestaInspeccion>(
+            '/inspecciones/',
+            {
+              method: 'POST',
+              token: sesion.accessToken,
+              body: datos,
+            }
+          );
+
+        // No marcar Ã©xito sin comprobar
+        // que la respuesta corresponde
+        // al registro enviado.
+        if (
+          !Number.isSafeInteger(respuesta.id) ||
+          respuesta.id <= 0 ||
+          !respuesta.id_cliente ||
+          normalizarCodigo(respuesta.id_cliente) !==
+            normalizarCodigo(inspeccion.id_cliente) ||
+          respuesta.colmena_id !== datos.colmena_id ||
+          respuesta.usuario_id !== sesion.usuario.id
+        ) {
+          throw new Error(
+            'La respuesta del servidor no coincide con la inspecciÃ³n enviada.'
+          );
+        }
+
+        const cambio = await db.runAsync(
+          `UPDATE inspecciones_locales
+           SET estado = 'SINCRONIZADO',
+               servidor_id = ?
+           WHERE id = ?
+             AND id_cliente = ?
+             AND usuario_local_id = ?
+             AND estado = 'PENDIENTE'
+             AND servidor_id IS NULL`,
+          [
+            respuesta.id,
+            inspeccion.id,
+            inspeccion.id_cliente,
+            sesion.usuario.id,
+          ]
+        );
+
+        if (cambio.changes !== 1) {
+          throw new Error(
+            'El servidor confirmÃ³ el registro, pero SQLite no pudo marcarlo como sincronizado.'
+          );
+        }
+
+        resultado.sincronizadas++;
+      } catch (error) {
+        resultado.fallidas++;
+
+        resultado.errores.push({
+          idLocal: inspeccion.id,
+          mensaje:
+            error instanceof Error
+              ? error.message
+              : 'Error desconocido de sincronizaciÃ³n.',
+        });
+
+        // Si falla la autorizaciÃ³n, no
+        // insistir con los demÃ¡s registros.
+        if (
+          error instanceof ErrorAPI &&
+          (
+            error.estado === 401 ||
+            error.estado === 403 ||
+            error.estado === 409
+          )
+        ) {
+          break;
+        }
+
+        // Otros errores dejan el registro
+        // pendiente, sin borrar informaciÃ³n.
+      }
+    }
+
+    return resultado;
+  } finally {
+    sincronizacionActiva = false;
+  }
+}
+
+
+========== ENDPOINT Y ESQUEMAS FASTAPI ==========
+
+  backend\app\main.py:24:    TOTAL_HEADER as COLMENAS_TOTAL_HEADER,
+  backend\app\main.py:25:    router as colmenas_router,
+  backend\app\main.py:26:)
+  backend\app\main.py:27:from app.routers.usuarios import router as usuarios_router
+  backend\app\main.py:28:from app.routers.inspecciones import router as inspecciones_router
+> backend\app\main.py:29:from app.routers.tratamientos import router as tratamientos_router
+  backend\app\main.py:30:
+  backend\app\main.py:31:from app.routers.transferencias_marcos import (
+  backend\app\main.py:32:    router as transferencias_marcos_router,
+  backend\app\main.py:33:)
+  backend\app\main.py:34:
+  backend\app\main.py:35:from app.routers.historial import router as historial_router
+  backend\app\main.py:36:from app.routers.grupos import router as grupos_router
+  backend\app\main.py:37:from app.routers.movil import router as movil_router
+  backend\app\main.py:38:from app.routers.revisiones import router as revisiones_router
+  backend\app\main.py:39:from app.routers.auditoria import router as auditoria_router
+  backend\app\main.py:40:from app.routers.auth import router as auth_router
+  backend\app\main.py:41:
+  backend\app\main.py:110:    inspecciones_router,
+  backend\app\main.py:111:    dependencies=[Depends(obtener_usuario_actual)],
+  backend\app\main.py:112:)
+  backend\app\main.py:113:
+  backend\app\main.py:114:app.include_router(
+> backend\app\main.py:115:    tratamientos_router,
+  backend\app\main.py:116:    dependencies=[Depends(obtener_usuario_actual)],
+  backend\app\main.py:117:)
+  backend\app\main.py:118:
+  backend\app\main.py:119:app.include_router(
+  backend\app\main.py:120:    transferencias_marcos_router,
+  backend\app\main.py:121:    dependencies=[Depends(obtener_usuario_actual)],
+  backend\app\main.py:122:)
+  backend\app\main.py:123:
+  backend\app\main.py:124:app.include_router(
+  backend\app\main.py:125:    historial_router,
+  backend\app\main.py:126:    dependencies=[Depends(obtener_usuario_actual)],
+  backend\app\main.py:127:)
+  backend\app\models\tratamiento.py:17:
+  backend\app\models\tratamiento.py:18:from app.database import Base
+  backend\app\models\tratamiento.py:19:
+  backend\app\models\tratamiento.py:20:
+  backend\app\models\tratamiento.py:21:# ==========================================================
+> backend\app\models\tratamiento.py:22:# MODELO: TRATAMIENTOS
+  backend\app\models\tratamiento.py:23:# PROYECTO: COLMENARES TRES PINOS
+  backend\app\models\tratamiento.py:24:# ==========================================================
+  backend\app\models\tratamiento.py:25:
+> backend\app\models\tratamiento.py:26:class Tratamiento(Base):
+  backend\app\models\tratamiento.py:27:
+> backend\app\models\tratamiento.py:28:    __tablename__ = "tratamientos"
+  backend\app\models\tratamiento.py:29:
+  backend\app\models\tratamiento.py:30:    # ======================================================
+  backend\app\models\tratamiento.py:31:    # INDICES EXISTENTES EN POSTGRESQL
+  backend\app\models\tratamiento.py:32:    # ======================================================
+  backend\app\models\tratamiento.py:33:
+  backend\app\models\tratamiento.py:34:    __table_args__ = (
+  backend\app\models\tratamiento.py:35:        Index(
+> backend\app\models\tratamiento.py:36:            "idx_tratamientos_colmena",
+  backend\app\models\tratamiento.py:37:            "colmena_id",
+  backend\app\models\tratamiento.py:38:        ),
+  backend\app\models\tratamiento.py:39:        Index(
+> backend\app\models\tratamiento.py:40:            "idx_tratamientos_fecha",
+  backend\app\models\tratamiento.py:41:            "fecha_inicio",
+  backend\app\models\tratamiento.py:42:        ),
+  backend\app\models\tratamiento.py:43:        Index(
+> backend\app\models\tratamiento.py:44:            "uq_tratamientos_id_cliente",
+  backend\app\models\tratamiento.py:45:            "id_cliente",
+  backend\app\models\tratamiento.py:46:            unique=True,
+  backend\app\models\tratamiento.py:47:        ),
+  backend\app\models\tratamiento.py:48:    )
+  backend\app\models\tratamiento.py:49:
+  backend\app\models\tratamiento.py:50:    # ======================================================
+  backend\app\models\tratamiento.py:51:    # IDENTIFICADOR AUTOMATICO
+  backend\app\models\tratamiento.py:52:    # ======================================================
+  backend\app\models\tratamiento.py:53:
+  backend\app\models\tratamiento.py:54:    id: Mapped[int] = mapped_column(
+  backend\app\models\tratamiento.py:55:        BigInteger,
+  backend\app\models\tratamiento.py:56:        Identity(always=True),
+  backend\app\models\tratamiento.py:57:        primary_key=True,
+  backend\app\models\tratamiento.py:58:    )
+  backend\app\models\tratamiento.py:59:
+  backend\app\models\tratamiento.py:60:    # ======================================================
+> backend\app\models\tratamiento.py:61:    # COLMENA QUE RECIBE EL TRATAMIENTO
+  backend\app\models\tratamiento.py:62:    # ======================================================
+  backend\app\models\tratamiento.py:63:
+  backend\app\models\tratamiento.py:64:    colmena_id: Mapped[int] = mapped_column(
+  backend\app\models\tratamiento.py:65:        BigInteger,
+  backend\app\models\tratamiento.py:66:        ForeignKey("colmenas.id"),
+  backend\app\models\tratamiento.py:67:        nullable=False,
+  backend\app\models\tratamiento.py:68:    )
+  backend\app\models\tratamiento.py:69:
+  backend\app\models\tratamiento.py:70:    # ======================================================
+  backend\app\models\tratamiento.py:71:    # INSPECCION ASOCIADA (OPCIONAL)
+  backend\app\models\tratamiento.py:72:    # ======================================================
+  backend\app\models\tratamiento.py:73:
+  backend\app\models\tratamiento.py:86:        ForeignKey("usuarios.id"),
+  backend\app\models\tratamiento.py:87:        nullable=False,
+  backend\app\models\tratamiento.py:88:    )
+  backend\app\models\tratamiento.py:89:
+  backend\app\models\tratamiento.py:90:    # ======================================================
+> backend\app\models\tratamiento.py:91:    # TIPO DE TRATAMIENTO
+  backend\app\models\tratamiento.py:92:    # ======================================================
+  backend\app\models\tratamiento.py:93:
+> backend\app\models\tratamiento.py:94:    tipo_tratamiento: Mapped[str] = mapped_column(
+  backend\app\models\tratamiento.py:95:        String(100),
+  backend\app\models\tratamiento.py:96:        nullable=False,
+  backend\app\models\tratamiento.py:97:    )
+  backend\app\models\tratamiento.py:98:
+  backend\app\models\tratamiento.py:99:    # ======================================================
+  backend\app\models\tratamiento.py:100:    # PRODUCTO UTILIZADO
+  backend\app\models\tratamiento.py:101:    # ======================================================
+  backend\app\models\tratamiento.py:102:
+  backend\app\models\tratamiento.py:103:    producto: Mapped[str | None] = mapped_column(
+  backend\app\models\tratamiento.py:104:        String(150),
+  backend\app\models\tratamiento.py:105:        nullable=True,
+  backend\app\models\tratamiento.py:106:    )
+  backend\app\models\tratamiento.py:113:        String(100),
+  backend\app\models\tratamiento.py:114:        nullable=True,
+  backend\app\models\tratamiento.py:115:    )
+  backend\app\models\tratamiento.py:116:
+  backend\app\models\tratamiento.py:117:    # ======================================================
+> backend\app\models\tratamiento.py:118:    # MOTIVO DEL TRATAMIENTO
+  backend\app\models\tratamiento.py:119:    # ======================================================
+  backend\app\models\tratamiento.py:120:
+  backend\app\models\tratamiento.py:121:    motivo: Mapped[str | None] = mapped_column(
+  backend\app\models\tratamiento.py:122:        Text,
+  backend\app\models\tratamiento.py:123:        nullable=True,
+  backend\app\models\tratamiento.py:124:    )
+  backend\app\models\tratamiento.py:125:
+  backend\app\models\tratamiento.py:126:    # ======================================================
+  backend\app\models\tratamiento.py:127:    # FECHA DE INICIO
+  backend\app\models\tratamiento.py:128:    # ======================================================
+  backend\app\models\tratamiento.py:129:
+  backend\app\models\tratamiento.py:130:    fecha_inicio: Mapped[date] = mapped_column(
+  backend\app\models\tratamiento.py:140:        Date,
+  backend\app\models\tratamiento.py:141:        nullable=True,
+  backend\app\models\tratamiento.py:142:    )
+  backend\app\models\tratamiento.py:143:
+  backend\app\models\tratamiento.py:144:    # ======================================================
+> backend\app\models\tratamiento.py:145:    # ESTADO DEL TRATAMIENTO
+  backend\app\models\tratamiento.py:146:    # ======================================================
+  backend\app\models\tratamiento.py:147:
+  backend\app\models\tratamiento.py:148:    estado: Mapped[str] = mapped_column(
+  backend\app\models\tratamiento.py:149:        String(20),
+  backend\app\models\tratamiento.py:150:        nullable=False,
+  backend\app\models\tratamiento.py:151:        default="EN_CURSO",
+  backend\app\models\tratamiento.py:152:        server_default=text("'EN_CURSO'"),
+  backend\app\models\tratamiento.py:153:    )
+  backend\app\models\tratamiento.py:154:
+  backend\app\models\tratamiento.py:155:    # ======================================================
+  backend\app\models\tratamiento.py:156:    # OBSERVACIONES
+  backend\app\models\tratamiento.py:157:    # ======================================================
+  backend\app\models\__init__.py:22:
+  backend\app\models\__init__.py:23:from app.models.inspeccion import Inspeccion
+  backend\app\models\__init__.py:24:
+  backend\app\models\__init__.py:25:from app.models.inspeccion_marco import InspeccionMarco
+  backend\app\models\__init__.py:26:
+> backend\app\models\__init__.py:27:from app.models.tratamiento import Tratamiento
+  backend\app\models\__init__.py:28:
+  backend\app\models\__init__.py:29:from app.models.transferencia_marco import TransferenciaMarco
+  backend\app\models\__init__.py:30:
+  backend\app\models\__init__.py:31:from app.models.auditoria import Auditoria
+  backend\app\models\__init__.py:32:
+  backend\app\models\__init__.py:33:
+  backend\app\models\__init__.py:34:# ==========================================================
+  backend\app\models\__init__.py:35:# INVENTARIO GENERAL DE MATERIALES
+  backend\app\models\__init__.py:36:# ==========================================================
+  backend\app\models\__init__.py:37:#
+  backend\app\models\__init__.py:38:# Almacena cantidades por material, ubicacion,
+  backend\app\models\__init__.py:39:# colmena y estado.
+  backend\app\routers\movil.py:8:from app.core.dependencies import obtener_usuario_actual
+  backend\app\routers\movil.py:9:from app.database import get_db
+  backend\app\routers\movil.py:10:from app.models.apiario import Apiario
+  backend\app\routers\movil.py:11:from app.models.colmena import Colmena
+  backend\app\routers\movil.py:12:from app.models.grupo import GrupoColmena, GrupoColmenaAsignacion
+> backend\app\routers\movil.py:13:from app.models.tratamiento import Tratamiento
+  backend\app\routers\movil.py:14:from app.models.usuario import Usuario
+  backend\app\routers\movil.py:15:from app.schemas.inspeccion import ContenidoMarco, Nivel, UbicacionMarco
+  backend\app\routers\movil.py:16:from app.schemas.movil import (
+  backend\app\routers\movil.py:17:    ApiarioCatalogo,
+  backend\app\routers\movil.py:18:    CatalogoMovilResponse,
+  backend\app\routers\movil.py:19:    ColmenaCatalogo,
+  backend\app\routers\movil.py:20:    GrupoCatalogo,
+  backend\app\routers\movil.py:21:    OpcionesCatalogo,
+> backend\app\routers\movil.py:22:    TratamientoCatalogo,
+  backend\app\routers\movil.py:23:    UsuarioCatalogo,
+  backend\app\routers\movil.py:24:)
+> backend\app\routers\movil.py:25:from app.schemas.tratamiento import EstadoTratamiento
+  backend\app\routers\movil.py:26:
+  backend\app\routers\movil.py:27:
+  backend\app\routers\movil.py:28:# ==========================================================
+  backend\app\routers\movil.py:29:# APP MOVIL (S2-T31)
+  backend\app\routers\movil.py:30:# ==========================================================
+  backend\app\routers\movil.py:31:#
+  backend\app\routers\movil.py:32:# GET /movil/catalogo   ADMIN y APICULTOR
+  backend\app\routers\movil.py:33:#
+  backend\app\routers\movil.py:34:# Una sola descarga para trabajar sin senal. Solo incluye
+  backend\app\routers\movil.py:35:# registros activos: apiarios y colmenas sin baja logica,
+> backend\app\routers\movil.py:36:# grupos activos y tratamientos EN_CURSO.
+  backend\app\routers\movil.py:37:# ==========================================================
+  backend\app\routers\movil.py:38:
+  backend\app\routers\movil.py:39:router = APIRouter(
+  backend\app\routers\movil.py:40:    prefix="/movil",
+  backend\app\routers\movil.py:41:    tags=["App móvil"]
+  backend\app\routers\movil.py:42:)
+  backend\app\routers\movil.py:43:
+  backend\app\routers\movil.py:44:# Escala vigente (H005-E4). BUENO, REGULAR y CRITICO solo se
+  backend\app\routers\movil.py:45:# aceptan para leer inspecciones antiguas: no se ofrecen.
+  backend\app\routers\movil.py:46:ESTADOS_GENERALES_VIGENTES = [
+  backend\app\routers\movil.py:47:    "COMPLETA",
+  backend\app\routers\movil.py:48:    "EN_DESARROLLO",
+  backend\app\routers\movil.py:93:        ).all()
+  backend\app\routers\movil.py:94:
+  backend\app\routers\movil.py:95:        for grupo_id, colmena_id in filas:
+  backend\app\routers\movil.py:96:            miembros[grupo_id].append(colmena_id)
+  backend\app\routers\movil.py:97:
+> backend\app\routers\movil.py:98:    tratamientos = db.scalars(
+> backend\app\routers\movil.py:99:        select(Tratamiento)
+> backend\app\routers\movil.py:100:        .where(Tratamiento.estado == "EN_CURSO")
+> backend\app\routers\movil.py:101:        .order_by(Tratamiento.colmena_id, Tratamiento.fecha_inicio)
+  backend\app\routers\movil.py:102:    ).all()
+  backend\app\routers\movil.py:103:
+  backend\app\routers\movil.py:104:    return CatalogoMovilResponse(
+  backend\app\routers\movil.py:105:        generado_en=datetime.now(timezone.utc),
+  backend\app\routers\movil.py:106:        usuario=UsuarioCatalogo(id=usuario.id, nombre=usuario.nombre, rol=usuario.rol),
+  backend\app\routers\movil.py:107:        apiarios=[
+  backend\app\routers\movil.py:108:            ApiarioCatalogo(id=a.id, nombre=a.nombre, ubicacion=a.ubicacion)
+  backend\app\routers\movil.py:109:            for a in apiarios
+  backend\app\routers\movil.py:110:        ],
+  backend\app\routers\movil.py:111:        colmenas=[
+  backend\app\routers\movil.py:112:            ColmenaCatalogo(
+  backend\app\routers\movil.py:113:                id=c.id,
+  backend\app\routers\movil.py:126:                nombre=g.nombre,
+  backend\app\routers\movil.py:127:                colmena_ids=miembros[g.id],
+  backend\app\routers\movil.py:128:            )
+  backend\app\routers\movil.py:129:            for g in grupos
+  backend\app\routers\movil.py:130:        ],
+> backend\app\routers\movil.py:131:        tratamientos_en_curso=[
+> backend\app\routers\movil.py:132:            TratamientoCatalogo(
+  backend\app\routers\movil.py:133:                id=t.id,
+  backend\app\routers\movil.py:134:                colmena_id=t.colmena_id,
+> backend\app\routers\movil.py:135:                tipo_tratamiento=t.tipo_tratamiento,
+  backend\app\routers\movil.py:136:                producto=t.producto,
+  backend\app\routers\movil.py:137:                dosis=t.dosis,
+  backend\app\routers\movil.py:138:                fecha_inicio=t.fecha_inicio,
+  backend\app\routers\movil.py:139:            )
+> backend\app\routers\movil.py:140:            for t in tratamientos
+  backend\app\routers\movil.py:141:        ],
+  backend\app\routers\movil.py:142:        opciones=OpcionesCatalogo(
+  backend\app\routers\movil.py:143:            estado_general=ESTADOS_GENERALES_VIGENTES,
+  backend\app\routers\movil.py:144:            nivel=list(get_args(Nivel)),
+  backend\app\routers\movil.py:145:            nivel_miel=NIVELES_MIEL,
+  backend\app\routers\movil.py:146:            contenido_marco=list(get_args(ContenidoMarco)),
+  backend\app\routers\movil.py:147:            ubicacion_marco=list(get_args(UbicacionMarco)),
+> backend\app\routers\movil.py:148:            estado_tratamiento=list(get_args(EstadoTratamiento)),
+  backend\app\routers\movil.py:149:        ),
+  backend\app\routers\movil.py:150:    )
+  backend\app\routers\tratamientos.py:10:
+  backend\app\routers\tratamientos.py:11:from app.core.dependencies import obtener_usuario_actual, verificar_autor_o_admin
+  backend\app\routers\tratamientos.py:12:from app.database import get_db
+  backend\app\routers\tratamientos.py:13:from app.models.usuario import Usuario
+  backend\app\routers\tratamientos.py:14:
+> backend\app\routers\tratamientos.py:15:from app.schemas.tratamiento import (
+> backend\app\routers\tratamientos.py:16:    TratamientoCreate,
+> backend\app\routers\tratamientos.py:17:    TratamientoUpdate,
+> backend\app\routers\tratamientos.py:18:    TratamientoResponse
+  backend\app\routers\tratamientos.py:19:)
+  backend\app\routers\tratamientos.py:20:from app.schemas.auditoria import AuditoriaCreate
+  backend\app\routers\tratamientos.py:21:
+> backend\app\routers\tratamientos.py:22:from app.services import tratamiento as tratamiento_service
+  backend\app\routers\tratamientos.py:23:from app.services import auditoria as auditoria_service
+  backend\app\routers\tratamientos.py:24:
+  backend\app\routers\tratamientos.py:25:
+  backend\app\routers\tratamientos.py:26:router = APIRouter(
+> backend\app\routers\tratamientos.py:27:    prefix="/tratamientos",
+> backend\app\routers\tratamientos.py:28:    tags=["Tratamientos"]
+  backend\app\routers\tratamientos.py:29:)
+  backend\app\routers\tratamientos.py:30:
+  backend\app\routers\tratamientos.py:31:
+  backend\app\routers\tratamientos.py:32:# ==========================================================
+  backend\app\routers\tratamientos.py:33:# FUNCIONES AUXILIARES PARA AUDITORÍA
+  backend\app\routers\tratamientos.py:34:# ==========================================================
+  backend\app\routers\tratamientos.py:35:
+  backend\app\routers\tratamientos.py:36:def valor_json(valor):
+  backend\app\routers\tratamientos.py:37:    """
+  backend\app\routers\tratamientos.py:38:    Convierte tipos especiales a valores compatibles con JSON.
+  backend\app\routers\tratamientos.py:39:    """
+  backend\app\routers\tratamientos.py:40:
+  backend\app\routers\tratamientos.py:51:        return float(valor)
+  backend\app\routers\tratamientos.py:52:
+  backend\app\routers\tratamientos.py:53:    return valor
+  backend\app\routers\tratamientos.py:54:
+  backend\app\routers\tratamientos.py:55:
+> backend\app\routers\tratamientos.py:56:def tratamiento_a_dict(tratamiento):
+  backend\app\routers\tratamientos.py:57:    """
+  backend\app\routers\tratamientos.py:58:    Convierte automáticamente todas las columnas
+> backend\app\routers\tratamientos.py:59:    del tratamiento a un diccionario.
+  backend\app\routers\tratamientos.py:60:    """
+  backend\app\routers\tratamientos.py:61:
+  backend\app\routers\tratamientos.py:62:    return {
+  backend\app\routers\tratamientos.py:63:        columna.key: valor_json(
+> backend\app\routers\tratamientos.py:64:            getattr(tratamiento, columna.key)
+  backend\app\routers\tratamientos.py:65:        )
+> backend\app\routers\tratamientos.py:66:        for columna in sa_inspect(tratamiento).mapper.column_attrs
+  backend\app\routers\tratamientos.py:67:    }
+  backend\app\routers\tratamientos.py:68:
+  backend\app\routers\tratamientos.py:69:
+  backend\app\routers\tratamientos.py:70:# ==========================================================
+> backend\app\routers\tratamientos.py:71:# LISTAR TRATAMIENTOS
+  backend\app\routers\tratamientos.py:72:# ==========================================================
+  backend\app\routers\tratamientos.py:73:
+  backend\app\routers\tratamientos.py:74:@router.get(
+  backend\app\routers\tratamientos.py:75:    "/",
+> backend\app\routers\tratamientos.py:76:    response_model=list[TratamientoResponse]
+  backend\app\routers\tratamientos.py:77:)
+> backend\app\routers\tratamientos.py:78:def listar_tratamientos(
+  backend\app\routers\tratamientos.py:79:    db: Session = Depends(get_db)
+  backend\app\routers\tratamientos.py:80:):
+> backend\app\routers\tratamientos.py:81:    return tratamiento_service.listar_tratamientos(db)
+  backend\app\routers\tratamientos.py:82:
+  backend\app\routers\tratamientos.py:83:
+  backend\app\routers\tratamientos.py:84:# ==========================================================
+> backend\app\routers\tratamientos.py:85:# OBTENER TRATAMIENTO POR ID
+  backend\app\routers\tratamientos.py:86:# ==========================================================
+  backend\app\routers\tratamientos.py:87:
+  backend\app\routers\tratamientos.py:88:@router.get(
+> backend\app\routers\tratamientos.py:89:    "/{tratamiento_id}",
+> backend\app\routers\tratamientos.py:90:    response_model=TratamientoResponse
+  backend\app\routers\tratamientos.py:91:)
+> backend\app\routers\tratamientos.py:92:def obtener_tratamiento(
+> backend\app\routers\tratamientos.py:93:    tratamiento_id: int,
+  backend\app\routers\tratamientos.py:94:    db: Session = Depends(get_db)
+  backend\app\routers\tratamientos.py:95:):
+> backend\app\routers\tratamientos.py:96:    tratamiento = tratamiento_service.obtener_tratamiento(
+  backend\app\routers\tratamientos.py:97:        db,
+> backend\app\routers\tratamientos.py:98:        tratamiento_id
+  backend\app\routers\tratamientos.py:99:    )
+  backend\app\routers\tratamientos.py:100:
+> backend\app\routers\tratamientos.py:101:    if tratamiento is None:
+  backend\app\routers\tratamientos.py:102:        raise HTTPException(
+  backend\app\routers\tratamientos.py:103:            status_code=status.HTTP_404_NOT_FOUND,
+> backend\app\routers\tratamientos.py:104:            detail="Tratamiento no encontrado"
+  backend\app\routers\tratamientos.py:105:        )
+  backend\app\routers\tratamientos.py:106:
+> backend\app\routers\tratamientos.py:107:    return tratamiento
+  backend\app\routers\tratamientos.py:108:
+  backend\app\routers\tratamientos.py:109:
+  backend\app\routers\tratamientos.py:110:# ==========================================================
+  backend\app\routers\tratamientos.py:111:# SINCRONIZACIÓN DESDE LA APP MÓVIL
+  backend\app\routers\tratamientos.py:112:# ==========================================================
+  backend\app\routers\tratamientos.py:113:#
+  backend\app\routers\tratamientos.py:114:# Si el id_cliente ya llegó antes (la app reintentó porque
+  backend\app\routers\tratamientos.py:115:# se cortó la señal), se devuelve el registro existente con
+  backend\app\routers\tratamientos.py:116:# 200 en vez de crear otro. Un id_cliente de otro usuario
+  backend\app\routers\tratamientos.py:117:# se rechaza: no se entrega un registro ajeno.
+  backend\app\routers\tratamientos.py:118:# ==========================================================
+  backend\app\routers\tratamientos.py:119:
+  backend\app\routers\tratamientos.py:129:
+  backend\app\routers\tratamientos.py:130:    return registro
+  backend\app\routers\tratamientos.py:131:
+  backend\app\routers\tratamientos.py:132:
+  backend\app\routers\tratamientos.py:133:# ==========================================================
+> backend\app\routers\tratamientos.py:134:# CREAR TRATAMIENTO
+  backend\app\routers\tratamientos.py:135:# ==========================================================
+  backend\app\routers\tratamientos.py:136:
+  backend\app\routers\tratamientos.py:137:@router.post(
+  backend\app\routers\tratamientos.py:138:    "/",
+> backend\app\routers\tratamientos.py:139:    response_model=TratamientoResponse,
+  backend\app\routers\tratamientos.py:140:    status_code=status.HTTP_201_CREATED
+  backend\app\routers\tratamientos.py:141:)
+> backend\app\routers\tratamientos.py:142:def crear_tratamiento(
+> backend\app\routers\tratamientos.py:143:    datos: TratamientoCreate,
+  backend\app\routers\tratamientos.py:144:    response: Response,
+  backend\app\routers\tratamientos.py:145:    db: Session = Depends(get_db),
+  backend\app\routers\tratamientos.py:146:    usuario_actual: Usuario = Depends(obtener_usuario_actual)
+  backend\app\routers\tratamientos.py:147:):
+  backend\app\routers\tratamientos.py:148:
+  backend\app\routers\tratamientos.py:149:    # ------------------------------------------------------
+  backend\app\routers\tratamientos.py:150:    # REINTENTO DE SINCRONIZACIÓN
+  backend\app\routers\tratamientos.py:151:    # ------------------------------------------------------
+  backend\app\routers\tratamientos.py:152:
+  backend\app\routers\tratamientos.py:153:    if datos.id_cliente is not None:
+  backend\app\routers\tratamientos.py:154:
+> backend\app\routers\tratamientos.py:155:        existente = tratamiento_service.obtener_por_id_cliente(
+  backend\app\routers\tratamientos.py:156:            db,
+  backend\app\routers\tratamientos.py:157:            datos.id_cliente
+  backend\app\routers\tratamientos.py:158:        )
+  backend\app\routers\tratamientos.py:159:
+  backend\app\routers\tratamientos.py:160:        if existente is not None:
+  backend\app\routers\tratamientos.py:161:            return registro_ya_sincronizado(existente, usuario_actual, response)
+  backend\app\routers\tratamientos.py:162:
+  backend\app\routers\tratamientos.py:163:    # ------------------------------------------------------
+  backend\app\routers\tratamientos.py:164:    # VALIDAR COLMENA
+  backend\app\routers\tratamientos.py:165:    # ------------------------------------------------------
+  backend\app\routers\tratamientos.py:166:
+> backend\app\routers\tratamientos.py:167:    colmena = tratamiento_service.obtener_colmena_activa(
+  backend\app\routers\tratamientos.py:168:        db,
+  backend\app\routers\tratamientos.py:169:        datos.colmena_id
+  backend\app\routers\tratamientos.py:170:    )
+  backend\app\routers\tratamientos.py:171:
+  backend\app\routers\tratamientos.py:172:    if colmena is None:
+  backend\app\routers\tratamientos.py:173:        raise HTTPException(
+  backend\app\routers\tratamientos.py:174:            status_code=status.HTTP_404_NOT_FOUND,
+  backend\app\routers\tratamientos.py:175:            detail="La colmena indicada no existe o está inactiva"
+  backend\app\routers\tratamientos.py:176:        )
+  backend\app\routers\tratamientos.py:177:
+  backend\app\routers\tratamientos.py:178:    # ------------------------------------------------------
+  backend\app\routers\tratamientos.py:179:    # VALIDAR INSPECCIÓN SI FUE INDICADA
+  backend\app\routers\tratamientos.py:180:    # ------------------------------------------------------
+  backend\app\routers\tratamientos.py:181:
+  backend\app\routers\tratamientos.py:182:    if datos.inspeccion_id is not None:
+  backend\app\routers\tratamientos.py:183:
+> backend\app\routers\tratamientos.py:184:        inspeccion = tratamiento_service.obtener_inspeccion(
+  backend\app\routers\tratamientos.py:185:            db,
+  backend\app\routers\tratamientos.py:186:            datos.inspeccion_id
+  backend\app\routers\tratamientos.py:187:        )
+  backend\app\routers\tratamientos.py:188:
+  backend\app\routers\tratamientos.py:189:        if inspeccion is None:
+  backend\app\routers\tratamientos.py:190:            raise HTTPException(
+  backend\app\routers\tratamientos.py:191:                status_code=status.HTTP_404_NOT_FOUND,
+  backend\app\routers\tratamientos.py:192:                detail="La inspección indicada no existe o está inactiva"
+  backend\app\routers\tratamientos.py:193:            )
+  backend\app\routers\tratamientos.py:194:
+  backend\app\routers\tratamientos.py:195:        if inspeccion.colmena_id != datos.colmena_id:
+  backend\app\routers\tratamientos.py:196:            raise HTTPException(
+  backend\app\routers\tratamientos.py:207:            "usuario_id": usuario_actual.id
+  backend\app\routers\tratamientos.py:208:        }
+  backend\app\routers\tratamientos.py:209:    )
+  backend\app\routers\tratamientos.py:210:
+  backend\app\routers\tratamientos.py:211:    try:
+> backend\app\routers\tratamientos.py:212:        tratamiento = tratamiento_service.crear_tratamiento(
+  backend\app\routers\tratamientos.py:213:            db,
+  backend\app\routers\tratamientos.py:214:            datos_seguros
+  backend\app\routers\tratamientos.py:215:        )
+  backend\app\routers\tratamientos.py:216:    except IntegrityError:
+  backend\app\routers\tratamientos.py:217:        db.rollback()
+  backend\app\routers\tratamientos.py:218:
+  backend\app\routers\tratamientos.py:219:        # Dos envíos simultáneos del mismo id_cliente: gana el primero.
+  backend\app\routers\tratamientos.py:220:        existente = (
+> backend\app\routers\tratamientos.py:221:            tratamiento_service.obtener_por_id_cliente(db, datos.id_cliente)
+  backend\app\routers\tratamientos.py:222:            if datos.id_cliente is not None
+  backend\app\routers\tratamientos.py:223:            else None
+  backend\app\routers\tratamientos.py:224:        )
+  backend\app\routers\tratamientos.py:225:
+  backend\app\routers\tratamientos.py:226:        if existente is None:
+  backend\app\routers\tratamientos.py:227:            raise
+  backend\app\routers\tratamientos.py:228:
+  backend\app\routers\tratamientos.py:229:        return registro_ya_sincronizado(existente, usuario_actual, response)
+  backend\app\routers\tratamientos.py:230:
+  backend\app\routers\tratamientos.py:231:    # ------------------------------------------------------
+  backend\app\routers\tratamientos.py:232:    # AUDITORÍA
+  backend\app\routers\tratamientos.py:233:    # ------------------------------------------------------
+  backend\app\routers\tratamientos.py:234:
+  backend\app\routers\tratamientos.py:235:    auditoria_service.registrar_auditoria(
+  backend\app\routers\tratamientos.py:236:        db,
+  backend\app\routers\tratamientos.py:237:        AuditoriaCreate(
+  backend\app\routers\tratamientos.py:238:            usuario_id=usuario_actual.id,
+> backend\app\routers\tratamientos.py:239:            entidad="TRATAMIENTO",
+> backend\app\routers\tratamientos.py:240:            entidad_id=tratamiento.id,
+  backend\app\routers\tratamientos.py:241:            accion="CREAR",
+  backend\app\routers\tratamientos.py:242:            datos_anteriores=None,
+> backend\app\routers\tratamientos.py:243:            datos_nuevos=tratamiento_a_dict(
+> backend\app\routers\tratamientos.py:244:                tratamiento
+  backend\app\routers\tratamientos.py:245:            )
+  backend\app\routers\tratamientos.py:246:        )
+  backend\app\routers\tratamientos.py:247:    )
+  backend\app\routers\tratamientos.py:248:
+> backend\app\routers\tratamientos.py:249:    return tratamiento
+  backend\app\routers\tratamientos.py:250:
+  backend\app\routers\tratamientos.py:251:
+  backend\app\routers\tratamientos.py:252:# ==========================================================
+> backend\app\routers\tratamientos.py:253:# ACTUALIZAR TRATAMIENTO
+  backend\app\routers\tratamientos.py:254:# ==========================================================
+  backend\app\routers\tratamientos.py:255:
+  backend\app\routers\tratamientos.py:256:@router.patch(
+> backend\app\routers\tratamientos.py:257:    "/{tratamiento_id}",
+> backend\app\routers\tratamientos.py:258:    response_model=TratamientoResponse
+  backend\app\routers\tratamientos.py:259:)
+> backend\app\routers\tratamientos.py:260:def actualizar_tratamiento(
+> backend\app\routers\tratamientos.py:261:    tratamiento_id: int,
+> backend\app\routers\tratamientos.py:262:    datos: TratamientoUpdate,
+  backend\app\routers\tratamientos.py:263:    db: Session = Depends(get_db),
+  backend\app\routers\tratamientos.py:264:    usuario_actual: Usuario = Depends(obtener_usuario_actual)
+  backend\app\routers\tratamientos.py:265:):
+  backend\app\routers\tratamientos.py:266:
+> backend\app\routers\tratamientos.py:267:    tratamiento = tratamiento_service.obtener_tratamiento(
+  backend\app\routers\tratamientos.py:268:        db,
+> backend\app\routers\tratamientos.py:269:        tratamiento_id
+  backend\app\routers\tratamientos.py:270:    )
+  backend\app\routers\tratamientos.py:271:
+> backend\app\routers\tratamientos.py:272:    if tratamiento is None:
+  backend\app\routers\tratamientos.py:273:        raise HTTPException(
+  backend\app\routers\tratamientos.py:274:            status_code=status.HTTP_404_NOT_FOUND,
+> backend\app\routers\tratamientos.py:275:            detail="Tratamiento no encontrado"
+  backend\app\routers\tratamientos.py:276:        )
+  backend\app\routers\tratamientos.py:277:
+  backend\app\routers\tratamientos.py:278:    cambios = datos.model_dump(
+  backend\app\routers\tratamientos.py:279:        exclude_unset=True
+  backend\app\routers\tratamientos.py:280:    )
+  backend\app\routers\tratamientos.py:281:
+  backend\app\routers\tratamientos.py:282:    # ------------------------------------------------------
+  backend\app\routers\tratamientos.py:283:    # FINALIZAR DESDE LA INSPECCIÓN
+  backend\app\routers\tratamientos.py:284:    # ------------------------------------------------------
+  backend\app\routers\tratamientos.py:285:    # Los apicultores rotan entre apiarios: cualquiera que
+> backend\app\routers\tratamientos.py:286:    # inspecciona la colmena puede finalizar un tratamiento
+  backend\app\routers\tratamientos.py:287:    # EN_CURSO, aunque lo haya registrado otra persona.
+  backend\app\routers\tratamientos.py:288:    # El resto de la edición queda para el autor o un ADMIN.
+  backend\app\routers\tratamientos.py:289:    # La auditoría registra quién lo finalizó.
+  backend\app\routers\tratamientos.py:290:
+  backend\app\routers\tratamientos.py:291:    es_finalizacion = (
+  backend\app\routers\tratamientos.py:292:        set(cambios) == {"estado", "fecha_fin"}
+  backend\app\routers\tratamientos.py:293:        and cambios["estado"] == "FINALIZADO"
+  backend\app\routers\tratamientos.py:294:        and cambios["fecha_fin"] is not None
+> backend\app\routers\tratamientos.py:295:        and tratamiento.estado == "EN_CURSO"
+  backend\app\routers\tratamientos.py:296:    )
+  backend\app\routers\tratamientos.py:297:
+  backend\app\routers\tratamientos.py:298:    if not (
+  backend\app\routers\tratamientos.py:299:        es_finalizacion
+  backend\app\routers\tratamientos.py:300:        and usuario_actual.rol == "APICULTOR"
+  backend\app\routers\tratamientos.py:301:    ):
+> backend\app\routers\tratamientos.py:302:        verificar_autor_o_admin(usuario_actual, tratamiento.usuario_id)
+  backend\app\routers\tratamientos.py:303:
+  backend\app\routers\tratamientos.py:304:    if (
+  backend\app\routers\tratamientos.py:305:        cambios.get("fecha_fin") is not None
+> backend\app\routers\tratamientos.py:306:        and cambios["fecha_fin"] < tratamiento.fecha_inicio
+  backend\app\routers\tratamientos.py:307:    ):
+  backend\app\routers\tratamientos.py:308:        raise HTTPException(
+  backend\app\routers\tratamientos.py:309:            status_code=status.HTTP_400_BAD_REQUEST,
+  backend\app\routers\tratamientos.py:310:            detail="La fecha_fin no puede ser anterior a fecha_inicio"
+  backend\app\routers\tratamientos.py:311:        )
+  backend\app\routers\tratamientos.py:312:
+  backend\app\routers\tratamientos.py:313:    # Estado antes del cambio
+> backend\app\routers\tratamientos.py:314:    datos_anteriores = tratamiento_a_dict(
+> backend\app\routers\tratamientos.py:315:        tratamiento
+  backend\app\routers\tratamientos.py:316:    )
+  backend\app\routers\tratamientos.py:317:
+> backend\app\routers\tratamientos.py:318:    # No permitimos cambiar quién creó el tratamiento
+  backend\app\routers\tratamientos.py:319:    cambios.pop(
+  backend\app\routers\tratamientos.py:320:        "usuario_id",
+  backend\app\routers\tratamientos.py:321:        None
+  backend\app\routers\tratamientos.py:322:    )
+  backend\app\routers\tratamientos.py:323:
+  backend\app\routers\tratamientos.py:324:    # ------------------------------------------------------
+  backend\app\routers\tratamientos.py:325:    # DETERMINAR COLMENA FINAL
+  backend\app\routers\tratamientos.py:326:    # ------------------------------------------------------
+  backend\app\routers\tratamientos.py:327:
+  backend\app\routers\tratamientos.py:328:    colmena_id_final = cambios.get(
+  backend\app\routers\tratamientos.py:329:        "colmena_id",
+> backend\app\routers\tratamientos.py:330:        tratamiento.colmena_id
+  backend\app\routers\tratamientos.py:331:    )
+  backend\app\routers\tratamientos.py:332:
+  backend\app\routers\tratamientos.py:333:    if "colmena_id" in cambios:
+  backend\app\routers\tratamientos.py:334:
+> backend\app\routers\tratamientos.py:335:        colmena = tratamiento_service.obtener_colmena_activa(
+  backend\app\routers\tratamientos.py:336:            db,
+  backend\app\routers\tratamientos.py:337:            colmena_id_final
+  backend\app\routers\tratamientos.py:338:        )
+  backend\app\routers\tratamientos.py:339:
+  backend\app\routers\tratamientos.py:340:        if colmena is None:
+  backend\app\routers\tratamientos.py:341:            raise HTTPException(
+  backend\app\routers\tratamientos.py:342:                status_code=status.HTTP_404_NOT_FOUND,
+  backend\app\routers\tratamientos.py:343:                detail="La colmena indicada no existe o está inactiva"
+  backend\app\routers\tratamientos.py:344:            )
+  backend\app\routers\tratamientos.py:345:
+  backend\app\routers\tratamientos.py:346:    # ------------------------------------------------------
+  backend\app\routers\tratamientos.py:347:    # VALIDAR INSPECCIÓN SI SE CAMBIA
+  backend\app\routers\tratamientos.py:350:    if (
+  backend\app\routers\tratamientos.py:351:        "inspeccion_id" in cambios
+  backend\app\routers\tratamientos.py:352:        and cambios["inspeccion_id"] is not None
+  backend\app\routers\tratamientos.py:353:    ):
+  backend\app\routers\tratamientos.py:354:
+> backend\app\routers\tratamientos.py:355:        inspeccion = tratamiento_service.obtener_inspeccion(
+  backend\app\routers\tratamientos.py:356:            db,
+  backend\app\routers\tratamientos.py:357:            cambios["inspeccion_id"]
+  backend\app\routers\tratamientos.py:358:        )
+  backend\app\routers\tratamientos.py:359:
+  backend\app\routers\tratamientos.py:360:        if inspeccion is None:
+  backend\app\routers\tratamientos.py:361:            raise HTTPException(
+  backend\app\routers\tratamientos.py:362:                status_code=status.HTTP_404_NOT_FOUND,
+  backend\app\routers\tratamientos.py:363:                detail="La inspección indicada no existe o está inactiva"
+  backend\app\routers\tratamientos.py:364:            )
+  backend\app\routers\tratamientos.py:365:
+  backend\app\routers\tratamientos.py:366:        if inspeccion.colmena_id != colmena_id_final:
+  backend\app\routers\tratamientos.py:367:            raise HTTPException(
+  backend\app\routers\tratamientos.py:371:
+  backend\app\routers\tratamientos.py:372:    # Si cambia solamente la colmena y ya existía una inspección,
+  backend\app\routers\tratamientos.py:373:    # verificamos que siga siendo compatible.
+  backend\app\routers\tratamientos.py:374:    elif (
+  backend\app\routers\tratamientos.py:375:        "colmena_id" in cambios
+> backend\app\routers\tratamientos.py:376:        and tratamiento.inspeccion_id is not None
+  backend\app\routers\tratamientos.py:377:    ):
+  backend\app\routers\tratamientos.py:378:
+> backend\app\routers\tratamientos.py:379:        inspeccion_actual = tratamiento_service.obtener_inspeccion(
+  backend\app\routers\tratamientos.py:380:            db,
+> backend\app\routers\tratamientos.py:381:            tratamiento.inspeccion_id
+  backend\app\routers\tratamientos.py:382:        )
+  backend\app\routers\tratamientos.py:383:
+  backend\app\routers\tratamientos.py:384:        if (
+  backend\app\routers\tratamientos.py:385:            inspeccion_actual is not None
+  backend\app\routers\tratamientos.py:386:            and inspeccion_actual.colmena_id != colmena_id_final
+  backend\app\routers\tratamientos.py:387:        ):
+  backend\app\routers\tratamientos.py:388:            raise HTTPException(
+  backend\app\routers\tratamientos.py:389:                status_code=status.HTTP_400_BAD_REQUEST,
+  backend\app\routers\tratamientos.py:390:                detail=(
+  backend\app\routers\tratamientos.py:391:                    "La inspección asociada actualmente no pertenece "
+  backend\app\routers\tratamientos.py:392:                    "a la nueva colmena"
+  backend\app\routers\tratamientos.py:393:                )
+  backend\app\routers\tratamientos.py:394:            )
+  backend\app\routers\tratamientos.py:395:
+> backend\app\routers\tratamientos.py:396:    datos_seguros = TratamientoUpdate(
+  backend\app\routers\tratamientos.py:397:        **cambios
+  backend\app\routers\tratamientos.py:398:    )
+  backend\app\routers\tratamientos.py:399:
+> backend\app\routers\tratamientos.py:400:    tratamiento_actualizado = (
+> backend\app\routers\tratamientos.py:401:        tratamiento_service.actualizar_tratamiento(
+  backend\app\routers\tratamientos.py:402:            db,
+> backend\app\routers\tratamientos.py:403:            tratamiento,
+  backend\app\routers\tratamientos.py:404:            datos_seguros
+  backend\app\routers\tratamientos.py:405:        )
+  backend\app\routers\tratamientos.py:406:    )
+  backend\app\routers\tratamientos.py:407:
+  backend\app\routers\tratamientos.py:408:    # ------------------------------------------------------
+  backend\app\routers\tratamientos.py:409:    # AUDITORÍA
+  backend\app\routers\tratamientos.py:410:    # ------------------------------------------------------
+  backend\app\routers\tratamientos.py:411:
+  backend\app\routers\tratamientos.py:412:    auditoria_service.registrar_auditoria(
+  backend\app\routers\tratamientos.py:413:        db,
+  backend\app\routers\tratamientos.py:414:        AuditoriaCreate(
+  backend\app\routers\tratamientos.py:415:            usuario_id=usuario_actual.id,
+> backend\app\routers\tratamientos.py:416:            entidad="TRATAMIENTO",
+> backend\app\routers\tratamientos.py:417:            entidad_id=tratamiento_actualizado.id,
+  backend\app\routers\tratamientos.py:418:            accion="MODIFICAR",
+  backend\app\routers\tratamientos.py:419:            datos_anteriores=datos_anteriores,
+> backend\app\routers\tratamientos.py:420:            datos_nuevos=tratamiento_a_dict(
+> backend\app\routers\tratamientos.py:421:                tratamiento_actualizado
+  backend\app\routers\tratamientos.py:422:            )
+  backend\app\routers\tratamientos.py:423:        )
+  backend\app\routers\tratamientos.py:424:    )
+  backend\app\routers\tratamientos.py:425:
+> backend\app\routers\tratamientos.py:426:    return tratamiento_actualizado
+  backend\app\routers\tratamientos.py:427:
+  backend\app\routers\tratamientos.py:428:
+  backend\app\routers\tratamientos.py:429:# ==========================================================
+> backend\app\routers\tratamientos.py:430:# CANCELAR TRATAMIENTO
+  backend\app\routers\tratamientos.py:431:# ==========================================================
+  backend\app\routers\tratamientos.py:432:
+  backend\app\routers\tratamientos.py:433:@router.delete(
+> backend\app\routers\tratamientos.py:434:    "/{tratamiento_id}",
+> backend\app\routers\tratamientos.py:435:    response_model=TratamientoResponse
+  backend\app\routers\tratamientos.py:436:)
+> backend\app\routers\tratamientos.py:437:def cancelar_tratamiento(
+> backend\app\routers\tratamientos.py:438:    tratamiento_id: int,
+  backend\app\routers\tratamientos.py:439:    db: Session = Depends(get_db),
+  backend\app\routers\tratamientos.py:440:    usuario_actual: Usuario = Depends(obtener_usuario_actual)
+  backend\app\routers\tratamientos.py:441:):
+  backend\app\routers\tratamientos.py:442:
+> backend\app\routers\tratamientos.py:443:    tratamiento = tratamiento_service.obtener_tratamiento(
+  backend\app\routers\tratamientos.py:444:        db,
+> backend\app\routers\tratamientos.py:445:        tratamiento_id
+  backend\app\routers\tratamientos.py:446:    )
+  backend\app\routers\tratamientos.py:447:
+> backend\app\routers\tratamientos.py:448:    if tratamiento is None:
+  backend\app\routers\tratamientos.py:449:        raise HTTPException(
+  backend\app\routers\tratamientos.py:450:            status_code=status.HTTP_404_NOT_FOUND,
+> backend\app\routers\tratamientos.py:451:            detail="Tratamiento no encontrado"
+  backend\app\routers\tratamientos.py:452:        )
+  backend\app\routers\tratamientos.py:453:
+  backend\app\routers\tratamientos.py:454:    # Datos antes de cancelar
+> backend\app\routers\tratamientos.py:455:    verificar_autor_o_admin(usuario_actual, tratamiento.usuario_id)
+  backend\app\routers\tratamientos.py:456:
+> backend\app\routers\tratamientos.py:457:    datos_anteriores = tratamiento_a_dict(
+> backend\app\routers\tratamientos.py:458:        tratamiento
+  backend\app\routers\tratamientos.py:459:    )
+  backend\app\routers\tratamientos.py:460:
+> backend\app\routers\tratamientos.py:461:    tratamiento_cancelado = (
+> backend\app\routers\tratamientos.py:462:        tratamiento_service.cancelar_tratamiento(
+  backend\app\routers\tratamientos.py:463:            db,
+> backend\app\routers\tratamientos.py:464:            tratamiento
+  backend\app\routers\tratamientos.py:465:        )
+  backend\app\routers\tratamientos.py:466:    )
+  backend\app\routers\tratamientos.py:467:
+  backend\app\routers\tratamientos.py:468:    # ------------------------------------------------------
+  backend\app\routers\tratamientos.py:469:    # AUDITORÍA
+  backend\app\routers\tratamientos.py:470:    #
+> backend\app\routers\tratamientos.py:471:    # Se registra como MODIFICAR porque el tratamiento
+  backend\app\routers\tratamientos.py:472:    # permanece en la base de datos y cambia a CANCELADO.
+  backend\app\routers\tratamientos.py:473:    # ------------------------------------------------------
+  backend\app\routers\tratamientos.py:474:
+  backend\app\routers\tratamientos.py:475:    auditoria_service.registrar_auditoria(
+  backend\app\routers\tratamientos.py:476:        db,
+  backend\app\routers\tratamientos.py:477:        AuditoriaCreate(
+  backend\app\routers\tratamientos.py:478:            usuario_id=usuario_actual.id,
+> backend\app\routers\tratamientos.py:479:            entidad="TRATAMIENTO",
+> backend\app\routers\tratamientos.py:480:            entidad_id=tratamiento_cancelado.id,
+  backend\app\routers\tratamientos.py:481:            accion="MODIFICAR",
+  backend\app\routers\tratamientos.py:482:            datos_anteriores=datos_anteriores,
+> backend\app\routers\tratamientos.py:483:            datos_nuevos=tratamiento_a_dict(
+> backend\app\routers\tratamientos.py:484:                tratamiento_cancelado
+  backend\app\routers\tratamientos.py:485:            )
+  backend\app\routers\tratamientos.py:486:        )
+  backend\app\routers\tratamientos.py:487:    )
+  backend\app\routers\tratamientos.py:488:
+> backend\app\routers\tratamientos.py:489:    return tratamiento_cancelado
+  backend\app\schemas\movil.py:8:# CATALOGO PARA LA APP MOVIL (GET /movil/catalogo)
+  backend\app\schemas\movil.py:9:# ==========================================================
+  backend\app\schemas\movil.py:10:#
+  backend\app\schemas\movil.py:11:# Todo lo que la app necesita para trabajar sin senal:
+  backend\app\schemas\movil.py:12:# resolver un QR a su colmena, elegir destinos de
+> backend\app\schemas\movil.py:13:# transferencia, recorrer grupos y finalizar tratamientos.
+  backend\app\schemas\movil.py:14:# ==========================================================
+  backend\app\schemas\movil.py:15:
+  backend\app\schemas\movil.py:16:class ApiarioCatalogo(BaseModel):
+  backend\app\schemas\movil.py:17:    id: int
+  backend\app\schemas\movil.py:18:    nombre: str
+  backend\app\schemas\movil.py:19:    ubicacion: str | None
+  backend\app\schemas\movil.py:20:
+  backend\app\schemas\movil.py:21:
+  backend\app\schemas\movil.py:22:class ColmenaCatalogo(BaseModel):
+  backend\app\schemas\movil.py:23:    id: int
+  backend\app\schemas\movil.py:24:    codigo: str
+  backend\app\schemas\movil.py:25:    codigo_qr: UUID
+  backend\app\schemas\movil.py:34:    nombre: str
+  backend\app\schemas\movil.py:35:    # En el orden en que se recorren en terreno (por codigo).
+  backend\app\schemas\movil.py:36:    colmena_ids: list[int]
+  backend\app\schemas\movil.py:37:
+  backend\app\schemas\movil.py:38:
+> backend\app\schemas\movil.py:39:class TratamientoCatalogo(BaseModel):
+  backend\app\schemas\movil.py:40:    id: int
+  backend\app\schemas\movil.py:41:    colmena_id: int
+> backend\app\schemas\movil.py:42:    tipo_tratamiento: str
+  backend\app\schemas\movil.py:43:    producto: str | None
+  backend\app\schemas\movil.py:44:    dosis: str | None
+  backend\app\schemas\movil.py:45:    fecha_inicio: date
+  backend\app\schemas\movil.py:46:
+  backend\app\schemas\movil.py:47:
+  backend\app\schemas\movil.py:48:class OpcionesCatalogo(BaseModel):
+  backend\app\schemas\movil.py:49:    """Valores que acepta la API, para validar en el telefono."""
+  backend\app\schemas\movil.py:50:
+  backend\app\schemas\movil.py:51:    estado_general: list[str]
+  backend\app\schemas\movil.py:52:    nivel: list[str]
+  backend\app\schemas\movil.py:53:    nivel_miel: list[str]
+  backend\app\schemas\movil.py:54:    contenido_marco: list[str]
+  backend\app\schemas\movil.py:55:    ubicacion_marco: list[str]
+> backend\app\schemas\movil.py:56:    estado_tratamiento: list[str]
+  backend\app\schemas\movil.py:57:
+  backend\app\schemas\movil.py:58:
+  backend\app\schemas\movil.py:59:class UsuarioCatalogo(BaseModel):
+  backend\app\schemas\movil.py:60:    id: int
+  backend\app\schemas\movil.py:61:    nombre: str
+  backend\app\schemas\movil.py:62:    rol: str
+  backend\app\schemas\movil.py:63:
+  backend\app\schemas\movil.py:64:
+  backend\app\schemas\movil.py:65:class CatalogoMovilResponse(BaseModel):
+  backend\app\schemas\movil.py:66:    # Hora del servidor: la app la guarda como "catalogo al".
+  backend\app\schemas\movil.py:67:    generado_en: datetime
+  backend\app\schemas\movil.py:68:    usuario: UsuarioCatalogo
+  backend\app\schemas\movil.py:69:    apiarios: list[ApiarioCatalogo]
+  backend\app\schemas\movil.py:70:    colmenas: list[ColmenaCatalogo]
+  backend\app\schemas\movil.py:71:    grupos: list[GrupoCatalogo]
+> backend\app\schemas\movil.py:72:    tratamientos_en_curso: list[TratamientoCatalogo]
+  backend\app\schemas\movil.py:73:    opciones: OpcionesCatalogo
+  backend\app\schemas\tratamiento.py:3:from uuid import UUID
+  backend\app\schemas\tratamiento.py:4:
+  backend\app\schemas\tratamiento.py:5:from pydantic import BaseModel, ConfigDict, Field, model_validator
+  backend\app\schemas\tratamiento.py:6:
+  backend\app\schemas\tratamiento.py:7:
+> backend\app\schemas\tratamiento.py:8:EstadoTratamiento = Literal[
+  backend\app\schemas\tratamiento.py:9:    "PLANIFICADO",
+  backend\app\schemas\tratamiento.py:10:    "EN_CURSO",
+  backend\app\schemas\tratamiento.py:11:    "FINALIZADO",
+  backend\app\schemas\tratamiento.py:12:    "CANCELADO"
+  backend\app\schemas\tratamiento.py:13:]
+  backend\app\schemas\tratamiento.py:14:
+  backend\app\schemas\tratamiento.py:15:
+> backend\app\schemas\tratamiento.py:16:class TratamientoBase(BaseModel):
+  backend\app\schemas\tratamiento.py:17:    colmena_id: int = Field(
+  backend\app\schemas\tratamiento.py:18:        gt=0
+  backend\app\schemas\tratamiento.py:19:    )
+  backend\app\schemas\tratamiento.py:20:
+  backend\app\schemas\tratamiento.py:21:    inspeccion_id: int | None = Field(
+  backend\app\schemas\tratamiento.py:22:        default=None,
+  backend\app\schemas\tratamiento.py:23:        gt=0
+  backend\app\schemas\tratamiento.py:24:    )
+  backend\app\schemas\tratamiento.py:25:
+  backend\app\schemas\tratamiento.py:26:    usuario_id: int = Field(
+  backend\app\schemas\tratamiento.py:27:        gt=0
+  backend\app\schemas\tratamiento.py:28:    )
+  backend\app\schemas\tratamiento.py:29:
+> backend\app\schemas\tratamiento.py:30:    tipo_tratamiento: str = Field(
+  backend\app\schemas\tratamiento.py:31:        min_length=2,
+  backend\app\schemas\tratamiento.py:32:        max_length=100
+  backend\app\schemas\tratamiento.py:33:    )
+  backend\app\schemas\tratamiento.py:34:
+  backend\app\schemas\tratamiento.py:35:    producto: str | None = Field(
+  backend\app\schemas\tratamiento.py:36:        default=None,
+  backend\app\schemas\tratamiento.py:37:        max_length=150
+  backend\app\schemas\tratamiento.py:38:    )
+  backend\app\schemas\tratamiento.py:39:
+  backend\app\schemas\tratamiento.py:40:    dosis: str | None = Field(
+  backend\app\schemas\tratamiento.py:41:        default=None,
+  backend\app\schemas\tratamiento.py:42:        max_length=100
+  backend\app\schemas\tratamiento.py:46:
+  backend\app\schemas\tratamiento.py:47:    fecha_inicio: date
+  backend\app\schemas\tratamiento.py:48:
+  backend\app\schemas\tratamiento.py:49:    fecha_fin: date | None = None
+  backend\app\schemas\tratamiento.py:50:
+> backend\app\schemas\tratamiento.py:51:    estado: EstadoTratamiento = "EN_CURSO"
+  backend\app\schemas\tratamiento.py:52:
+  backend\app\schemas\tratamiento.py:53:    observaciones: str | None = None
+  backend\app\schemas\tratamiento.py:54:
+  backend\app\schemas\tratamiento.py:55:    @model_validator(mode="after")
+  backend\app\schemas\tratamiento.py:56:    def validar_fechas(self):
+  backend\app\schemas\tratamiento.py:57:        if (
+  backend\app\schemas\tratamiento.py:58:            self.fecha_fin is not None
+  backend\app\schemas\tratamiento.py:59:            and self.fecha_fin < self.fecha_inicio
+  backend\app\schemas\tratamiento.py:60:        ):
+  backend\app\schemas\tratamiento.py:61:            raise ValueError(
+  backend\app\schemas\tratamiento.py:62:                "La fecha_fin no puede ser anterior a fecha_inicio"
+  backend\app\schemas\tratamiento.py:63:            )
+  backend\app\schemas\tratamiento.py:64:
+  backend\app\schemas\tratamiento.py:65:        return self
+  backend\app\schemas\tratamiento.py:66:
+  backend\app\schemas\tratamiento.py:67:
+> backend\app\schemas\tratamiento.py:68:class TratamientoCreate(TratamientoBase):
+  backend\app\schemas\tratamiento.py:69:
+  backend\app\schemas\tratamiento.py:70:    # UUID generado en el telefono para sincronizar sin duplicar.
+  backend\app\schemas\tratamiento.py:71:    id_cliente: UUID | None = None
+  backend\app\schemas\tratamiento.py:72:
+  backend\app\schemas\tratamiento.py:73:
+> backend\app\schemas\tratamiento.py:74:class TratamientoUpdate(BaseModel):
+> backend\app\schemas\tratamiento.py:75:    tipo_tratamiento: str | None = Field(
+  backend\app\schemas\tratamiento.py:76:        default=None,
+  backend\app\schemas\tratamiento.py:77:        min_length=2,
+  backend\app\schemas\tratamiento.py:78:        max_length=100
+  backend\app\schemas\tratamiento.py:79:    )
+  backend\app\schemas\tratamiento.py:80:
+  backend\app\schemas\tratamiento.py:81:    producto: str | None = Field(
+  backend\app\schemas\tratamiento.py:82:        default=None,
+  backend\app\schemas\tratamiento.py:83:        max_length=150
+  backend\app\schemas\tratamiento.py:84:    )
+  backend\app\schemas\tratamiento.py:85:
+  backend\app\schemas\tratamiento.py:86:    dosis: str | None = Field(
+  backend\app\schemas\tratamiento.py:87:        default=None,
+  backend\app\schemas\tratamiento.py:90:
+  backend\app\schemas\tratamiento.py:91:    motivo: str | None = None
+  backend\app\schemas\tratamiento.py:92:
+  backend\app\schemas\tratamiento.py:93:    fecha_fin: date | None = None
+  backend\app\schemas\tratamiento.py:94:
+> backend\app\schemas\tratamiento.py:95:    estado: EstadoTratamiento | None = None
+  backend\app\schemas\tratamiento.py:96:
+  backend\app\schemas\tratamiento.py:97:    observaciones: str | None = None
+  backend\app\schemas\tratamiento.py:98:
+  backend\app\schemas\tratamiento.py:99:
+> backend\app\schemas\tratamiento.py:100:class TratamientoResponse(TratamientoBase):
+  backend\app\schemas\tratamiento.py:101:    id: int
+  backend\app\schemas\tratamiento.py:102:
+  backend\app\schemas\tratamiento.py:103:    # UUID generado en el telefono para sincronizar sin duplicar.
+  backend\app\schemas\tratamiento.py:104:    id_cliente: UUID | None = None
+  backend\app\schemas\tratamiento.py:105:
+  backend\app\schemas\tratamiento.py:106:    fecha_creacion: datetime
+  backend\app\schemas\tratamiento.py:107:    fecha_actualizacion: datetime
+  backend\app\schemas\tratamiento.py:108:
+  backend\app\schemas\tratamiento.py:109:    model_config = ConfigDict(
+  backend\app\schemas\tratamiento.py:110:        from_attributes=True
+  backend\app\schemas\tratamiento.py:111:    )
+  backend\app\services\tratamiento.py:1:from sqlalchemy import select
+  backend\app\services\tratamiento.py:2:from sqlalchemy.orm import Session
+  backend\app\services\tratamiento.py:3:
+  backend\app\services\tratamiento.py:4:from app.models.colmena import Colmena
+  backend\app\services\tratamiento.py:5:from app.models.inspeccion import Inspeccion
+> backend\app\services\tratamiento.py:6:from app.models.tratamiento import Tratamiento
+  backend\app\services\tratamiento.py:7:from app.models.usuario import Usuario
+> backend\app\services\tratamiento.py:8:from app.schemas.tratamiento import (
+> backend\app\services\tratamiento.py:9:    TratamientoCreate,
+> backend\app\services\tratamiento.py:10:    TratamientoUpdate
+  backend\app\services\tratamiento.py:11:)
+  backend\app\services\tratamiento.py:12:
+  backend\app\services\tratamiento.py:13:
+  backend\app\services\tratamiento.py:14:# ==========================================================
+> backend\app\services\tratamiento.py:15:# LISTAR TRATAMIENTOS
+  backend\app\services\tratamiento.py:16:# ==========================================================
+  backend\app\services\tratamiento.py:17:
+> backend\app\services\tratamiento.py:18:def listar_tratamientos(db: Session):
+  backend\app\services\tratamiento.py:19:    consulta = (
+> backend\app\services\tratamiento.py:20:        select(Tratamiento)
+> backend\app\services\tratamiento.py:21:        .order_by(Tratamiento.fecha_inicio.desc())
+  backend\app\services\tratamiento.py:22:    )
+  backend\app\services\tratamiento.py:23:
+  backend\app\services\tratamiento.py:24:    return db.scalars(consulta).all()
+  backend\app\services\tratamiento.py:25:
+  backend\app\services\tratamiento.py:26:
+  backend\app\services\tratamiento.py:27:# ==========================================================
+> backend\app\services\tratamiento.py:28:# OBTENER TRATAMIENTO POR ID
+  backend\app\services\tratamiento.py:29:# ==========================================================
+  backend\app\services\tratamiento.py:30:
+> backend\app\services\tratamiento.py:31:def obtener_tratamiento(
+  backend\app\services\tratamiento.py:32:    db: Session,
+> backend\app\services\tratamiento.py:33:    tratamiento_id: int
+  backend\app\services\tratamiento.py:34:):
+> backend\app\services\tratamiento.py:35:    consulta = select(Tratamiento).where(
+> backend\app\services\tratamiento.py:36:        Tratamiento.id == tratamiento_id
+  backend\app\services\tratamiento.py:37:    )
+  backend\app\services\tratamiento.py:38:
+  backend\app\services\tratamiento.py:39:    return db.scalar(consulta)
+  backend\app\services\tratamiento.py:40:
+  backend\app\services\tratamiento.py:41:
+  backend\app\services\tratamiento.py:42:# ==========================================================
+  backend\app\services\tratamiento.py:43:# VALIDAR COLMENA
+  backend\app\services\tratamiento.py:44:# ==========================================================
+  backend\app\services\tratamiento.py:45:
+  backend\app\services\tratamiento.py:46:def obtener_colmena_activa(
+  backend\app\services\tratamiento.py:47:    db: Session,
+  backend\app\services\tratamiento.py:48:    colmena_id: int
+  backend\app\services\tratamiento.py:86:
+  backend\app\services\tratamiento.py:87:    return db.scalar(consulta)
+  backend\app\services\tratamiento.py:88:
+  backend\app\services\tratamiento.py:89:
+  backend\app\services\tratamiento.py:90:# ==========================================================
+> backend\app\services\tratamiento.py:91:# CREAR TRATAMIENTO
+  backend\app\services\tratamiento.py:92:# ==========================================================
+  backend\app\services\tratamiento.py:93:
+> backend\app\services\tratamiento.py:94:def obtener_por_id_cliente(db: Session, id_cliente) -> Tratamiento | None:
+> backend\app\services\tratamiento.py:95:    """Tratamiento ya sincronizado con ese id del telefono."""
+  backend\app\services\tratamiento.py:96:    return db.scalar(
+> backend\app\services\tratamiento.py:97:        select(Tratamiento).where(Tratamiento.id_cliente == id_cliente)
+  backend\app\services\tratamiento.py:98:    )
+  backend\app\services\tratamiento.py:99:
+  backend\app\services\tratamiento.py:100:
+> backend\app\services\tratamiento.py:101:def crear_tratamiento(
+  backend\app\services\tratamiento.py:102:    db: Session,
+> backend\app\services\tratamiento.py:103:    datos: TratamientoCreate
+  backend\app\services\tratamiento.py:104:):
+> backend\app\services\tratamiento.py:105:    tratamiento = Tratamiento(
+  backend\app\services\tratamiento.py:106:        colmena_id=datos.colmena_id,
+  backend\app\services\tratamiento.py:107:        inspeccion_id=datos.inspeccion_id,
+  backend\app\services\tratamiento.py:108:        usuario_id=datos.usuario_id,
+> backend\app\services\tratamiento.py:109:        tipo_tratamiento=datos.tipo_tratamiento,
+  backend\app\services\tratamiento.py:110:        producto=datos.producto,
+  backend\app\services\tratamiento.py:111:        dosis=datos.dosis,
+  backend\app\services\tratamiento.py:112:        motivo=datos.motivo,
+  backend\app\services\tratamiento.py:113:        fecha_inicio=datos.fecha_inicio,
+  backend\app\services\tratamiento.py:114:        fecha_fin=datos.fecha_fin,
+  backend\app\services\tratamiento.py:115:        estado=datos.estado,
+  backend\app\services\tratamiento.py:116:        observaciones=datos.observaciones,
+  backend\app\services\tratamiento.py:117:        id_cliente=datos.id_cliente
+  backend\app\services\tratamiento.py:118:    )
+  backend\app\services\tratamiento.py:119:
+> backend\app\services\tratamiento.py:120:    db.add(tratamiento)
+  backend\app\services\tratamiento.py:121:    db.commit()
+> backend\app\services\tratamiento.py:122:    db.refresh(tratamiento)
+  backend\app\services\tratamiento.py:123:
+> backend\app\services\tratamiento.py:124:    return tratamiento
+  backend\app\services\tratamiento.py:125:
+  backend\app\services\tratamiento.py:126:
+  backend\app\services\tratamiento.py:127:# ==========================================================
+> backend\app\services\tratamiento.py:128:# ACTUALIZAR TRATAMIENTO
+  backend\app\services\tratamiento.py:129:# ==========================================================
+  backend\app\services\tratamiento.py:130:
+> backend\app\services\tratamiento.py:131:def actualizar_tratamiento(
+  backend\app\services\tratamiento.py:132:    db: Session,
+> backend\app\services\tratamiento.py:133:    tratamiento: Tratamiento,
+> backend\app\services\tratamiento.py:134:    datos: TratamientoUpdate
+  backend\app\services\tratamiento.py:135:):
+  backend\app\services\tratamiento.py:136:    datos_actualizados = datos.model_dump(
+  backend\app\services\tratamiento.py:137:        exclude_unset=True
+  backend\app\services\tratamiento.py:138:    )
+  backend\app\services\tratamiento.py:139:
+  backend\app\services\tratamiento.py:140:    for campo, valor in datos_actualizados.items():
+> backend\app\services\tratamiento.py:141:        setattr(tratamiento, campo, valor)
+  backend\app\services\tratamiento.py:142:
+  backend\app\services\tratamiento.py:143:    db.commit()
+> backend\app\services\tratamiento.py:144:    db.refresh(tratamiento)
+  backend\app\services\tratamiento.py:145:
+> backend\app\services\tratamiento.py:146:    return tratamiento
+  backend\app\services\tratamiento.py:147:
+  backend\app\services\tratamiento.py:148:
+  backend\app\services\tratamiento.py:149:# ==========================================================
+> backend\app\services\tratamiento.py:150:# CANCELAR TRATAMIENTO
+  backend\app\services\tratamiento.py:151:# ==========================================================
+  backend\app\services\tratamiento.py:152:
+> backend\app\services\tratamiento.py:153:def cancelar_tratamiento(
+  backend\app\services\tratamiento.py:154:    db: Session,
+> backend\app\services\tratamiento.py:155:    tratamiento: Tratamiento
+  backend\app\services\tratamiento.py:156:):
+> backend\app\services\tratamiento.py:157:    tratamiento.estado = "CANCELADO"
+  backend\app\services\tratamiento.py:158:
+  backend\app\services\tratamiento.py:159:    db.commit()
+> backend\app\services\tratamiento.py:160:    db.refresh(tratamiento)
+  backend\app\services\tratamiento.py:161:
+> backend\app\services\tratamiento.py:162:    return tratamiento
+
+
+

@@ -6,12 +6,12 @@ import { COLORS } from './theme';
 import {
   ActivityIndicator,
   Alert,
-  SafeAreaView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
 
+import { SafeAreaView } from 'react-native-safe-area-context';
 import App from './App';
 import Login from './Login';
 
@@ -493,7 +493,7 @@ export default function AppAutenticado() {
   // ========================================
 
   return (
-    <SafeAreaView style={styles.contenedor}>
+    <SafeAreaView edges={['top', 'bottom', 'left', 'right']} style={styles.contenedor}>
 
       <App
         usuario={sesion.usuario}

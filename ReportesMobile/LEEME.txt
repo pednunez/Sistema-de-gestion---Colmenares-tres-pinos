@@ -1,0 +1,39 @@
+COLMENARES TRES PINOS | REPORTES MOVIL
+=====================================
+
+Requisitos: Expo SDK 58, React Native, sesión ADMIN, servidor FastAPI.
+
+1. Descomprime la carpeta ReportesMobile dentro de la RAIZ del repositorio,
+   junto a las carpetas mobile, frontend y backend.
+
+2. Desde la raíz, ejecuta en PowerShell:
+   .\ReportesMobile\integrar_reportes.ps1
+
+3. Instala las dependencias que faltan:
+   cd .\mobile
+   npx expo install expo-file-system expo-sharing
+
+4. Comprueba y ejecuta:
+   npx tsc --noEmit
+   npx expo start -c
+
+La integración hace copia de seguridad de mobile/App.tsx antes de modificarlo.
+Los archivos nuevos se copian a:
+  mobile/ReportesLocales.tsx
+  mobile/api/reportes.ts
+
+La pantalla obtiene la vista previa de los listados JSON existentes de FastAPI
+(/apiarios/, /colmenas/, /inspecciones/, /tratamientos/, /usuarios/).
+Los botones PDF / Excel / CSV descargan los archivos oficiales mediante
+GET /reportes/{tipo}?formato=..., con Bearer token en el encabezado HTTP.
+Los archivos se comparten o guardan mediante el diálogo nativo del dispositivo.
+
+IMPORTANTE:
+- Solo ADMIN puede consultar reportes.
+- Requiere conexión; no hay cache local de reportes.
+- La vista previa muestra hasta 25 filas; el archivo contiene todas las
+  coincidencias, según los filtros aplicados en el backend.
+- Si la rama local tiene un App.tsx muy diferente de main y el instalador no
+  encuentra los puntos de integración, se detiene sin modificar los archivos.
+- No se tocó el backend, frontend ni ninguna otra pantalla existente.
+- Se comprobó sintaxis TS/TSX, pero NO se compiló contra tu proyecto de Windows.

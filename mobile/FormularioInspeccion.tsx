@@ -1,4 +1,3 @@
-
 import React, {
   useEffect,
   useRef,
@@ -39,12 +38,21 @@ import type {
 } from './database/inspeccionesAvanzadas';
 
 import {
+  cambiarEstadoTratamientoLocal,
+  fechaLocalISO,
+  guardarTratamientoLocal,
+  limpiarTexto,
+} from './database/tratamientos';
+
+import {
   leerSesionGuardada,
 } from './api/auth';
 
 import {
   leerCatalogoLocal,
 } from './database/catalogo';
+
+import type { InspeccionApi } from './api/inspecciones';
 
 // ==========================================
 // COLMENARES TRES PINOS
@@ -54,6 +62,11 @@ import {
 type Props = {
   codigoQR: string;
   onVolver: () => void;
+  modoModal?: boolean;
+  apiarioNombre?: string;
+  codigoColmena?: string;
+  inspeccionEditar?: InspeccionApi | null;
+  onGuardarEdicion?: (datos: InspeccionAvanzada) => Promise<void>;
 
   // Solo se usa en revisiones por grupo.
   onGuardarEnRevision?: (
@@ -142,6 +155,30 @@ function formularioVacio(
   };
 }
 
+function formularioDesdeInspeccion(
+  codigoQR: string,
+  inspeccion: InspeccionApi
+): InspeccionAvanzada {
+  return {
+    codigoQR,
+    estadoGeneral: (inspeccion.estado_general as EstadoGeneral | null) ?? null,
+    reinaObservada: inspeccion.reina_observada,
+    presenciaCria: inspeccion.presencia_cria,
+    postura: inspeccion.postura,
+    nivelPoblacion: (inspeccion.nivel_poblacion as Nivel | null) ?? null,
+    reservasAlimento: (inspeccion.reservas_alimento as Nivel | null) ?? null,
+    nivelMiel: (inspeccion.miel as NivelMiel | null) ?? null,
+    alimentacion: inspeccion.alimentacion_suministrada ?? '',
+    signosEnfermedad: Boolean(inspeccion.signos_enfermedad),
+    enfermedadObservada: inspeccion.enfermedad_observada ?? '',
+    tirasMedicamento: inspeccion.tiras_medicamento,
+    observaciones: inspeccion.observaciones ?? '',
+    tieneAlza: Boolean(inspeccion.tiene_alza),
+    camara: crearCaja(),
+    alza: crearCaja(),
+  };
+}
+
 // ==========================================
 // OPCIÓN SELECCIONABLE
 // ==========================================
@@ -189,12 +226,20 @@ function Opcion({
 export default function FormularioInspeccion({
   codigoQR,
   onVolver,
+  modoModal = false,
+  apiarioNombre = '',
+  codigoColmena = '',
+  inspeccionEditar = null,
+  onGuardarEdicion,
   onGuardarEnRevision,
   onGuardado,
 }: Props) {
+  const esEdicion = Boolean(inspeccionEditar);
   const [datos, setDatos] =
     useState<InspeccionAvanzada>(
-      () => formularioVacio(codigoQR)
+      () => inspeccionEditar
+        ? formularioDesdeInspeccion(codigoQR, inspeccionEditar)
+        : formularioVacio(codigoQR)
     );
 
   const [destinos, setDestinos] =
@@ -215,6 +260,17 @@ export default function FormularioInspeccion({
       numero: 1,
     });
 
+  const [marcoMenuVisible, setMarcoMenuVisible] = useState(false);
+  const [cajaCompletarActiva, setCajaCompletarActiva] = useState<Caja | null>(null);
+  const [registrarTratamiento, setRegistrarTratamiento] = useState(false);
+  const [tratamientoInspeccion, setTratamientoInspeccion] = useState({
+    tipoTratamiento: '',
+    producto: '',
+    dosis: '',
+    estado: 'EN_CURSO' as 'EN_CURSO' | 'FINALIZADO',
+    observaciones: '',
+  });
+
   const bloqueo = useRef(false);
 
   const esRevision = Boolean(
@@ -226,13 +282,27 @@ export default function FormularioInspeccion({
   // ========================================
 
   useEffect(() => {
-    setDatos(formularioVacio(codigoQR));
+    setDatos(
+      inspeccionEditar
+        ? formularioDesdeInspeccion(codigoQR, inspeccionEditar)
+        : formularioVacio(codigoQR)
+    );
 
     setMarcoActivo({
       caja: 'camara',
       numero: 1,
     });
-  }, [codigoQR]);
+    setMarcoMenuVisible(false);
+    setCajaCompletarActiva(null);
+    setRegistrarTratamiento(false);
+    setTratamientoInspeccion({
+      tipoTratamiento: '',
+      producto: '',
+      dosis: '',
+      estado: 'EN_CURSO',
+      observaciones: '',
+    });
+  }, [codigoQR, inspeccionEditar?.id]);
 
   // ========================================
   // CARGAR DESTINOS OFICIALES
@@ -242,6 +312,13 @@ export default function FormularioInspeccion({
     let activo = true;
 
     const cargar = async () => {
+      if (esEdicion) {
+        setDestinos([]);
+        setErrorCatalogo('');
+        setCargandoCatalogo(false);
+        return;
+      }
+
       setCargandoCatalogo(true);
       setErrorCatalogo('');
 
@@ -314,7 +391,7 @@ export default function FormularioInspeccion({
     return () => {
       activo = false;
     };
-  }, [codigoQR]);
+  }, [codigoQR, esEdicion]);
 
   // ========================================
   // MODIFICAR DATOS GENERALES
@@ -431,51 +508,94 @@ export default function FormularioInspeccion({
         );
       }
 
-      if (cargandoCatalogo) {
+      if (!esEdicion && cargandoCatalogo) {
         throw new Error(
           'El catálogo todavía se está cargando.'
         );
       }
 
-      if (errorCatalogo) {
+      if (!esEdicion && errorCatalogo) {
         throw new Error(
           'Necesitas una sesión y un catálogo oficial para guardar esta inspección.'
         );
       }
 
-      // Validar antes de guardar.
-      validarInspeccionAvanzada(
-        datos,
-        destinos.map(
-          destino => destino.codigoQR
-        )
-      );
+      if (esEdicion) {
+        if (!inspeccionEditar || !onGuardarEdicion) {
+          throw new Error('No se pudo preparar la edición de esta inspección.');
+        }
+        if (!datos.estadoGeneral) {
+          throw new Error('Selecciona el estado actual de la colmena.');
+        }
+        await onGuardarEdicion(datos);
+      } else {
+        validarInspeccionAvanzada(
+          datos,
+          destinos.map(destino => destino.codigoQR)
+        );
+      }
 
-      // Inspección normal:
-      // guardarInspeccionAvanzada()
-      //
-      // Revisión por grupo:
-      // onGuardarEnRevision()
-      //
-      // Solo se ejecuta una de las dos.
-      const id = onGuardarEnRevision
-        ? await onGuardarEnRevision(datos)
-        : await guardarInspeccionAvanzada(
-            datos
-          );
+      // Las nuevas inspecciones se guardan en SQLite. Las históricas se
+      // actualizan mediante PATCH y no generan movimientos de marcos nuevos.
+      if (
+        modoModal &&
+        datos.signosEnfermedad &&
+        registrarTratamiento &&
+        tratamientoInspeccion.tipoTratamiento.trim().length < 2
+      ) {
+        throw new Error('Indica el tipo de tratamiento que se aplicó.');
+      }
+
+      const id = esEdicion
+        ? inspeccionEditar?.id ?? 0
+        : onGuardarEnRevision
+          ? await onGuardarEnRevision(datos)
+          : await guardarInspeccionAvanzada(datos);
+
+      let avisoTratamiento = '';
+      if (
+        !esEdicion &&
+        modoModal &&
+        datos.signosEnfermedad &&
+        registrarTratamiento
+      ) {
+        try {
+          const tratamientoId = await guardarTratamientoLocal({
+            codigoQR,
+            inspeccionLocalId: id,
+            tipoTratamiento: limpiarTexto(tratamientoInspeccion.tipoTratamiento, 100).trim(),
+            producto: limpiarTexto(tratamientoInspeccion.producto, 150).trim(),
+            dosis: limpiarTexto(tratamientoInspeccion.dosis, 100).trim() ||
+              (datos.tirasMedicamento ? `${datos.tirasMedicamento} ${datos.tirasMedicamento === 1 ? 'tira' : 'tiras'}` : ''),
+            motivo: limpiarTexto(datos.enfermedadObservada, 500).trim(),
+            fechaInicio: fechaLocalISO(),
+            fechaFin: null,
+            estado: 'EN_CURSO',
+            observaciones: limpiarTexto(tratamientoInspeccion.observaciones, 1000).trim(),
+          });
+
+          if (tratamientoInspeccion.estado === 'FINALIZADO') {
+            await cambiarEstadoTratamientoLocal(tratamientoId, 'FINALIZADO');
+          }
+        } catch (errorTratamiento) {
+          avisoTratamiento = ` La inspección quedó guardada, pero no se pudo registrar el tratamiento: ${
+            errorTratamiento instanceof Error ? errorTratamiento.message : 'error desconocido'
+          }`;
+        }
+      }
 
       Alert.alert(
-        'Inspección guardada',
-        esRevision
-          ? 'La inspección quedó guardada y vinculada a la revisión. Continuaremos con la siguiente colmena disponible.'
-          : 'La inspección quedó guardada en SQLite, pendiente de sincronización.',
+        esEdicion ? 'Inspección actualizada' : 'Inspección guardada',
+        (esEdicion
+          ? 'Los datos de la inspección se actualizaron en el servidor. Los movimientos históricos de marcos se conservaron.'
+          : esRevision
+            ? 'La inspección quedó guardada y vinculada a la revisión. Continuaremos con la siguiente colmena disponible.'
+            : 'La inspección quedó guardada en SQLite, pendiente de sincronización.') + avisoTratamiento,
         [
           {
-            text: esRevision
-              ? 'Guardar y siguiente'
-              : 'Aceptar',
+            text: esRevision && !esEdicion ? 'Guardar y siguiente' : 'Aceptar',
             onPress: () => {
-              if (onGuardado) {
+              if (onGuardado && !esEdicion) {
                 onGuardado(id);
               } else {
                 onVolver();
@@ -521,7 +641,7 @@ export default function FormularioInspeccion({
       />
 
       <Opcion
-        texto="Sin evaluar"
+        texto={modoModal ? 'No revisado' : 'Sin evaluar'}
         activa={valor === null}
         onPress={() => onChange(null)}
       />
@@ -718,66 +838,223 @@ export default function FormularioInspeccion({
     </View>
   );
 
+  const etiquetaConteudoMarco = (contenido: ContenidoMarco | '') =>
+    contenido === ''
+      ? 'Sin registrar'
+      : OPCIONES_MARCOS.find(opcion => opcion.valor === contenido)?.texto ?? contenido;
+
+  const mostrarCajaModal = (caja: Caja, titulo: string) => {
+    const sinRegistrar = datos[caja].filter(marco => marco.contenido === '').length;
+    const registrados = datos[caja].filter(marco => marco.contenido !== '' && marco.contenido !== 'SIN_MARCO').length;
+    const transferidos = datos[caja].filter(marco => marco.transferir).length;
+
+    return (
+      <View style={styles.tarjeta}>
+        <View style={styles.cajaModalEncabezado}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.tituloSeccion}>{titulo}</Text>
+            <Text style={styles.ayuda}>
+              {sinRegistrar === 10
+                ? 'Sin registrar'
+                : `${registrados} marcos registrados${transferidos ? ` · ${transferidos} para transferir` : ''}`}
+            </Text>
+          </View>
+          {sinRegistrar > 0 && (
+            <Pressable
+              style={styles.botonCompletarMarcos}
+              onPress={() => setCajaCompletarActiva(actual => actual === caja ? null : caja)}
+            >
+              <Text style={styles.botonCompletarMarcosTexto}>
+                Completar {sinRegistrar} faltantes
+              </Text>
+            </Pressable>
+          )}
+        </View>
+
+        {cajaCompletarActiva === caja && (
+          <View style={styles.marcoModalOpciones}>
+            {OPCIONES_MARCOS.map(opcion => (
+              <Opcion
+                key={`completar-${caja}-${opcion.valor}`}
+                texto={opcion.texto}
+                activa={false}
+                onPress={() => {
+                  setDatos(actual => ({
+                    ...actual,
+                    [caja]: actual[caja].map(marco =>
+                      marco.contenido === ''
+                        ? { ...marco, contenido: opcion.valor }
+                        : marco
+                    ),
+                  }));
+                  setCajaCompletarActiva(null);
+                }}
+              />
+            ))}
+          </View>
+        )}
+
+        {datos[caja].map(marco => {
+          const activo = marcoActivo.caja === caja && marcoActivo.numero === marco.numero;
+          return (
+            <View key={`${caja}-modal-${marco.numero}`} style={styles.marcoModalContenedor}>
+              <View style={styles.marcoModalFila}>
+                <Text style={styles.marcoModalNombre}>Marco {marco.numero}</Text>
+                <Pressable
+                  style={styles.marcoModalSelector}
+                  onPress={() => {
+                    setMarcoActivo({ caja, numero: marco.numero });
+                    setMarcoMenuVisible(actual => !(activo && actual));
+                    setCajaCompletarActiva(null);
+                  }}
+                >
+                  <Text style={styles.marcoModalSelectorTexto} numberOfLines={1}>
+                    {etiquetaConteudoMarco(marco.contenido)}
+                  </Text>
+                  <Text style={styles.marcoModalFlecha}>⌄</Text>
+                </Pressable>
+                <Pressable
+                  disabled={!marco.contenido || marco.contenido === 'SIN_MARCO'}
+                  style={[
+                    styles.marcoModalTransferir,
+                    marco.transferir && styles.marcoModalTransferirActivo,
+                    (!marco.contenido || marco.contenido === 'SIN_MARCO') && styles.deshabilitado,
+                  ]}
+                  onPress={() => {
+                    if (!marco.contenido || marco.contenido === 'SIN_MARCO') return;
+                    cambiarMarco(caja, marco.numero, {
+                      transferir: !marco.transferir,
+                      destino: '',
+                    });
+                  }}
+                >
+                  <Text style={[
+                    styles.marcoModalTransferirTexto,
+                    marco.transferir && styles.marcoModalTransferirTextoActivo,
+                  ]}>
+                    {marco.transferir ? 'Quitar' : 'Transferir'}
+                  </Text>
+                </Pressable>
+              </View>
+
+              {activo && marcoMenuVisible && (
+                <View style={styles.marcoModalOpciones}>
+                  {OPCIONES_MARCOS.map(opcion => (
+                    <Opcion
+                      key={`${caja}-${marco.numero}-${opcion.valor}`}
+                      texto={opcion.texto}
+                      activa={marco.contenido === opcion.valor}
+                      onPress={() => {
+                        cambiarMarco(caja, marco.numero, {
+                          contenido: opcion.valor,
+                          ...(opcion.valor === 'SIN_MARCO'
+                            ? { transferir: false, destino: '' }
+                            : {}),
+                        });
+                        setMarcoMenuVisible(false);
+                      }}
+                    />
+                  ))}
+                </View>
+              )}
+
+              {marco.transferir && (
+                <View style={styles.marcoModalDestino}>
+                  <Text style={styles.label}>Colmena de destino *</Text>
+                  {destinos.length === 0 ? (
+                    <Text style={styles.ayuda}>No hay otras colmenas oficiales disponibles en el catálogo.</Text>
+                  ) : (
+                    <View style={styles.marcoModalOpciones}>
+                      {destinos.map(destino => (
+                        <Opcion
+                          key={`${caja}-${marco.numero}-${destino.codigoQR}`}
+                          texto={destino.etiqueta}
+                          activa={marco.destino === destino.codigoQR}
+                          onPress={() => cambiarMarco(caja, marco.numero, { destino: destino.codigoQR })}
+                        />
+                      ))}
+                    </View>
+                  )}
+                </View>
+              )}
+            </View>
+          );
+        })}
+      </View>
+    );
+  };
+
   // ========================================
   // INTERFAZ
   // ========================================
 
   return (
-    <ScrollView
-      style={styles.pantalla}
-      contentContainerStyle={styles.contenido}
-      keyboardShouldPersistTaps="handled"
-    >
-      <StatusBar barStyle="dark-content" />
-
-      <Pressable
-        disabled={guardando}
-        onPress={onVolver}
+    <View style={modoModal ? styles.modalFormularioRoot : styles.pantalla}>
+      <ScrollView
+        style={styles.scrollFormulario}
+        contentContainerStyle={modoModal ? styles.contenidoModalFormulario : styles.contenido}
+        keyboardShouldPersistTaps="handled"
       >
-        <Text style={styles.enlace}>
-          ‹ Volver
-        </Text>
-      </Pressable>
+        <StatusBar barStyle="dark-content" />
 
-      <Text style={styles.titulo}>
-        {esRevision
-          ? 'Inspección de grupo'
-          : 'Nueva inspección'}
-      </Text>
+        {!modoModal && (
+          <>
+            <Pressable disabled={guardando} onPress={onVolver}>
+              <Text style={styles.enlace}>‹ Volver</Text>
+            </Pressable>
 
-      <View style={styles.tarjeta}>
-        <Text style={styles.label}>
-          Código QR de la colmena
-        </Text>
-
-        <Text style={styles.codigo}>
-          {codigoQR}
-        </Text>
-
-        <Text style={styles.ayuda}>
-          Los datos se guardan en el
-          teléfono. La sincronización
-          se realizará posteriormente.
-        </Text>
-
-        {cargandoCatalogo && (
-          <ActivityIndicator
-            color={COLORS.gold}
-          />
+            <Text style={styles.titulo}>
+              {esEdicion
+                ? 'Editar inspección'
+                : esRevision
+                  ? 'Inspección de grupo'
+                  : 'Nueva inspección'}
+            </Text>
+          </>
         )}
 
-        {!!errorCatalogo && (
-          <Text style={styles.avisoTexto}>
-            {errorCatalogo}
-          </Text>
+        {modoModal && (
+          <View style={[styles.tarjeta, styles.tarjetaSelectorModal]}>
+            <View style={styles.filaDatosModal}>
+              <View style={styles.campoDatoModal}>
+                <Text style={styles.label}>Apiario *</Text>
+                <View style={styles.valorDatoModal}>
+                  <Text style={styles.valorDatoModalTexto} numberOfLines={1}>
+                    {apiarioNombre || 'Sin apiario'}
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.campoDatoModal}>
+                <Text style={styles.label}>Colmena *</Text>
+                <View style={styles.valorDatoModal}>
+                  <Text style={styles.valorDatoModalTexto} numberOfLines={1}>
+                    {codigoColmena || codigoQR}
+                  </Text>
+                </View>
+              </View>
+            </View>
+            {cargandoCatalogo && <ActivityIndicator color={COLORS.gold} style={{ marginTop: 8 }} />}
+            {!!errorCatalogo && <Text style={styles.avisoTexto}>{errorCatalogo}</Text>}
+          </View>
         )}
-      </View>
+
+        {!modoModal && (
+          <View style={styles.tarjeta}>
+            <Text style={styles.label}>Código QR de la colmena</Text>
+            <Text style={styles.codigo}>{codigoQR}</Text>
+            <Text style={styles.ayuda}>
+              Los datos se guardan en el teléfono. La sincronización se realizará posteriormente.
+            </Text>
+            {cargandoCatalogo && <ActivityIndicator color={COLORS.gold} />}
+            {!!errorCatalogo && <Text style={styles.avisoTexto}>{errorCatalogo}</Text>}
+          </View>
+        )}
 
       {/* ESTADO GENERAL */}
 
       <View style={styles.tarjeta}>
         <Text style={styles.tituloSeccion}>
-          Estado general *
+          {modoModal ? 'Estado de la colmena *' : 'Estado general *'}
         </Text>
 
         <View style={styles.fila}>
@@ -821,7 +1098,7 @@ export default function FormularioInspeccion({
         )}
 
         <Text style={styles.label}>
-          ¿Hay presencia de cría?
+          {modoModal ? '¿Hay cría?' : '¿Hay presencia de cría?'}
         </Text>
 
         {opcionesSiNo(
@@ -855,12 +1132,12 @@ export default function FormularioInspeccion({
         </Text>
 
         <Text style={styles.label}>
-          Nivel de población
+          {modoModal ? 'Población' : 'Nivel de población'}
         </Text>
 
         <View style={styles.fila}>
           <Opcion
-            texto="Sin evaluar"
+            texto={modoModal ? 'No revisado' : 'Sin evaluar'}
             activa={
               datos.nivelPoblacion === null
             }
@@ -896,7 +1173,7 @@ export default function FormularioInspeccion({
 
         <View style={styles.fila}>
           <Opcion
-            texto="Sin evaluar"
+            texto={modoModal ? 'No revisado' : 'Sin evaluar'}
             activa={
               datos.reservasAlimento ===
               null
@@ -928,12 +1205,12 @@ export default function FormularioInspeccion({
         </View>
 
         <Text style={styles.label}>
-          Nivel de miel
+          {modoModal ? 'Miel' : 'Nivel de miel'}
         </Text>
 
         <View style={styles.fila}>
           <Opcion
-            texto="Sin evaluar"
+            texto={modoModal ? 'No revisado' : 'Sin evaluar'}
             activa={
               datos.nivelMiel === null
             }
@@ -983,6 +1260,9 @@ export default function FormularioInspeccion({
             )
           }
         />
+        {modoModal && (
+          <Text style={styles.ayuda}>Déjalo vacío si no se alimentó la colmena.</Text>
+        )}
       </View>
 
       {/* SALUD */}
@@ -1029,7 +1309,7 @@ export default function FormularioInspeccion({
         {datos.signosEnfermedad && (
           <>
             <Text style={styles.label}>
-              Enfermedad o signos observados *
+              {modoModal ? '¿Qué se observó? *' : 'Enfermedad o signos observados *'}
             </Text>
 
             <TextInput
@@ -1052,7 +1332,7 @@ export default function FormularioInspeccion({
             />
 
             <Text style={styles.label}>
-              Tiras de medicamento
+              {modoModal ? 'Tiras de medicamento aplicadas' : 'Tiras de medicamento'}
             </Text>
 
             <View style={styles.fila}>
@@ -1066,7 +1346,7 @@ export default function FormularioInspeccion({
                     }
                     texto={
                       cantidad === null
-                        ? 'Sin registrar'
+                        ? (modoModal ? 'No se aplicaron' : 'Sin registrar')
                         : String(cantidad)
                     }
                     activa={
@@ -1087,104 +1367,187 @@ export default function FormularioInspeccion({
         )}
       </View>
 
-      {/* CÁMARAS */}
+      {modoModal && datos.signosEnfermedad && (
+        <View style={styles.tarjeta}>
+          <Text style={styles.tituloSeccion}>Tratamiento asociado</Text>
+          <Text style={styles.label}>¿Se aplicó un tratamiento?</Text>
+          <View style={styles.fila}>
+            <Opcion
+              texto="No"
+              activa={!registrarTratamiento}
+              onPress={() => setRegistrarTratamiento(false)}
+            />
+            <Opcion
+              texto="Sí, registrar"
+              activa={registrarTratamiento}
+              onPress={() => setRegistrarTratamiento(true)}
+            />
+          </View>
 
-      <View style={styles.tarjeta}>
-        <Text style={styles.tituloSeccion}>
-          Configuración de cajas
-        </Text>
+          {registrarTratamiento && (
+            <>
+              <Text style={styles.label}>Tipo de tratamiento *</Text>
+              <TextInput
+                style={styles.input}
+                value={tratamientoInspeccion.tipoTratamiento}
+                onChangeText={valor => setTratamientoInspeccion(actual => ({
+                  ...actual,
+                  tipoTratamiento: limpiarTexto(valor, 100),
+                }))}
+                placeholder="Por ejemplo: Control de varroa"
+                maxLength={100}
+              />
 
-        <Text style={styles.label}>
-          ¿La colmena tiene alza?
-        </Text>
+              <View style={styles.filaDatosModal}>
+                <View style={styles.campoDatoModal}>
+                  <Text style={styles.label}>Producto</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={tratamientoInspeccion.producto}
+                    onChangeText={valor => setTratamientoInspeccion(actual => ({
+                      ...actual,
+                      producto: limpiarTexto(valor, 150),
+                    }))}
+                    placeholder="Producto utilizado"
+                    maxLength={150}
+                  />
+                </View>
+                <View style={styles.campoDatoModal}>
+                  <Text style={styles.label}>Dosis</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={tratamientoInspeccion.dosis}
+                    onChangeText={valor => setTratamientoInspeccion(actual => ({
+                      ...actual,
+                      dosis: limpiarTexto(valor, 100),
+                    }))}
+                    placeholder={datos.tirasMedicamento ? `${datos.tirasMedicamento} tiras` : 'Dosis aplicada'}
+                    maxLength={100}
+                  />
+                </View>
+              </View>
 
-        <View style={styles.fila}>
-          <Opcion
-            texto="No"
-            activa={!datos.tieneAlza}
-            onPress={() =>
-              cambiarAlza(false)
-            }
-          />
+              <Text style={styles.label}>Estado del tratamiento</Text>
+              <View style={styles.fila}>
+                <Opcion
+                  texto="En curso"
+                  activa={tratamientoInspeccion.estado === 'EN_CURSO'}
+                  onPress={() => setTratamientoInspeccion(actual => ({ ...actual, estado: 'EN_CURSO' }))}
+                />
+                <Opcion
+                  texto="Finalizado"
+                  activa={tratamientoInspeccion.estado === 'FINALIZADO'}
+                  onPress={() => setTratamientoInspeccion(actual => ({ ...actual, estado: 'FINALIZADO' }))}
+                />
+              </View>
+              <Text style={styles.ayuda}>
+                Se registrará asociado a esta inspección. Si lo marcas como finalizado, se utilizará la fecha de hoy.
+              </Text>
 
-          <Opcion
-            texto="Sí"
-            activa={datos.tieneAlza}
-            onPress={() =>
-              cambiarAlza(true)
-            }
-          />
+              <Text style={styles.label}>Observaciones del tratamiento</Text>
+              <TextInput
+                style={[styles.input, styles.area]}
+                value={tratamientoInspeccion.observaciones}
+                onChangeText={valor => setTratamientoInspeccion(actual => ({
+                  ...actual,
+                  observaciones: limpiarTexto(valor, 1000),
+                }))}
+                multiline
+                textAlignVertical="top"
+                placeholder="Observaciones adicionales"
+                maxLength={1000}
+              />
+            </>
+          )}
         </View>
-      </View>
-
-      {mostrarCaja(
-        'camara',
-        'Cámara de cría · 10 posiciones'
       )}
 
-      {datos.tieneAlza &&
-        mostrarCaja(
-          'alza',
-          'Alza · 10 posiciones'
-        )}
+      {!esEdicion ? (
+        <>
+          {/* CÁMARAS */}
+          {modoModal && (
+            <View style={{ marginBottom: 4 }}>
+              <Text style={styles.tituloSeccion}>Revisión de marcos</Text>
+              <Text style={styles.ayuda}>
+                Indica qué contiene cada marco. Si mueves un marco a otra colmena del apiario, márcalo con Transferir.
+              </Text>
+            </View>
+          )}
+          {!modoModal && (
+            <View style={styles.tarjeta}>
+              <Text style={styles.tituloSeccion}>Configuración de cajas</Text>
+              <Text style={styles.label}>¿La colmena tiene alza?</Text>
+              <View style={styles.fila}>
+                <Opcion texto="No" activa={!datos.tieneAlza} onPress={() => cambiarAlza(false)} />
+                <Opcion texto="Sí" activa={datos.tieneAlza} onPress={() => cambiarAlza(true)} />
+              </View>
+            </View>
+          )}
 
-      {/* RESUMEN */}
+          {modoModal
+            ? mostrarCajaModal('camara', 'Cámara de cría')
+            : mostrarCaja('camara', 'Cámara de cría · 10 posiciones')}
 
-      <View style={styles.tarjeta}>
-        <Text style={styles.tituloSeccion}>
-          Resumen automático
-        </Text>
+          {modoModal && (
+            <View style={styles.tarjeta}>
+              <Text style={styles.label}>¿La colmena tiene alza?</Text>
+              <View style={styles.fila}>
+                <Opcion texto="No" activa={!datos.tieneAlza} onPress={() => cambiarAlza(false)} />
+                <Opcion texto="Sí" activa={datos.tieneAlza} onPress={() => cambiarAlza(true)} />
+              </View>
+            </View>
+          )}
 
-        <View style={styles.resumen}>
-          <View>
-            <Text style={styles.resumenNumero}>
-              {resumen.total}
+          {datos.tieneAlza && (
+            modoModal
+              ? mostrarCajaModal('alza', 'Alza')
+              : mostrarCaja('alza', 'Alza · 10 posiciones')
+          )}
+
+          {/* RESUMEN */}
+          {!modoModal && <View style={styles.tarjeta}>
+            <Text style={styles.tituloSeccion}>
+              Resumen automático
             </Text>
+
+            <View style={styles.resumen}>
+              <View>
+                <Text style={styles.resumenNumero}>{resumen.total}</Text>
+                <Text style={styles.ayuda}>Marcos</Text>
+              </View>
+              <View>
+                <Text style={styles.resumenNumero}>{resumen.cria}</Text>
+                <Text style={styles.ayuda}>Con cría</Text>
+              </View>
+              <View>
+                <Text style={styles.resumenNumero}>{resumen.miel}</Text>
+                <Text style={styles.ayuda}>Con miel</Text>
+              </View>
+              <View>
+                <Text style={styles.resumenNumero}>{resumen.transferencias}</Text>
+                <Text style={styles.ayuda}>Transferencias</Text>
+              </View>
+            </View>
+
             <Text style={styles.ayuda}>
-              Marcos
+              Posiciones sin registrar: {resumen.sinRegistrar}
             </Text>
-          </View>
-
-          <View>
-            <Text style={styles.resumenNumero}>
-              {resumen.cria}
-            </Text>
-            <Text style={styles.ayuda}>
-              Con cría
-            </Text>
-          </View>
-
-          <View>
-            <Text style={styles.resumenNumero}>
-              {resumen.miel}
-            </Text>
-            <Text style={styles.ayuda}>
-              Con miel
-            </Text>
-          </View>
-
-          <View>
-            <Text style={styles.resumenNumero}>
-              {resumen.transferencias}
-            </Text>
-            <Text style={styles.ayuda}>
-              Transferencias
-            </Text>
-          </View>
+          </View>}
+        </>
+      ) : (
+        <View style={styles.tarjeta}>
+          <Text style={styles.tituloSeccion}>Revisión de marcos</Text>
+          <Text style={styles.ayuda}>
+            La información de marcos y las transferencias históricas se conserva tal como fue registrada. Esta edición modifica los datos generales y sanitarios, sin crear movimientos nuevos.
+          </Text>
         </View>
-
-        <Text style={styles.ayuda}>
-          Posiciones sin registrar: {
-            resumen.sinRegistrar
-          }
-        </Text>
-      </View>
+      )}
 
       {/* OBSERVACIONES */}
 
       <View style={styles.tarjeta}>
         <Text style={styles.tituloSeccion}>
-          Observaciones generales
+          {modoModal ? 'Observaciones' : 'Observaciones generales'}
         </Text>
 
         <TextInput
@@ -1211,31 +1574,52 @@ export default function FormularioInspeccion({
 
       {/* GUARDAR */}
 
-      <Pressable
-        style={[
-          styles.botonGuardar,
-          guardando &&
-            styles.deshabilitado,
-        ]}
-        disabled={guardando}
-        onPress={() =>
-          void guardar()
-        }
-      >
-        <Text style={styles.botonTexto}>
-          {guardando
-            ? 'Guardando...'
-            : esRevision
-              ? 'Guardar y siguiente'
-              : 'Guardar inspección'}
-        </Text>
-      </Pressable>
+        {!modoModal && (
+          <>
+            <Pressable
+              style={[styles.botonGuardar, guardando && styles.deshabilitado]}
+              disabled={guardando}
+              onPress={() => void guardar()}
+            >
+              <Text style={styles.botonTexto}>
+                {guardando
+                  ? 'Guardando...'
+                  : esEdicion
+                    ? 'Guardar cambios'
+                    : esRevision
+                      ? 'Guardar y siguiente'
+                      : 'Guardar inspección'}
+              </Text>
+            </Pressable>
 
-      <Text style={styles.pie}>
-        Colmenares Tres Pinos ·
-        Registro local SQLite
-      </Text>
-    </ScrollView>
+            <Text style={styles.pie}>
+              Colmenares Tres Pinos · {esEdicion ? 'Edición sincronizada en FastAPI' : 'Registro local SQLite'}
+            </Text>
+          </>
+        )}
+      </ScrollView>
+
+      {modoModal && (
+        <View style={styles.modalFormularioFooter}>
+          <Pressable
+            style={styles.modalFormularioCancelar}
+            onPress={onVolver}
+            disabled={guardando}
+          >
+            <Text style={styles.modalFormularioCancelarTexto}>Cancelar</Text>
+          </Pressable>
+          <Pressable
+            style={[styles.modalFormularioGuardar, guardando && styles.deshabilitado]}
+            onPress={() => void guardar()}
+            disabled={guardando}
+          >
+            <Text style={styles.modalFormularioGuardarTexto}>
+              {guardando ? 'Guardando…' : 'Registrar inspección'}
+            </Text>
+          </Pressable>
+        </View>
+      )}
+    </View>
   );
 }
 
@@ -1247,6 +1631,206 @@ const styles = StyleSheet.create({
   pantalla: {
     flex: 1,
     backgroundColor: COLORS.backgroundSoft,
+  },
+
+  modalFormularioRoot: {
+    flex: 1,
+    backgroundColor: COLORS.backgroundSoft,
+  },
+
+  scrollFormulario: {
+    flex: 1,
+  },
+
+  contenidoModalFormulario: {
+    padding: 16,
+    paddingTop: 14,
+    paddingBottom: 24,
+  },
+
+  tarjetaSelectorModal: {
+    marginBottom: 10,
+  },
+
+  filaDatosModal: {
+    flexDirection: 'row',
+    gap: 9,
+  },
+
+  campoDatoModal: {
+    flex: 1,
+    minWidth: 0,
+  },
+
+  valorDatoModal: {
+    minHeight: 43,
+    borderWidth: 1,
+    borderColor: COLORS.borderStrong,
+    borderRadius: 10,
+    backgroundColor: COLORS.surface,
+    paddingHorizontal: 11,
+    justifyContent: 'center',
+  },
+
+  valorDatoModalTexto: {
+    color: COLORS.text,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+
+  modalFormularioFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    backgroundColor: COLORS.surface,
+  },
+
+  modalFormularioCancelar: {
+    flex: 1,
+    minHeight: 44,
+    borderWidth: 1,
+    borderColor: COLORS.borderStrong,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+  },
+
+  modalFormularioCancelarTexto: {
+    color: COLORS.text,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+
+  modalFormularioGuardar: {
+    flex: 1.35,
+    minHeight: 44,
+    backgroundColor: COLORS.gold,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+  },
+
+  modalFormularioGuardarTexto: {
+    color: COLORS.forestDeep,
+    fontSize: 13,
+    fontWeight: '900',
+  },
+
+  cajaModalEncabezado: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 8,
+    marginBottom: 8,
+  },
+
+  botonCompletarMarcos: {
+    borderWidth: 1,
+    borderColor: COLORS.goldBorder,
+    borderRadius: 9,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    backgroundColor: COLORS.goldSoft,
+  },
+
+  botonCompletarMarcosTexto: {
+    color: COLORS.goldText,
+    fontSize: 11,
+    fontWeight: '800',
+  },
+
+  marcoModalContenedor: {
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    paddingTop: 8,
+    paddingBottom: 4,
+  },
+
+  marcoModalFila: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+  },
+
+  marcoModalNombre: {
+    width: 57,
+    color: COLORS.text,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+
+  marcoModalSelector: {
+    flex: 1,
+    minHeight: 40,
+    borderWidth: 1,
+    borderColor: COLORS.borderStrong,
+    borderRadius: 9,
+    backgroundColor: COLORS.surface,
+    paddingHorizontal: 9,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 5,
+  },
+
+  marcoModalSelectorTexto: {
+    flex: 1,
+    color: COLORS.text,
+    fontSize: 11,
+  },
+
+  marcoModalFlecha: {
+    color: COLORS.forest,
+    fontSize: 17,
+    fontWeight: '800',
+  },
+
+  marcoModalTransferir: {
+    minWidth: 72,
+    minHeight: 40,
+    borderWidth: 1,
+    borderColor: COLORS.borderStrong,
+    borderRadius: 9,
+    backgroundColor: COLORS.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 7,
+  },
+
+  marcoModalTransferirActivo: {
+    borderColor: COLORS.gold,
+    backgroundColor: COLORS.goldSoft,
+  },
+
+  marcoModalTransferirTexto: {
+    color: COLORS.textSecondary,
+    fontSize: 10,
+    fontWeight: '700',
+  },
+
+  marcoModalTransferirTextoActivo: {
+    color: COLORS.goldText,
+  },
+
+  marcoModalOpciones: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    paddingTop: 8,
+  },
+
+  marcoModalDestino: {
+    marginTop: 8,
+    marginLeft: 60,
+    padding: 9,
+    borderRadius: 10,
+    backgroundColor: COLORS.goldSoft,
   },
 
   contenido: {

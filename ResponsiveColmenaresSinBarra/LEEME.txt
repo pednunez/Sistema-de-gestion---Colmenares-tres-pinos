@@ -1,0 +1,34 @@
+COLMENARES TRES PINOS | RESPONSIVE SIN BARRA INFERIOR PERSONALIZADA
+=====================================================================
+
+ESTA ES LA VERSION CORREGIDA. NO AGREGA BOTONES ATRAS / INICIO / MENU.
+La barra inferior de Android y el indicador de inicio de iPhone siguen
+siendo controles nativos del telefono. La app evita tapar contenido con ellos.
+
+CAMBIOS
+- Safe area en Android/iPhone/iPad (notch, barra superior e inferior).
+- Menu actual: desplegable en telefono y lateral en tablet.
+- Detecta tablets usando ancho y alto, incluso al girar el dispositivo.
+- Ajusta el ancho real en Stock y Reportes, conserva scroll de tablas.
+- Login ajustado a pantallas pequenas y grandes.
+- Compatibilidad con la accion nativa Atras de Android.
+- Orientacion automatica vertical/horizontal.
+- Apiarios solo visible para ADMIN.
+- Si usaste el ZIP anterior, ELIMINA su barra inferior nueva sin perder otros ajustes.
+
+INSTALACION
+1) Descomprime esta carpeta en la raiz del repositorio.
+2) En PowerShell desde la raiz:
+   python .\ResponsiveColmenaresSinBarra\aplicar_responsive.py
+3) Luego:
+   cd mobile
+   npx expo install react-native-safe-area-context
+   npx tsc --noEmit
+   npx expo start -c
+
+ADVERTENCIAS
+- Hace respaldos junto a la carpeta del repositorio (no los sube a git).
+- Verifica manualmente formularios, modales, tablas y ambos roles.
+- No cambia datos, FastAPI ni logica de sincronizacion.
+- Sin probar los dispositivos reales no se garantiza 100% de cobertura.
+- No uses git add . antes de revisar los cambios.

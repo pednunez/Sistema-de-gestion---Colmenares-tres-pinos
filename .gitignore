@@ -48,3 +48,12 @@ build/
 .env.production.local
 .env.test.local
 backend/.env.testing
+
+# Respaldos y archivos comprimidos
+*.zip
+*.rar
+*.7z
+*.bak*
+*backup*
+*respaldo*
+*.orig.*

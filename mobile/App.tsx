@@ -5,8 +5,10 @@ import React, {
 } from 'react';
 
 import { COLORS } from './theme';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
+  BackHandler,
   Alert,
   Image,
   Modal,
@@ -30,7 +32,8 @@ import {
 // ==========================================
 
 import FormularioInspeccion from './FormularioInspeccion';
-import MisInspecciones from './MisInspecciones';
+import InspeccionesLocales from './InspeccionesLocales';
+import PorRevisarLocales from './PorRevisarLocales';
 import InicioModulos from './InicioModulos';
 import ColmenasLocales from './ColmenasLocales';
 import TratamientosLocales from './TratamientosLocales';
@@ -38,6 +41,7 @@ import RevisionesGrupos from './RevisionesGrupos';
 import ApiariosLocales from './ApiariosLocales';
 import TransferenciasLocales from './TransferenciasLocales';
 import StockLocales from './StockLocales';
+import ReportesLocales from './ReportesLocales';
 import AuditoriaLocales from './AuditoriaLocales';
 import UsuariosLocales from './UsuariosLocales';
 import Tutorial from './Tutorial';
@@ -81,12 +85,14 @@ type Pantalla =
   | 'colmena'
   | 'inspeccion'
   | 'mis-inspecciones'
+  | 'por-revisar-locales'
   | 'colmenas-locales'
   | 'apiarios-locales'
   | 'transferencias-locales'
   | 'tratamientos-locales'
   | 'revisiones-grupos'
   | 'stock-locales'
+  | 'reportes-locales'
   | 'auditoria'
   | 'usuarios-locales';
 
@@ -97,10 +103,12 @@ type IdModulo =
   | 'apiarios'
   | 'colmenas'
   | 'inspecciones'
+  | 'por-revisar'
   | 'tratamientos'
   | 'revisiones'
   | 'transferencias'
   | 'stock'
+  | 'reportes'
   | 'qr'
   | 'auditoria'
   | 'usuarios';
@@ -175,12 +183,19 @@ const MENU: ItemMenu[] = [
     id: 'colmenas',
     nombre: 'Colmenas',
     icono: '🐝',
-    roles: TODOS,
+    roles: SOLO_ADMIN,
     destino: 'colmenas-locales',
     disponible: true,
   },
 
-
+  {
+    id: 'por-revisar',
+    nombre: 'Por revisar',
+    icono: '▣',
+    roles: TODOS,
+    destino: 'por-revisar-locales',
+    disponible: true,
+  },
 
   {
     id: 'inspecciones',
@@ -226,6 +241,15 @@ const MENU: ItemMenu[] = [
     icono: '📦',
     roles: TODOS,
     destino: 'stock-locales',
+    disponible: true,
+  },
+
+  {
+    id: 'reportes',
+    nombre: 'Reportes',
+    icono: '📑',
+    roles: SOLO_ADMIN,
+    destino: 'reportes-locales',
     disponible: true,
   },
 
@@ -289,6 +313,9 @@ function obtenerModuloActivo(
     case 'stock-locales':
       return 'stock';
 
+    case 'reportes-locales':
+      return 'reportes';
+
     case 'auditoria':
       return 'auditoria';
 
@@ -302,6 +329,9 @@ function obtenerModuloActivo(
     case 'mis-inspecciones':
     case 'inspeccion':
       return 'inspecciones';
+
+    case 'por-revisar-locales':
+      return 'por-revisar';
 
     case 'tratamientos-locales':
       return 'tratamientos';
@@ -373,10 +403,12 @@ export default function App({
   // RESPONSIVE
   // ========================================
 
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
 
   // Tablet desde 768 px.
-  const esTablet = width >= 768;
+  const esTablet = width >= 760 && Math.min(width, height) >= 600;
+  const anchoSidebar = Math.max(210, Math.min(270, Math.round(width * 0.28)));
 
   const pantallaInicial: Pantalla =
     usuario.rol === 'ADMIN'
@@ -389,8 +421,29 @@ export default function App({
 
   const [pantalla, setPantalla] =
     useState<Pantalla>(pantallaInicial);
+  // RESPONSIVE_COLMENARES_2026: historial de navegacion compartido.
+  const historialPantallas = useRef<Pantalla[]>([]);
+  const pantallaActualRef = useRef<Pantalla>(pantallaInicial);
+
+  const navegar = (destino: Pantalla) => {
+    const actual = pantallaActualRef.current;
+    if (destino === actual) return;
+    historialPantallas.current.push(actual);
+    if (historialPantallas.current.length > 30) historialPantallas.current.shift();
+    pantallaActualRef.current = destino;
+    setPantalla(destino);
+  };
+
 
   const [menuAbierto, setMenuAbierto] =
+    useState(false);
+
+  // Filtros que llegan desde los accesos del Dashboard.
+  const [filtroColmenasDashboard, setFiltroColmenasDashboard] =
+    useState<{ apiarioId?: number; colmenaIds?: number[]; colmenaId?: number } | null>(null);
+  const [volverInspeccionA, setVolverInspeccionA] =
+    useState<'colmena' | 'colmenas-locales'>('colmena');
+  const [tratamientoDesdeColmenas, setTratamientoDesdeColmenas] =
     useState(false);
 
   // ========================================
@@ -548,16 +601,46 @@ export default function App({
     setCodigoQR('');
     setColmenaSeleccionada(null);
     setApiarioSeleccionado(null);
+    setFiltroColmenasDashboard(null);
+    setVolverInspeccionA('colmena');
+    setTratamientoDesdeColmenas(false);
     setMenuAbierto(false);
-
+    historialPantallas.current = [];
+    pantallaActualRef.current = pantallaInicial;
     setPantalla(pantallaInicial);
   };
+
+  // Historial accesible desde boton inferior y boton fisico Android.
+  const volverAtras = () => {
+    if (menuAbierto) { setMenuAbierto(false); return; }
+    const anterior = historialPantallas.current.pop();
+    if (anterior) {
+      pantallaActualRef.current = anterior;
+      setPantalla(anterior);
+    } else if (pantallaActualRef.current !== pantallaInicial) {
+      volverInicio();
+    }
+  };
+
+  useEffect(() => {
+    if (Platform.OS !== 'android') return;
+    const suscripcion = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (menuAbierto) { setMenuAbierto(false); return true; }
+      if (tutorialVisible) { void cerrarTutorial(); return true; }
+      if (pantallaActualRef.current !== pantallaInicial) { volverAtras(); return true; }
+      return false;
+    });
+    return () => suscripcion.remove();
+  }, [menuAbierto, tutorialVisible, pantalla, pantallaInicial]);
+
 
   // ========================================
   // ABRIR ESCANER QR
   // ========================================
 
   const abrirEscaner = async () => {
+
+    setVolverInspeccionA('colmena');
 
     if (!permission?.granted) {
 
@@ -584,7 +667,49 @@ export default function App({
     setApiarioSeleccionado(null);
 
     setMenuAbierto(false);
-    setPantalla('escaner');
+    navegar('escaner');
+  };
+
+  // ========================================
+  // ACCESOS DIRECTOS DESDE EL DASHBOARD
+  // ========================================
+
+  const buscarColmenaDashboard = async (colmenaId: number) => {
+    const catalogo = await leerCatalogoLocal(usuario.id);
+    const colmena = catalogo?.colmenas.find(item => item.id === colmenaId);
+
+    if (!colmena || !catalogo) {
+      Alert.alert(
+        'Colmena no disponible',
+        'No se encontró la colmena en el catálogo local. Actualiza el catálogo e inténtalo nuevamente.'
+      );
+      return null;
+    }
+
+    const apiario = catalogo.apiarios.find(
+      item => item.id === colmena.apiario_id
+    ) ?? null;
+
+    setCodigoQR(colmena.codigo_qr);
+    setColmenaSeleccionada(colmena);
+    setApiarioSeleccionado(apiario);
+    setCameraReady(false);
+    setMenuAbierto(false);
+
+    return colmena;
+  };
+
+  const inspeccionarDesdeDashboard = async (colmenaId: number) => {
+    try {
+      const colmena = await buscarColmenaDashboard(colmenaId);
+      if (!colmena) return;
+      setFiltroColmenasDashboard({ colmenaId });
+      setVolverInspeccionA('colmenas-locales');
+      navegar('inspeccion');
+    } catch (error) {
+      console.error('No se pudo iniciar la inspección desde Dashboard:', error);
+      Alert.alert('Error', 'No se pudo iniciar la inspección de la colmena.');
+    }
   };
 
   // ========================================
@@ -592,6 +717,7 @@ export default function App({
   // ========================================
 
   const navegarModulo = (item: ItemMenu) => {
+    if (!item.roles.includes(usuario.rol as Rol)) return;
 
     if (!item.disponible) {
       return;
@@ -614,7 +740,7 @@ export default function App({
     // Resto de los módulos disponibles.
     if (item.destino) {
       setCameraReady(false);
-      setPantalla(item.destino);
+      navegar(item.destino);
     }
   };
 
@@ -742,7 +868,7 @@ export default function App({
 
       setCameraReady(false);
 
-      setPantalla('colmena');
+      navegar('colmena');
 
     } catch (error) {
 
@@ -769,6 +895,7 @@ export default function App({
     <View style={[
       styles.sidebarContenido,
       mostrarCerrar && styles.sidebarContenidoMovil,
+        mostrarCerrar && { paddingTop: Math.max(insets.top, Platform.OS === 'ios' ? 44 : 24) },
     ]}>
 
       {/* MARCA: AL TOCARLA REGRESA A LA PANTALLA PRINCIPAL DEL ROL */}
@@ -908,6 +1035,7 @@ export default function App({
       <View style={[
         styles.sidebarFooter,
         mostrarCerrar && styles.sidebarFooterMovil,
+        mostrarCerrar && { paddingBottom: Math.max(38, insets.bottom + 14) },
       ]}>
 
         <View style={styles.usuarioAvatar}>
@@ -1063,21 +1191,46 @@ export default function App({
         }}
 
         onInspecciones={() => {
-          setPantalla('mis-inspecciones');
+          navegar('mis-inspecciones');
         }}
 
         onColmenas={() => {
-          setPantalla('colmenas-locales');
+          navegar('colmenas-locales');
         }}
 
         onTratamientos={() => {
-          setPantalla('tratamientos-locales');
+          navegar('tratamientos-locales');
         }}
 
         onRevisiones={() => {
           if (HABILITAR_REVISIONES_GRUPOS) {
-            setPantalla('revisiones-grupos');
+            navegar('revisiones-grupos');
           }
+        }}
+
+        onApiarios={() => {
+          navegar('apiarios-locales');
+        }}
+
+        onStock={() => {
+          navegar('stock-locales');
+        }}
+
+        onVerColmenas={(apiarioId, colmenaIds) => {
+          setFiltroColmenasDashboard({
+            apiarioId,
+            colmenaIds,
+          });
+          navegar('colmenas-locales');
+        }}
+
+        onVerColmena={(colmenaId) => {
+          setFiltroColmenasDashboard({ colmenaId });
+          navegar('colmenas-locales');
+        }}
+
+        onInspeccionar={(colmena) => {
+          void inspeccionarDesdeDashboard(colmena.id);
         }}
 
       />
@@ -1090,6 +1243,7 @@ export default function App({
     contenido = (
       <ApiariosLocales
         onVolver={volverInicio}
+        rol={usuario.rol}
       />
     );
   }
@@ -1111,6 +1265,16 @@ export default function App({
 
     contenido = (
       <StockLocales
+        onVolver={volverInicio}
+        rol={usuario.rol}
+      />
+    );
+  }
+
+  // REPORTES
+  else if (pantalla === 'reportes-locales') {
+    contenido = (
+      <ReportesLocales
         onVolver={volverInicio}
         rol={usuario.rol}
       />
@@ -1142,6 +1306,24 @@ export default function App({
 
     contenido = (
       <TratamientosLocales
+        colmenaIdInicial={tratamientoDesdeColmenas ? filtroColmenasDashboard?.colmenaId : undefined}
+        onVolver={() => {
+          if (tratamientoDesdeColmenas) {
+            setTratamientoDesdeColmenas(false);
+            navegar('colmenas-locales');
+          } else {
+            volverInicio();
+          }
+        }}
+      />
+    );
+  }
+
+  // COLMENAS POR REVISAR
+  else if (pantalla === 'por-revisar-locales') {
+
+    contenido = (
+      <PorRevisarLocales
         onVolver={volverInicio}
       />
     );
@@ -1170,18 +1352,30 @@ export default function App({
         }}
 
         onVerInspecciones={() => {
-          setPantalla('mis-inspecciones');
+          navegar('mis-inspecciones');
         }}
+
+        onInspeccionar={inspeccionarDesdeDashboard}
+        onAbrirTratamientos={(colmenaId) => {
+          setFiltroColmenasDashboard({ colmenaId });
+          setTratamientoDesdeColmenas(true);
+          navegar('tratamientos-locales');
+        }}
+
+        apiarioIdInicial={filtroColmenasDashboard?.apiarioId}
+        colmenaIdsIniciales={filtroColmenasDashboard?.colmenaIds}
+        colmenaIdInicial={filtroColmenasDashboard?.colmenaId}
+        rol={usuario.rol}
 
       />
     );
   }
 
-  // HISTORIAL DE INSPECCIONES
+  // LISTADO DE INSPECCIONES
   else if (pantalla === 'mis-inspecciones') {
 
     contenido = (
-      <MisInspecciones
+      <InspeccionesLocales
         onVolver={volverInicio}
       />
     );
@@ -1196,7 +1390,7 @@ export default function App({
         codigoQR={codigoQR}
 
         onVolver={() => {
-          setPantalla('colmena');
+          navegar(volverInspeccionA);
         }}
 
       />
@@ -1287,7 +1481,7 @@ export default function App({
                 return;
               }
 
-              setPantalla('inspeccion');
+              navegar('inspeccion');
             }}
           >
             <Text style={styles.buttonText}>
@@ -1323,7 +1517,7 @@ export default function App({
       {/* MENU PERMANENTE EN TABLETS */}
       {esTablet && (
 
-        <View style={styles.sidebarTablet}>
+        <View style={[styles.sidebarTablet, { width: anchoSidebar }]}>
           {renderSidebar(false)}
         </View>
 
@@ -1468,6 +1662,7 @@ export default function App({
           {contenido}
         </View>
 
+
       </View>
 
       {/* MENU DESPLEGABLE EN TELEFONOS
@@ -1521,6 +1716,7 @@ export default function App({
 // ==========================================
 
 const styles = StyleSheet.create({
+
 
   // ESTRUCTURA GENERAL
 

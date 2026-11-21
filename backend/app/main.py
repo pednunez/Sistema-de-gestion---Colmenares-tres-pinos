@@ -38,6 +38,7 @@ from app.routers.movil import router as movil_router
 from app.routers.revisiones import router as revisiones_router
 from app.routers.auditoria import router as auditoria_router
 from app.routers.auth import router as auth_router
+from app.routers.reportes import router as reportes_router
 
 # ==========================================================
 # INVENTARIO GENERAL
@@ -139,6 +140,7 @@ app.include_router(
 )
 
 app.include_router(auditoria_router)
+app.include_router(reportes_router)
 
 
 # ==========================================================

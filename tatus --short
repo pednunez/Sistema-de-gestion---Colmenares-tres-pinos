@@ -1,0 +1,33 @@
+warning: in the working copy of 'backend/app/main.py', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'mobile/ApiariosLocales.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'mobile/ColmenasLocales.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'mobile/FormularioInspeccion.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'mobile/InicioModulos.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'mobile/TransferenciasLocales.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'mobile/TratamientosLocales.tsx', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'mobile/api/cliente.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'mobile/database/inspecciones.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'mobile/database/inspeccionesAvanzadas.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'mobile/database/tratamientos.ts', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'mobile/package-lock.json', LF will be replaced by CRLF the next time Git touches it
+warning: in the working copy of 'mobile/package.json', LF will be replaced by CRLF the next time Git touches it
+ backend/app/main.py                      |    2 [32m+[m
+ mobile/ApiariosLocales.tsx               | 1588 [32m+++++++[m[31m------[m
+ mobile/App.tsx                           |  234 [32m+[m[31m-[m
+ mobile/AppAutenticado.tsx                |    4 [32m+[m[31m-[m
+ mobile/ColmenasLocales.tsx               | 3676 [32m+++++++++++++++++++++++[m[31m-------[m
+ mobile/FormularioInspeccion.tsx          |  968 [32m++++++[m[31m--[m
+ mobile/InicioModulos.tsx                 | 3198 [32m++++++++++[m[31m----------------[m
+ mobile/Login.tsx                         |    8 [32m+[m[31m-[m
+ mobile/StockLocales.tsx                  | 1939 [32m++++++[m[31m----------[m
+ mobile/TransferenciasLocales.tsx         | 1629 [32m+++++[m[31m--------[m
+ mobile/TratamientosLocales.tsx           | 2402 [32m+++++++[m[31m------------[m
+ mobile/api/cliente.ts                    |    3 [32m+[m[31m-[m
+ mobile/app.json                          |   13 [32m+[m[31m-[m
+ mobile/database/inspecciones.ts          |   25 [32m+[m[31m-[m
+ mobile/database/inspeccionesAvanzadas.ts |  114 [32m+[m[31m-[m
+ mobile/database/tratamientos.ts          |   77 [32m+[m[31m-[m
+ mobile/index.ts                          |    5 [32m+[m[31m-[m
+ mobile/package-lock.json                 |   56 [32m+[m[31m-[m
+ mobile/package.json                      |    8 [32m+[m[31m-[m
+ 19 files changed, 7984 insertions(+), 7965 deletions(-)

@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 
 import { COLORS } from './theme';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
   ActivityIndicator,
@@ -117,7 +118,8 @@ export default function Login({
   // ========================================
 
   return (
-    <KeyboardAvoidingView
+    <SafeAreaView edges={['top', 'bottom', 'left', 'right']} style={styles.pantalla}>
+      <KeyboardAvoidingView
       style={styles.pantalla}
       behavior={
         Platform.OS === 'ios'
@@ -311,6 +313,7 @@ export default function Login({
       </ScrollView>
 
     </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
@@ -359,6 +362,9 @@ const styles = StyleSheet.create({
   },
 
   tarjeta: {
+    width: '100%',
+    maxWidth: 520,
+    alignSelf: 'center',
     backgroundColor: COLORS.surface,
     borderRadius: 18,
     padding: 23,

@@ -1,13 +1,4 @@
-import React, {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
-
-import { COLORS } from './theme';
-
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -20,47 +11,41 @@ import {
   Text,
   TextInput,
   View,
+  useWindowDimensions,
 } from 'react-native';
-
 import DateTimePicker from '@react-native-community/datetimepicker';
 
+import { COLORS } from './theme';
+import { SelectorLista, InsigniaMovil } from './ComponentesMoviles';
+
+import { leerSesionGuardada, tokenVigente } from './api/auth';
+import type { SesionMovil } from './api/auth';
+import {
+  listarTratamientos,
+  actualizarTratamiento,
+  cancelarTratamiento,
+} from './api/tratamientos';
+import type { TratamientoApi, TratamientoUpdateApi } from './api/tratamientos';
+import { listarUsuarios } from './api/usuarios';
+import type { UsuarioAPI } from './api/usuarios';
+
+import { descargarCatalogo, leerCatalogoLocal } from './database/catalogo';
+import type { CatalogoMovil, ColmenaCatalogo } from './database/catalogo';
+import { listarInspeccionesLocales } from './database/inspecciones';
+import type { InspeccionGuardada } from './database/inspecciones';
 import {
   actualizarTratamientoLocal,
   cambiarEstadoTratamientoLocal,
   fechaLocalISO,
   guardarTratamientoLocal,
-  limpiarTexto,
   listarTratamientosLocales,
-  PRODUCTOS_TRATAMIENTO,
-  TIPOS_TRATAMIENTO,
-  UNIDADES_DOSIS,
 } from './database/tratamientos';
-
 import type {
   DatosTratamiento,
   EstadoTratamiento,
   TratamientoGuardado,
 } from './database/tratamientos';
-
-import {
-  listarInspeccionesLocales,
-} from './database/inspecciones';
-
-import type {
-  InspeccionGuardada,
-} from './database/inspecciones';
-
-import {
-  leerSesionGuardada,
-} from './api/auth';
-
-import {
-  leerCatalogoLocal,
-} from './database/catalogo';
-
-import {
-  ejecutarControlador,
-} from './sincronizacion/controlador';
+import { sincronizarTratamientosPendientes } from './sincronizacion/tratamientos';
 
 // ==========================================
 // TIPOS
@@ -68,1723 +53,896 @@ import {
 
 type Props = {
   onVolver: () => void;
+  colmenaIdInicial?: number;
 };
 
-type CatalogoLocal =
-  Awaited<ReturnType<typeof leerCatalogoLocal>>;
-
-const NOMBRES: Record<EstadoTratamiento, string> = {
-  PLANIFICADO: 'Planificado',
-  EN_CURSO: 'En curso',
-  FINALIZADO: 'Finalizado',
-  CANCELADO: 'Cancelado',
+type TratamientoVista = {
+  key: string;
+  id: number;
+  serverId: number | null;
+  localId: number | null;
+  idCliente: string | null;
+  colmenaId: number | null;
+  codigo: string;
+  inspeccionId: number | null;
+  usuarioId: number | null;
+  usuarioNombre: string;
+  tipo: string;
+  producto: string;
+  dosis: string;
+  motivo: string;
+  fechaInicio: string;
+  fechaFin: string | null;
+  estado: EstadoTratamiento;
+  observaciones: string;
+  pendiente: boolean;
+  server?: TratamientoApi;
+  local?: TratamientoGuardado;
 };
 
+type FormularioTratamiento = {
+  registro: TratamientoVista | null;
+  colmenaId: string;
+  inspeccionLocalId: string;
+  tipo: string;
+  producto: string;
+  dosis: string;
+  fechaInicio: string;
+  fechaFin: string;
+  estado: EstadoTratamiento;
+  motivo: string;
+  observaciones: string;
+};
+
+type CampoFecha = 'inicio' | 'termino' | null;
+
+const ESTADOS: { value: string; label: string }[] = [
+  { value: '', label: 'Todos los estados' },
+  { value: 'PLANIFICADO', label: 'Planificado' },
+  { value: 'EN_CURSO', label: 'En curso' },
+  { value: 'FINALIZADO', label: 'Finalizado' },
+  { value: 'CANCELADO', label: 'Cancelado' },
+];
+
+const ESTADOS_FORM: { value: string; label: string }[] = [
+  { value: 'PLANIFICADO', label: 'Planificado' },
+  { value: 'EN_CURSO', label: 'En curso' },
+  { value: 'FINALIZADO', label: 'Finalizado' },
+  { value: 'CANCELADO', label: 'Cancelado' },
+];
+
 // ==========================================
-// FECHAS
+// FORMATO Y AUXILIARES
 // ==========================================
 
-function fechaADate(valor: string): Date {
-  const [a, m, d] = valor.split('-').map(Number);
-  return new Date(a, m - 1, d, 12);
+function fechaEtiqueta(valor?: string | null): string {
+  if (!valor) return 'Sin definir';
+  const partes = valor.slice(0, 10).split('-');
+  if (partes.length !== 3) return valor;
+  return `${partes[2]}-${partes[1]}-${partes[0]}`;
 }
 
-function dateAFecha(valor: Date): string {
-  const a = valor.getFullYear();
-
-  const m = String(
-    valor.getMonth() + 1
-  ).padStart(2, '0');
-
-  const d = String(
-    valor.getDate()
-  ).padStart(2, '0');
-
-  return `${a}-${m}-${d}`;
+function fechaDate(valor?: string | null): Date {
+  if (valor && /^\d{4}-\d{2}-\d{2}$/.test(valor)) {
+    const [anio, mes, dia] = valor.split('-').map(Number);
+    return new Date(anio, mes - 1, dia, 12, 0, 0);
+  }
+  return new Date();
 }
 
-function moverAnios(
-  valor: string,
-  cantidad: number
+function usuarioNombre(
+  id: number | null,
+  sesion: SesionMovil | null,
+  usuarios: UsuarioAPI[]
 ): string {
-  const fecha = fechaADate(valor);
-
-  fecha.setFullYear(
-    fecha.getFullYear() + cantidad
-  );
-
-  return dateAFecha(fecha);
+  if (id === null) return 'Usuario local';
+  if (sesion?.usuario.id === id) return sesion.usuario.nombre;
+  const usuario = usuarios.find(item => item.id === id);
+  return usuario
+    ? `${usuario.nombre}${usuario.apellido ? ` ${usuario.apellido}` : ''}`
+    : `Usuario #${id}`;
 }
 
-// ==========================================
-// FORMULARIO VACÍO
-// ==========================================
-
-function formularioVacio(): DatosTratamiento {
-  return {
-    codigoQR: '',
-    inspeccionLocalId: null,
-    tipoTratamiento: '',
-    producto: '',
-    dosis: '',
-    motivo: '',
-    fechaInicio: fechaLocalISO(),
-    fechaFin: null,
-    estado: 'EN_CURSO',
-    observaciones: '',
-  };
+function tonoTratamiento(estado: EstadoTratamiento): 'verde' | 'ambar' | 'rojo' | 'neutral' {
+  if (estado === 'FINALIZADO') return 'verde';
+  if (estado === 'EN_CURSO') return 'ambar';
+  if (estado === 'CANCELADO') return 'rojo';
+  return 'neutral';
 }
 
-// ==========================================
-// SELECTOR DE FECHA
-// ==========================================
-
-type SelectorFechaProps = {
-  titulo: string;
-  valor: string | null;
-  minimo: string;
-  maximo: string;
-  deshabilitado?: boolean;
-  onChange: (valor: string | null) => void;
-};
-
-function SelectorFecha({
-  titulo,
-  valor,
-  minimo,
-  maximo,
-  deshabilitado = false,
-  onChange,
-}: SelectorFechaProps) {
-
-  const [abierto, setAbierto] = useState(false);
-
-  const [temporal, setTemporal] =
-    useState(new Date());
-
-  const abrir = () => {
-
-    if (deshabilitado) return;
-
-    const inicial = valor || fechaLocalISO();
-
-    const ajustada =
-      inicial < minimo
-        ? minimo
-        : inicial > maximo
-          ? maximo
-          : inicial;
-
-    setTemporal(fechaADate(ajustada));
-
-    setAbierto(true);
+function etiquetaTratamiento(estado: EstadoTratamiento): string {
+  const nombres: Record<EstadoTratamiento, string> = {
+    PLANIFICADO: 'Planificado',
+    EN_CURSO: 'En curso',
+    FINALIZADO: 'Finalizado',
+    CANCELADO: 'Cancelado',
   };
-
-  const cambiar = (
-    evento: { type: string },
-    seleccion?: Date
-  ) => {
-
-    if (Platform.OS === 'android') {
-
-      setAbierto(false);
-
-      if (
-        evento.type === 'set' &&
-        seleccion
-      ) {
-        onChange(dateAFecha(seleccion));
-      }
-
-    } else if (seleccion) {
-
-      setTemporal(seleccion);
-
-    }
-  };
-
-  return (
-    <View style={{ marginTop: 12 }}>
-
-      <Text style={styles.label}>
-        {titulo}
-      </Text>
-
-      <Pressable
-        disabled={deshabilitado}
-        style={[
-          styles.input,
-          deshabilitado && styles.deshabilitado,
-        ]}
-        onPress={abrir}
-      >
-        <Text style={styles.texto}>
-          📅 {valor ?? 'Seleccionar fecha'}
-        </Text>
-      </Pressable>
-
-      {valor && !deshabilitado && (
-        <Pressable
-          onPress={() => onChange(null)}
-        >
-          <Text style={styles.enlace}>
-            Quitar fecha
-          </Text>
-        </Pressable>
-      )}
-
-      {abierto &&
-        Platform.OS === 'android' && (
-          <DateTimePicker
-            value={temporal}
-            mode="date"
-            minimumDate={fechaADate(minimo)}
-            maximumDate={fechaADate(maximo)}
-            onChange={cambiar}
-          />
-        )}
-
-      {Platform.OS === 'ios' && (
-        <Modal
-          visible={abierto}
-          transparent
-          animationType="fade"
-          onRequestClose={() => setAbierto(false)}
-        >
-          <View style={styles.modalFondo}>
-            <View style={styles.modalCaja}>
-
-              <Text style={styles.tituloSeccion}>
-                {titulo}
-              </Text>
-
-              <DateTimePicker
-                value={temporal}
-                mode="date"
-                display="spinner"
-                locale="es-CL"
-                minimumDate={fechaADate(minimo)}
-                maximumDate={fechaADate(maximo)}
-                onChange={cambiar}
-                style={{ height: 190 }}
-              />
-
-              <View style={styles.fila}>
-
-                <Pressable
-                  style={styles.botonBorde}
-                  onPress={() => setAbierto(false)}
-                >
-                  <Text style={styles.textoBorde}>
-                    Cancelar
-                  </Text>
-                </Pressable>
-
-                <Pressable
-                  style={styles.boton}
-                  onPress={() => {
-                    onChange(dateAFecha(temporal));
-                    setAbierto(false);
-                  }}
-                >
-                  <Text style={styles.textoBoton}>
-                    Confirmar
-                  </Text>
-                </Pressable>
-
-              </View>
-            </View>
-          </View>
-        </Modal>
-      )}
-
-    </View>
-  );
+  return nombres[estado];
 }
 
-// ==========================================
-// COMPONENTE OPCIÓN
-// ==========================================
-
-type OpcionProps = {
-  etiqueta: string;
-  activa: boolean;
-  onPress: () => void;
-  disabled?: boolean;
-};
-
-function Opcion({
-  etiqueta,
-  activa,
-  onPress,
-  disabled = false,
-}: OpcionProps) {
-
-  return (
-    <Pressable
-      onPress={onPress}
-      disabled={disabled}
-      style={[
-        styles.opcion,
-        activa && styles.opcionActiva,
-        disabled && styles.deshabilitado,
-      ]}
-    >
-      <Text style={styles.textoOpcion}>
-        {activa ? '● ' : '○ '}
-        {etiqueta}
-      </Text>
-    </Pressable>
-  );
+function textoNulo(valor: string | null | undefined): string {
+  return valor?.trim() ? valor : 'Sin registrar';
 }
 
 // ==========================================
 // PANTALLA PRINCIPAL
 // ==========================================
 
-export default function TratamientosLocales({
-  onVolver,
-}: Props) {
-
-  const [tratamientos, setTratamientos] =
-    useState<TratamientoGuardado[]>([]);
-
-  const [inspecciones, setInspecciones] =
-    useState<InspeccionGuardada[]>([]);
-
-  const [catalogo, setCatalogo] =
-    useState<CatalogoLocal>(null);
-
-  const [cargando, setCargando] =
-    useState(true);
-
-  const [guardando, setGuardando] =
-    useState(false);
-
-  const [sincronizando, setSincronizando] =
-    useState(false);
-
+export default function TratamientosLocales({ onVolver, colmenaIdInicial }: Props) {
+  const { width } = useWindowDimensions();
+  const esTablet = width >= 760;
+  const [sesion, setSesion] = useState<SesionMovil | null>(null);
+  const [catalogo, setCatalogo] = useState<CatalogoMovil | null>(null);
+  const [locales, setLocales] = useState<TratamientoGuardado[]>([]);
+  const [servidor, setServidor] = useState<TratamientoApi[]>([]);
+  const [usuarios, setUsuarios] = useState<UsuarioAPI[]>([]);
+  const [inspeccionesLocales, setInspeccionesLocales] = useState<InspeccionGuardada[]>([]);
+  const [cargando, setCargando] = useState(true);
+  const [actualizando, setActualizando] = useState(false);
+  const [guardando, setGuardando] = useState(false);
   const [error, setError] = useState('');
+  const [busqueda, setBusqueda] = useState('');
+  const [estadoFiltro, setEstadoFiltro] = useState('');
+  const [formulario, setFormulario] = useState<FormularioTratamiento | null>(null);
+  const [fechaVisible, setFechaVisible] = useState<CampoFecha>(null);
+  const formularioInicialAbierto = useRef(false);
 
-  const [
-    formularioVisible,
-    setFormularioVisible,
-  ] = useState(false);
+  const cargar = useCallback(async (forzar = false) => {
+    if (forzar) setActualizando(true);
+    else setCargando(true);
+    setError('');
 
-  const [editandoId, setEditandoId] =
-    useState<number | null>(null);
+    try {
+      const sesionActual = await leerSesionGuardada();
+      if (!sesionActual) throw new Error('No existe una sesión móvil activa. Vuelve a iniciar sesión.');
+      setSesion(sesionActual);
 
-  const [datos, setDatos] =
-    useState<DatosTratamiento>(
-      formularioVacio()
-    );
+      let catalogoActual = await leerCatalogoLocal(sesionActual.usuario.id);
+      if (tokenVigente(sesionActual)) {
+        try {
+          catalogoActual = await descargarCatalogo(sesionActual);
+        } catch (err) {
+          if (!catalogoActual) throw err;
+        }
+      }
+      setCatalogo(catalogoActual);
 
-  const [cantidad, setCantidad] =
-    useState('');
-
-  const [unidad, setUnidad] =
-    useState('mg');
-
-  const [busqueda, setBusqueda] =
-    useState('');
-
-  const [filtro, setFiltro] =
-    useState('TODOS');
-
-  const bloqueo = useRef(false);
-
-  const bloqueoSincronizacion = useRef(false);
-
-  // ========================================
-  // CARGAR SQLITE Y CATÁLOGO
-  // ========================================
-
-  const recargar = useCallback(
-    async () => {
-
-      setCargando(true);
-      setError('');
+      const [registrosLocales, inspecciones] = await Promise.all([
+        listarTratamientosLocales(),
+        listarInspeccionesLocales(),
+      ]);
+      setLocales(registrosLocales);
+      setInspeccionesLocales(inspecciones);
 
       try {
-
-        const sesion =
-          await leerSesionGuardada();
-
-        // Inicializar primero las tablas
-        // de inspecciones.
-
-        const i =
-          await listarInspeccionesLocales();
-
-        const [t, c] = await Promise.all([
-
-          listarTratamientosLocales(),
-
-          sesion
-            ? leerCatalogoLocal(sesion.usuario.id)
-            : Promise.resolve(null),
-
-        ]);
-
-        // Mostrar únicamente los registros
-        // pertenecientes al usuario actual.
-
-        const propios = t.filter(
-          registro =>
-            sesion
-              ? registro.usuario_local_id ===
-                sesion.usuario.id
-              : registro.usuario_local_id === null
-        );
-
-        setTratamientos(propios);
-
-        setInspecciones(
-          i.filter(registro =>
-            sesion
-              ? registro.usuario_local_id ===
-                sesion.usuario.id
-              : registro.usuario_local_id === null
-          )
-        );
-
-        setCatalogo(c);
-
-      } catch (e) {
-
-        console.error(
-          'Error SQLite:',
-          e
-        );
-
+        const registrosServidor = await listarTratamientos(sesionActual.accessToken);
+        setServidor(registrosServidor);
+        if (sesionActual.usuario.rol === 'ADMIN') {
+          setUsuarios(await listarUsuarios(sesionActual.accessToken).catch(() => []));
+        } else {
+          setUsuarios([]);
+        }
+      } catch (err) {
+        setServidor([]);
         setError(
-          'Error al consultar registros locales.'
+          err instanceof Error
+            ? `No se pudo actualizar el listado del servidor. Se muestran los registros guardados en el teléfono. ${err.message}`
+            : 'No se pudo conectar con FastAPI. Se muestran los registros guardados en el teléfono.'
         );
-
-      } finally {
-
-        setCargando(false);
-
       }
-    },
-    []
-  );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'No se pudieron cargar los tratamientos.');
+    } finally {
+      setCargando(false);
+      setActualizando(false);
+    }
+  }, []);
 
   useEffect(() => {
-    void recargar();
-  }, [recargar]);
+    void cargar(false);
+  }, [cargar]);
 
-  // ========================================
-  // COLMENAS OFICIALES
-  // ========================================
-
-  const colmenas = useMemo(
-    () => catalogo?.colmenas ?? [],
-    [catalogo]
-  );
-
-  const inspeccionesColmena =
-    inspecciones.filter(
-      inspeccion =>
-        inspeccion.codigo_qr === datos.codigoQR
+  const registros = useMemo<TratamientoVista[]>(() => {
+    const colmenasPorId = new Map<number, ColmenaCatalogo>(
+      (catalogo?.colmenas ?? []).map(colmena => [colmena.id, colmena])
     );
+    const colmenasPorQr = new Map<string, ColmenaCatalogo>(
+      (catalogo?.colmenas ?? []).map(colmena => [colmena.codigo_qr.toLowerCase(), colmena])
+    );
+    const localPorCliente = new Map<string, TratamientoGuardado>(locales.map(item => [item.id_cliente, item] as const));
+    const localPorServidor = new Map<number, TratamientoGuardado>(locales.filter(item => item.servidor_id !== null).map(item => [item.servidor_id as number, item] as const));
+    const clientesVistos = new Set<string>();
+    const servidoresVistos = new Set<number>();
 
-  // ========================================
-  // FILTROS DEL HISTORIAL
-  // ========================================
-
-  const filtrados =
-    tratamientos.filter(tratamiento => {
-
-      const texto = busqueda.toLowerCase();
-
-      return (
-
-        (
-          filtro === 'TODOS' ||
-          tratamiento.estado === filtro
-        ) &&
-
-        (
-          tratamiento.codigo_qr
-            .toLowerCase()
-            .includes(texto) ||
-
-          tratamiento.tipo_tratamiento
-            .toLowerCase()
-            .includes(texto) ||
-
-          tratamiento.producto
-            .toLowerCase()
-            .includes(texto)
-        )
-
-      );
+    const remotos: TratamientoVista[] = servidor.map(item => {
+      const local = (item.id_cliente ? localPorCliente.get(item.id_cliente) : undefined)
+        ?? localPorServidor.get(item.id);
+      if (item.id_cliente) clientesVistos.add(item.id_cliente);
+      servidoresVistos.add(item.id);
+      const colmena = colmenasPorId.get(item.colmena_id);
+      return {
+        key: `server-${item.id}`,
+        id: item.id,
+        serverId: item.id,
+        localId: local?.id ?? null,
+        idCliente: item.id_cliente,
+        colmenaId: item.colmena_id,
+        codigo: colmena?.codigo ?? `Colmena #${item.colmena_id}`,
+        inspeccionId: item.inspeccion_id,
+        usuarioId: item.usuario_id,
+        usuarioNombre: usuarioNombre(item.usuario_id, sesion, usuarios),
+        tipo: item.tipo_tratamiento,
+        producto: item.producto ?? '',
+        dosis: item.dosis ?? '',
+        motivo: item.motivo ?? '',
+        fechaInicio: item.fecha_inicio,
+        fechaFin: item.fecha_fin,
+        estado: item.estado,
+        observaciones: item.observaciones ?? '',
+        pendiente: false,
+        server: item,
+        local,
+      };
     });
 
-  // ========================================
-  // CAMBIAR CAMPO
-  // ========================================
+    const pendientes: TratamientoVista[] = locales
+      .filter(item =>
+        !clientesVistos.has(item.id_cliente) &&
+        !(item.servidor_id !== null && servidoresVistos.has(item.servidor_id))
+      )
+      .map(item => {
+        const colmena = colmenasPorQr.get(item.codigo_qr.toLowerCase());
+        return {
+          key: `local-${item.id}`,
+          id: item.id,
+          serverId: item.servidor_id,
+          localId: item.id,
+          idCliente: item.id_cliente,
+          colmenaId: colmena?.id ?? null,
+          codigo: colmena?.codigo ?? 'Colmena local',
+          inspeccionId: null,
+          usuarioId: item.usuario_local_id,
+          usuarioNombre: usuarioNombre(item.usuario_local_id, sesion, usuarios),
+          tipo: item.tipo_tratamiento,
+          producto: item.producto,
+          dosis: item.dosis,
+          motivo: item.motivo,
+          fechaInicio: item.fecha_inicio,
+          fechaFin: item.fecha_fin,
+          estado: item.estado,
+          observaciones: item.observaciones,
+          pendiente: item.sincronizacion === 'PENDIENTE',
+          local: item,
+        };
+      });
 
-  const cambiar = <
-    K extends keyof DatosTratamiento
-  >(
-    campo: K,
-    valor: DatosTratamiento[K]
-  ) => {
+    return [...remotos, ...pendientes].sort((a, b) => b.fechaInicio.localeCompare(a.fechaInicio));
+  }, [servidor, locales, catalogo, sesion, usuarios]);
 
-    setDatos(actual => ({
-      ...actual,
-      [campo]: valor,
+  const filtrados = useMemo(() => {
+    const termino = busqueda.trim().toLowerCase();
+    return registros.filter(item => {
+      const coincideEstado = !estadoFiltro || item.estado === estadoFiltro;
+      const coincideTexto = !termino ||
+        item.codigo.toLowerCase().includes(termino) ||
+        item.tipo.toLowerCase().includes(termino) ||
+        item.producto.toLowerCase().includes(termino);
+      return coincideEstado && coincideTexto;
+    });
+  }, [registros, estadoFiltro, busqueda]);
+
+  const opcionesColmenas = (catalogo?.colmenas ?? [])
+    .filter(item => item.estado !== 'INACTIVA' && item.estado !== 'BAJA')
+    .sort((a, b) => a.codigo.localeCompare(b.codigo, 'es', { numeric: true }))
+    .map(item => ({
+      value: String(item.id),
+      label: item.codigo,
+      description: catalogo?.apiarios.find(apiario => apiario.id === item.apiario_id)?.nombre ?? 'Apiario',
     }));
 
-  };
+  const inspeccionesDeColmena = useMemo(() => {
+    if (!formulario?.colmenaId || !catalogo) return [];
+    const colmena = catalogo.colmenas.find(item => String(item.id) === formulario.colmenaId);
+    if (!colmena) return [];
+    return inspeccionesLocales
+      .filter(item => item.codigo_qr.toLowerCase() === colmena.codigo_qr.toLowerCase() && item.estado !== 'ANULADA')
+      .sort((a, b) => b.fecha_local.localeCompare(a.fecha_local))
+      .map(item => ({
+        value: String(item.id),
+        label: fechaEtiqueta(item.fecha_local.slice(0, 10)),
+        description: item.estado === 'SINCRONIZADO' ? 'Inspección sincronizada' : 'Inspección pendiente de sincronización',
+      }));
+  }, [formulario?.colmenaId, inspeccionesLocales, catalogo]);
 
-  // ========================================
-  // NUEVO TRATAMIENTO
-  // ========================================
+  const puedeGestionar = (item: TratamientoVista) =>
+    Boolean(sesion && (sesion.usuario.rol === 'ADMIN' || item.usuarioId === sesion.usuario.id));
+  const estaAbierto = (item: TratamientoVista) => item.estado === 'PLANIFICADO' || item.estado === 'EN_CURSO';
 
-  const nuevo = () => {
-
-    if (colmenas.length === 0) {
-
-      Alert.alert(
-        'Catálogo no disponible',
-        'Debes iniciar sesión y descargar el catálogo oficial para registrar tratamientos.'
-      );
-
-      return;
-    }
-
-    setEditandoId(null);
-
-    setDatos(formularioVacio());
-
-    setCantidad('');
-
-    setUnidad('mg');
-
-    setFormularioVisible(true);
-  };
-
-  // ========================================
-  // EDITAR TRATAMIENTO
-  // ========================================
-
-  const editar = (
-    t: TratamientoGuardado
-  ) => {
-
-    if (!catalogo) {
-
-      Alert.alert(
-        'Catálogo no disponible',
-        'Necesitas el catálogo oficial del usuario para editar este tratamiento.'
-      );
-
-      return;
-    }
-
-    if (
-      t.sincronizacion !== 'PENDIENTE' ||
-      ![
-        'PLANIFICADO',
-        'EN_CURSO',
-      ].includes(t.estado)
-    ) {
-
-      Alert.alert(
-        'Edición bloqueada',
-        'Un tratamiento cerrado o sincronizado no se puede editar.'
-      );
-
-      return;
-    }
-
-    if (
-      !catalogo.colmenas.some(
-        c => c.codigo_qr === t.codigo_qr
-      )
-    ) {
-
-      Alert.alert(
-        'Colmena no disponible',
-        'La colmena no se encuentra en el catálogo oficial.'
-      );
-
-      return;
-    }
-
-    const coincidencia = t.dosis.match(
-      /^(\d+(?:[.,]\d+)?) (mg|g|ml|l|tiras|unidades)$/
-    );
-
-    setCantidad(
-      coincidencia?.[1] ?? ''
-    );
-
-    setUnidad(
-      coincidencia?.[2] ?? 'mg'
-    );
-
-    setDatos({
-      codigoQR: t.codigo_qr,
-      inspeccionLocalId: t.inspeccion_local_id,
-      tipoTratamiento: t.tipo_tratamiento,
-      producto: t.producto,
-      dosis: t.dosis,
-      motivo: t.motivo,
-      fechaInicio: t.fecha_inicio,
-      fechaFin: t.fecha_fin,
-      estado: t.estado,
-      observaciones: t.observaciones,
+  useEffect(() => {
+    if (!colmenaIdInicial || !catalogo || formularioInicialAbierto.current) return;
+    const existe = catalogo.colmenas.some(item => item.id === colmenaIdInicial);
+    if (!existe) return;
+    formularioInicialAbierto.current = true;
+    setFormulario({
+      registro: null,
+      colmenaId: String(colmenaIdInicial),
+      inspeccionLocalId: '',
+      tipo: '',
+      producto: '',
+      dosis: '',
+      fechaInicio: fechaLocalISO(),
+      fechaFin: '',
+      estado: 'EN_CURSO',
+      motivo: '',
+      observaciones: '',
     });
+  }, [colmenaIdInicial, catalogo]);
 
-    setEditandoId(t.id);
-
-    setFormularioVisible(true);
+  const abrirNuevo = () => {
+    setFormulario({
+      registro: null,
+      colmenaId: '',
+      inspeccionLocalId: '',
+      tipo: '',
+      producto: '',
+      dosis: '',
+      fechaInicio: fechaLocalISO(),
+      fechaFin: '',
+      estado: 'EN_CURSO',
+      motivo: '',
+      observaciones: '',
+    });
   };
 
-  // ========================================
-  // SINCRONIZAR AHORA
-  // ========================================
-
-  const sincronizarAhora = async () => {
-
-    if (bloqueoSincronizacion.current) return;
-
-    bloqueoSincronizacion.current = true;
-
-    setSincronizando(true);
-
-    try {
-
-      const resultado =
-        await ejecutarControlador();
-
-      await recargar();
-
-      Alert.alert(
-        resultado.estado === 'SINCRONIZADO'
-          ? 'Sincronización completada'
-          : 'Estado de sincronización',
-        resultado.mensaje
-      );
-
-    } catch (e) {
-
-      Alert.alert(
-        'Error de sincronización',
-        e instanceof Error
-          ? e.message
-          : 'No se pudo ejecutar la sincronización.'
-      );
-
-    } finally {
-
-      bloqueoSincronizacion.current = false;
-
-      setSincronizando(false);
-
-    }
+  const abrirEdicion = (item: TratamientoVista) => {
+    setFormulario({
+      registro: item,
+      colmenaId: item.colmenaId === null ? '' : String(item.colmenaId),
+      inspeccionLocalId: item.local?.inspeccion_local_id ? String(item.local.inspeccion_local_id) : '',
+      tipo: item.tipo,
+      producto: item.producto,
+      dosis: item.dosis,
+      fechaInicio: item.fechaInicio,
+      fechaFin: item.fechaFin ?? '',
+      estado: item.estado,
+      motivo: item.motivo,
+      observaciones: item.observaciones,
+    });
   };
 
-  // ========================================
-  // GUARDAR
-  // ========================================
+  const cambiarFormulario = <K extends keyof FormularioTratamiento>(campo: K, valor: FormularioTratamiento[K]) => {
+    setFormulario(actual => actual ? { ...actual, [campo]: valor } : actual);
+  };
 
   const guardar = async () => {
+    if (!formulario || !sesion || !catalogo) return;
+    if (guardando) return;
 
-    if (bloqueo.current) return;
-
-    bloqueo.current = true;
+    const tipo = formulario.tipo.trim();
+    if (tipo.length < 2 || tipo.length > 100) {
+      Alert.alert('Revisa el formulario', 'El tipo de tratamiento debe tener entre 2 y 100 caracteres.');
+      return;
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(formulario.fechaInicio)) {
+      Alert.alert('Fecha inválida', 'Indica una fecha de inicio válida.');
+      return;
+    }
+    if (formulario.fechaFin && formulario.fechaFin < formulario.fechaInicio) {
+      Alert.alert('Fechas inválidas', 'La fecha de término no puede ser anterior al inicio.');
+      return;
+    }
+    if (formulario.estado === 'FINALIZADO' && !formulario.fechaFin) {
+      Alert.alert('Fecha requerida', 'Un tratamiento finalizado necesita una fecha de término.');
+      return;
+    }
+    if (formulario.estado === 'EN_CURSO' && formulario.fechaFin) {
+      Alert.alert('Revisa el estado', 'Un tratamiento en curso no puede tener fecha de término.');
+      return;
+    }
 
     setGuardando(true);
-
     try {
-
-      const dosis =
-        datos.producto === 'Sin producto (prueba)'
-          ? ''
-          : cantidad.trim()
-            ? `${cantidad.replace(',', '.')} ${unidad}`
-            : '';
-
-      const seguros = {
-        ...datos,
-        dosis,
+      const comunes: TratamientoUpdateApi = {
+        tipo_tratamiento: tipo,
+        producto: formulario.producto.trim() || null,
+        dosis: formulario.dosis.trim() || null,
+        motivo: formulario.motivo.trim() || null,
+        fecha_fin: formulario.fechaFin || null,
+        estado: formulario.estado,
+        observaciones: formulario.observaciones.trim() || null,
       };
 
-      // ------------------------------------
-      // GUARDAR EN SQLITE
-      // ------------------------------------
-
-      if (editandoId === null) {
-
-        await guardarTratamientoLocal(
-          seguros
-        );
-
+      if (formulario.registro) {
+        const registro = formulario.registro;
+        if (registro.serverId !== null) {
+          if (registro.pendiente) throw new Error('El tratamiento todavía está pendiente de sincronización.');
+          await actualizarTratamiento(registro.serverId, comunes, sesion.accessToken);
+        } else if (registro.localId !== null && registro.local) {
+          const colmena = catalogo.colmenas.find(item => item.codigo_qr.toLowerCase() === registro.local?.codigo_qr.toLowerCase());
+          if (!colmena) throw new Error('La colmena no está en el catálogo oficial.');
+          const datos: DatosTratamiento = {
+            codigoQR: registro.local.codigo_qr,
+            inspeccionLocalId: registro.local.inspeccion_local_id,
+            tipoTratamiento: tipo,
+            producto: formulario.producto.trim(),
+            dosis: formulario.dosis.trim(),
+            motivo: formulario.motivo.trim(),
+            fechaInicio: registro.local.fecha_inicio,
+            fechaFin: formulario.fechaFin || null,
+            estado: registro.local.estado,
+            observaciones: formulario.observaciones.trim(),
+          };
+          await actualizarTratamientoLocal(registro.localId, datos);
+        }
       } else {
-
-        await actualizarTratamientoLocal(
-          editandoId,
-          seguros
-        );
-
+        const colmena = catalogo.colmenas.find(item => String(item.id) === formulario.colmenaId);
+        if (!colmena) throw new Error('Selecciona una colmena válida.');
+        const datos: DatosTratamiento = {
+          codigoQR: colmena.codigo_qr,
+          inspeccionLocalId: formulario.inspeccionLocalId ? Number(formulario.inspeccionLocalId) : null,
+          tipoTratamiento: tipo,
+          producto: formulario.producto.trim(),
+          dosis: formulario.dosis.trim(),
+          motivo: formulario.motivo.trim(),
+          fechaInicio: formulario.fechaInicio,
+          fechaFin: formulario.fechaFin || null,
+          estado: formulario.estado,
+          observaciones: formulario.observaciones.trim(),
+        };
+        await guardarTratamientoLocal(datos);
       }
 
-      // ------------------------------------
-      // INTENTAR SINCRONIZACIÓN
-      // ------------------------------------
-
-      let mensajeSincronizacion =
-        'El tratamiento quedó guardado localmente y pendiente de sincronización.';
-
+      setFormulario(null);
+      await cargar(true);
       try {
-
-        setSincronizando(true);
-
-        const resultado =
-          await ejecutarControlador();
-
-        mensajeSincronizacion =
-          resultado.mensaje;
-
-      } catch (errorSync) {
-
-        mensajeSincronizacion =
-          errorSync instanceof Error
-            ? `El registro quedó guardado localmente. ${errorSync.message}`
-            : 'El registro quedó guardado localmente. No se pudo comprobar la sincronización.';
-
-      } finally {
-
-        setSincronizando(false);
-
+        await sincronizarTratamientosPendientes();
+        await cargar(true);
+      } catch {
+        // El registro ya está guardado localmente. La sincronización automática
+        // lo enviará cuando vuelva la conexión.
       }
-
-      // ------------------------------------
-      // ACTUALIZAR HISTORIAL
-      // ------------------------------------
-
-      await recargar();
-
-      setFormularioVisible(false);
-
-      setEditandoId(null);
-
       Alert.alert(
         'Tratamiento guardado',
-        `El registro se guardó correctamente en SQLite.\n\n${mensajeSincronizacion}`
+        formulario.registro
+          ? 'Los cambios quedaron guardados correctamente.'
+          : 'El tratamiento quedó guardado en el teléfono y se sincronizará con FastAPI cuando haya conexión.'
       );
-
-    } catch (e) {
-
-      Alert.alert(
-        'Datos inválidos',
-        e instanceof Error
-          ? e.message
-          : 'No se pudo guardar.'
-      );
-
+    } catch (err) {
+      Alert.alert('No se pudo guardar', err instanceof Error ? err.message : 'Ocurrió un error al guardar.');
     } finally {
-
-      bloqueo.current = false;
-
       setGuardando(false);
-
     }
   };
 
-  // ========================================
-  // FINALIZAR O CANCELAR
-  // ========================================
-
-  const cambiarEstado = (
-    t: TratamientoGuardado,
-    estado:
-      | 'FINALIZADO'
-      | 'CANCELADO'
-  ) => {
-
+  const finalizar = (item: TratamientoVista) => {
+    if (!puedeGestionar(item) || !estaAbierto(item)) return;
     Alert.alert(
-      'Confirmar',
-
-      `¿Quieres ${
-        estado === 'FINALIZADO'
-          ? 'finalizar'
-          : 'cancelar'
-      } este tratamiento?`,
-
+      '¿Finalizar este tratamiento?',
+      `${item.tipo} en ${item.codigo} quedará como finalizado con fecha de término de hoy.`,
       [
+        { text: 'Volver', style: 'cancel' },
         {
-          text: 'Volver',
-          style: 'cancel',
-        },
-        {
-          text: 'Confirmar',
-
+          text: 'Finalizar',
           onPress: () => {
-
             void (async () => {
-
               try {
-
-                await cambiarEstadoTratamientoLocal(
-                  t.id,
-                  estado
-                );
-
-                await recargar();
-
-              } catch (e) {
-
-                Alert.alert(
-                  'Error',
-                  e instanceof Error
-                    ? e.message
-                    : 'No se pudo actualizar.'
-                );
-
+                if (item.serverId !== null) {
+                  if (!sesion) throw new Error('Sesión no disponible.');
+                  await actualizarTratamiento(item.serverId, {
+                    estado: 'FINALIZADO',
+                    fecha_fin: fechaLocalISO(),
+                  }, sesion.accessToken);
+                } else if (item.localId !== null) {
+                  await cambiarEstadoTratamientoLocal(item.localId, 'FINALIZADO');
+                  await sincronizarTratamientosPendientes().catch(() => {});
+                }
+                await cargar(true);
+                Alert.alert('Tratamiento finalizado', 'El estado se actualizó correctamente.');
+              } catch (err) {
+                Alert.alert('No se pudo finalizar', err instanceof Error ? err.message : 'Intenta nuevamente.');
               }
-
             })();
-
           },
         },
       ]
     );
   };
 
-  // ========================================
-  // FORMULARIO
-  // ========================================
+  const cancelar = (item: TratamientoVista) => {
+    if (!puedeGestionar(item) || !estaAbierto(item)) return;
+    Alert.alert(
+      '¿Cancelar este tratamiento?',
+      'El tratamiento quedará como cancelado y se conservará en el historial de la colmena.',
+      [
+        { text: 'Volver', style: 'cancel' },
+        {
+          text: 'Cancelar tratamiento',
+          style: 'destructive',
+          onPress: () => {
+            void (async () => {
+              try {
+                if (item.serverId !== null) {
+                  if (!sesion) throw new Error('Sesión no disponible.');
+                  await cancelarTratamiento(item.serverId, sesion.accessToken);
+                } else if (item.localId !== null) {
+                  await cambiarEstadoTratamientoLocal(item.localId, 'CANCELADO');
+                  await sincronizarTratamientosPendientes().catch(() => {});
+                }
+                await cargar(true);
+                Alert.alert('Tratamiento cancelado', 'El tratamiento quedó cancelado correctamente.');
+              } catch (err) {
+                Alert.alert('No se pudo cancelar', err instanceof Error ? err.message : 'Intenta nuevamente.');
+              }
+            })();
+          },
+        },
+      ]
+    );
+  };
 
-  if (formularioVisible) {
-
-    const hoy = fechaLocalISO();
-
-    const minimo = moverAnios(hoy, -5);
-
-    const maximo = moverAnios(hoy, 1);
-
+  if (cargando) {
     return (
-
-      <ScrollView
-        style={styles.pantalla}
-        contentContainerStyle={styles.contenido}
-        keyboardShouldPersistTaps="handled"
-      >
-
-        <StatusBar barStyle="dark-content" />
-
-        <Pressable
-          disabled={guardando}
-          onPress={() => setFormularioVisible(false)}
-        >
-          <Text style={styles.enlace}>
-            ‹ Volver a tratamientos
-          </Text>
-        </Pressable>
-
-        <Text style={styles.titulo}>
-          {editandoId === null
-            ? 'Registrar tratamiento'
-            : 'Editar tratamiento'}
-        </Text>
-
-        <View style={styles.aviso}>
-          <Text style={styles.avisoTexto}>
-            Modo de prueba.
-            Los tipos y productos disponibles son simulados.
-            No representan medicamentos autorizados ni aplicaciones reales.
-          </Text>
-        </View>
-
-        <Text style={styles.tituloSeccion}>
-          Colmena *
-        </Text>
-
-        {colmenas.map(colmena => {
-
-          const apiario =
-            catalogo?.apiarios.find(
-              item => item.id === colmena.apiario_id
-            );
-
-          return (
-
-            <Opcion
-              key={colmena.id}
-              etiqueta={
-                `${colmena.codigo} · ${
-                  apiario?.nombre ?? 'Apiario sin nombre'
-                }`
-              }
-              activa={
-                datos.codigoQR === colmena.codigo_qr
-              }
-              disabled={editandoId !== null}
-              onPress={() => {
-
-                setDatos(actual => ({
-                  ...actual,
-                  codigoQR: colmena.codigo_qr,
-                  inspeccionLocalId: null,
-                }));
-
-              }}
-            />
-
-          );
-        })}
-
-        {colmenas.length === 0 && (
-
-          <View style={styles.aviso}>
-            <Text style={styles.avisoTexto}>
-              No hay colmenas oficiales disponibles.
-              Inicia sesión para descargar el catálogo.
-            </Text>
-          </View>
-
-        )}
-
-        {editandoId === null &&
-          inspeccionesColmena.length > 0 && (
-
-            <>
-
-              <Text style={styles.tituloSeccion}>
-                Inspección asociada
-              </Text>
-
-              <Opcion
-                etiqueta="Ninguna"
-                activa={datos.inspeccionLocalId === null}
-                onPress={() =>
-                  cambiar('inspeccionLocalId', null)
-                }
-              />
-
-              {inspeccionesColmena.map(inspeccion => (
-
-                <Opcion
-                  key={inspeccion.id}
-                  etiqueta={`Inspección N.º ${inspeccion.id}`}
-                  activa={
-                    datos.inspeccionLocalId === inspeccion.id
-                  }
-                  onPress={() =>
-                    cambiar(
-                      'inspeccionLocalId',
-                      inspeccion.id
-                    )
-                  }
-                />
-
-              ))}
-
-            </>
-          )}
-
-        <Text style={styles.tituloSeccion}>
-          Tipo de tratamiento *
-        </Text>
-
-        {TIPOS_TRATAMIENTO.map(tipo => (
-
-          <Opcion
-            key={tipo}
-            etiqueta={tipo}
-            activa={datos.tipoTratamiento === tipo}
-            onPress={() =>
-              cambiar('tipoTratamiento', tipo)
-            }
-          />
-
-        ))}
-
-        <Text style={styles.tituloSeccion}>
-          Producto *
-        </Text>
-
-        {PRODUCTOS_TRATAMIENTO.map(producto => (
-
-          <Opcion
-            key={producto}
-            etiqueta={producto}
-            activa={datos.producto === producto}
-            onPress={() => {
-
-              cambiar('producto', producto);
-
-              if (producto === 'Sin producto (prueba)') {
-                setCantidad('');
-              }
-
-            }}
-          />
-
-        ))}
-
-        {datos.producto === 'Producto simulado' && (
-
-          <>
-
-            <Text style={styles.tituloSeccion}>
-              Dosis de prueba *
-            </Text>
-
-            <Text style={styles.label}>
-              Cantidad
-            </Text>
-
-            <TextInput
-              style={styles.input}
-              keyboardType="decimal-pad"
-              value={cantidad}
-              onChangeText={valor => {
-
-                const limpio = valor
-                  .replace(/[^0-9.,]/g, '')
-                  .replace(',', '.');
-
-                if (
-                  /^\d{0,6}(?:\.\d{0,3})?$/.test(limpio)
-                ) {
-                  setCantidad(limpio);
-                }
-
-              }}
-              placeholder="Ejemplo: 5"
-            />
-
-            <Text style={styles.label}>
-              Unidad
-            </Text>
-
-            <View style={styles.fila}>
-
-              {UNIDADES_DOSIS.map(u => (
-
-                <Opcion
-                  key={u}
-                  etiqueta={u}
-                  activa={unidad === u}
-                  onPress={() => setUnidad(u)}
-                />
-
-              ))}
-
-            </View>
-
-          </>
-        )}
-
-        <Text style={styles.tituloSeccion}>
-          Estado *
-        </Text>
-
-        {(
-          [
-            'PLANIFICADO',
-            'EN_CURSO',
-          ] as const
-        ).map(estado => (
-
-          <Opcion
-            key={estado}
-            etiqueta={NOMBRES[estado]}
-            activa={datos.estado === estado}
-            disabled={editandoId !== null}
-            onPress={() => {
-
-              setDatos(actual => ({
-                ...actual,
-                estado,
-                fechaFin:
-                  estado === 'EN_CURSO'
-                    ? null
-                    : actual.fechaFin,
-              }));
-
-            }}
-          />
-
-        ))}
-
-        <SelectorFecha
-          titulo="Fecha de inicio *"
-          valor={datos.fechaInicio}
-          minimo={minimo}
-          maximo={
-            datos.estado === 'PLANIFICADO'
-              ? maximo
-              : hoy
-          }
-          deshabilitado={editandoId !== null}
-          onChange={fecha => {
-
-            if (!fecha) return;
-
-            setDatos(actual => ({
-              ...actual,
-              fechaInicio: fecha,
-              fechaFin:
-                actual.fechaFin &&
-                actual.fechaFin < fecha
-                  ? null
-                  : actual.fechaFin,
-            }));
-
-          }}
-        />
-
-        {datos.estado === 'PLANIFICADO' && (
-
-          <SelectorFecha
-            titulo="Fecha de término planificada"
-            valor={datos.fechaFin}
-            minimo={datos.fechaInicio}
-            maximo={maximo}
-            onChange={fecha =>
-              cambiar('fechaFin', fecha)
-            }
-          />
-
-        )}
-
-        <Text style={styles.label}>
-          Motivo
-        </Text>
-
-        <TextInput
-          style={[
-            styles.input,
-            styles.area,
-          ]}
-          multiline
-          textAlignVertical="top"
-          maxLength={500}
-          value={datos.motivo}
-          onChangeText={valor =>
-            cambiar(
-              'motivo',
-              limpiarTexto(valor, 500)
-            )
-          }
-          placeholder="Describe el motivo"
-        />
-
-        <Text style={styles.label}>
-          Observaciones
-        </Text>
-
-        <TextInput
-          style={[
-            styles.input,
-            styles.area,
-          ]}
-          multiline
-          textAlignVertical="top"
-          maxLength={1000}
-          value={datos.observaciones}
-          onChangeText={valor =>
-            cambiar(
-              'observaciones',
-              limpiarTexto(valor, 1000)
-            )
-          }
-          placeholder="Observaciones de prueba"
-        />
-
-        <Pressable
-          style={[
-            styles.botonAncho,
-            guardando && styles.deshabilitado,
-          ]}
-          disabled={guardando}
-          onPress={() => void guardar()}
-        >
-          <Text style={styles.textoBoton}>
-            {guardando
-              ? 'Guardando...'
-              : 'Guardar tratamiento'}
-          </Text>
-        </Pressable>
-
-        {sincronizando && (
-
-          <View style={styles.fila}>
-            <ActivityIndicator color={COLORS.gold} />
-
-            <Text style={styles.texto}>
-              Comprobando sincronización...
-            </Text>
-          </View>
-
-        )}
-
-      </ScrollView>
-
+      <View style={styles.cargandoPantalla}>
+        <ActivityIndicator size="large" color={COLORS.gold} />
+        <Text style={styles.textoCargando}>Cargando tratamientos...</Text>
+      </View>
     );
   }
 
-  // ========================================
-  // HISTORIAL
-  // ========================================
-
-  const pendientes = tratamientos.filter(
-    t => t.sincronizacion === 'PENDIENTE'
-  ).length;
-
-  const sincronizados = tratamientos.filter(
-    t => t.sincronizacion === 'SINCRONIZADO'
-  ).length;
-
   return (
-
-    <ScrollView
-      style={styles.pantalla}
-      contentContainerStyle={styles.contenido}
-    >
-
+    <ScrollView style={styles.pantalla} contentContainerStyle={styles.contenido} keyboardShouldPersistTaps="handled">
       <StatusBar barStyle="dark-content" />
 
-      <Pressable onPress={onVolver}>
-        <Text style={styles.enlace}>
-          ‹ Volver al inicio
-        </Text>
-      </Pressable>
-
-      <Text style={styles.titulo}>
-        💊 Tratamientos
-      </Text>
-
-      <Text style={styles.subtitulo}>
-        Historial de tratamientos
-      </Text>
-
-      {/* RESUMEN */}
-
-      <View style={styles.resumen}>
-
-        <Text style={styles.resumenNumero}>
-          {tratamientos.length} registros
-        </Text>
-
-        <Text style={styles.texto}>
-          {pendientes} pendientes de sincronización
-        </Text>
-
-        <Text style={styles.texto}>
-          {sincronizados} sincronizados con FastAPI
-        </Text>
-
-      </View>
-
-      {/* NUEVO TRATAMIENTO */}
-
-      <Pressable
-        style={styles.botonAncho}
-        onPress={nuevo}
-      >
-        <Text style={styles.textoBoton}>
-          + Registrar tratamiento
-        </Text>
-      </Pressable>
-
-      {/* SINCRONIZACIÓN MANUAL */}
-
-      <Pressable
-        style={[
-          styles.botonSincronizar,
-          sincronizando && styles.deshabilitado,
-        ]}
-        disabled={sincronizando}
-        onPress={() => void sincronizarAhora()}
-      >
-
-        {sincronizando ? (
-
-          <ActivityIndicator color={COLORS.surface} />
-
-        ) : (
-
-          <Text style={styles.textoBoton}>
-            ↻ Sincronizar ahora
-          </Text>
-
-        )}
-
-      </Pressable>
-
-      {/* BÚSQUEDA */}
-
-      <TextInput
-        style={styles.input}
-        value={busqueda}
-        onChangeText={setBusqueda}
-        placeholder="Buscar en el historial"
-      />
-
-      {/* FILTROS */}
-
-      <View style={styles.fila}>
-
-        {(
-          [
-            'TODOS',
-            ...Object.keys(NOMBRES),
-          ]
-        ).map(estado => (
-
-          <Opcion
-            key={estado}
-            etiqueta={
-              estado === 'TODOS'
-                ? 'Todos'
-                : NOMBRES[
-                    estado as EstadoTratamiento
-                  ]
-            }
-            activa={filtro === estado}
-            onPress={() => setFiltro(estado)}
-          />
-
-        ))}
-
-      </View>
-
-      {/* RECARGAR */}
-
-      <Pressable
-        onPress={() => void recargar()}
-      >
-        <Text style={styles.enlace}>
-          Actualizar historial
-        </Text>
-      </Pressable>
-
-      {/* RESULTADOS */}
-
-      {cargando ? (
-
-        <ActivityIndicator
-          size="large"
-          color={COLORS.gold}
-        />
-
-      ) : error ? (
-
-        <Text style={styles.error}>
-          {error}
-        </Text>
-
-      ) : filtrados.length === 0 ? (
-
-        <View style={styles.tarjeta}>
-          <Text>
-            No hay resultados.
-          </Text>
+      <View style={styles.encabezado}>
+        <View style={{ flex: 1 }}>
+          <Pressable onPress={onVolver} style={styles.volver}>
+            <Text style={styles.volverTexto}>‹ Volver</Text>
+          </Pressable>
+          <Text style={styles.titulo}>Tratamientos</Text>
+          <Text style={styles.subtitulo}>Seguimiento sanitario de las colmenas.</Text>
         </View>
+        <Pressable style={styles.botonPrincipal} onPress={abrirNuevo}>
+          <Text style={styles.botonPrincipalTexto}>＋ Registrar tratamiento</Text>
+        </Pressable>
+      </View>
 
-      ) : (
-
-        filtrados.map(t => {
-
-          const editable =
-            t.sincronizacion === 'PENDIENTE' &&
-            [
-              'PLANIFICADO',
-              'EN_CURSO',
-            ].includes(t.estado) &&
-            t.usuario_local_id !== null;
-
-          const codigoColmena =
-            catalogo?.colmenas.find(
-              c => c.codigo_qr === t.codigo_qr
-            )?.codigo ?? t.codigo_qr;
-
-          const inspeccionAsociada =
-            t.inspeccion_local_id !== null
-              ? inspecciones.find(
-                  i => i.id === t.inspeccion_local_id
-                )
-              : null;
-
-          return (
-
-            <View
-              key={t.id}
-              style={styles.tarjeta}
-            >
-
-              <Text style={styles.tarjetaTitulo}>
-                {t.tipo_tratamiento}
-              </Text>
-
-              <Text style={styles.codigo}>
-                {codigoColmena}
-              </Text>
-
-              {/* ESTADO */}
-
-              <View style={styles.aviso}>
-
-                <Text style={styles.avisoTexto}>
-
-                  {NOMBRES[t.estado]}
-
-                  {' · '}
-
-                  {t.sincronizacion === 'PENDIENTE'
-                    ? 'Pendiente de envío'
-                    : 'Sincronizado'}
-
-                </Text>
-
-              </View>
-
-              {/* TRAZABILIDAD */}
-
-              <Text style={styles.detalle}>
-                ID local: {t.id}
-              </Text>
-
-              <Text style={styles.detalle}>
-                ID servidor: {t.servidor_id ?? 'Pendiente'}
-              </Text>
-
-              {t.inspeccion_local_id !== null && (
-
-                <Text style={styles.detalle}>
-                  Inspección asociada: #{t.inspeccion_local_id}
-
-                  {inspeccionAsociada
-                    ? inspeccionAsociada.estado === 'SINCRONIZADO'
-                      ? ' · Sincronizada'
-                      : ' · Pendiente'
-                    : ' · No encontrada'}
-                </Text>
-
-              )}
-
-              {/* INFORMACIÓN */}
-
-              <Text style={styles.detalle}>
-                Producto: {t.producto || 'Sin registrar'}
-              </Text>
-
-              <Text style={styles.detalle}>
-                Dosis: {t.dosis || 'Sin dosis'}
-              </Text>
-
-              <Text style={styles.detalle}>
-                Inicio: {t.fecha_inicio}
-              </Text>
-
-              <Text style={styles.detalle}>
-                Término: {t.fecha_fin || 'Sin definir'}
-              </Text>
-
-              {!!t.motivo && (
-
-                <Text style={styles.detalle}>
-                  Motivo: {t.motivo}
-                </Text>
-
-              )}
-
-              {!!t.observaciones && (
-
-                <Text style={styles.detalle}>
-                  Observaciones: {t.observaciones}
-                </Text>
-
-              )}
-
-              {/* ACCIONES */}
-
-              {editable && (
-
-                <View style={styles.fila}>
-
-                  <Pressable
-                    style={styles.botonBorde}
-                    onPress={() => editar(t)}
-                  >
-                    <Text style={styles.textoBorde}>
-                      Editar
-                    </Text>
-                  </Pressable>
-
-                  <Pressable
-                    style={styles.botonBorde}
-                    onPress={() =>
-                      cambiarEstado(t, 'FINALIZADO')
-                    }
-                  >
-                    <Text style={styles.textoBorde}>
-                      Finalizar
-                    </Text>
-                  </Pressable>
-
-                  <Pressable
-                    style={styles.botonBorde}
-                    onPress={() =>
-                      cambiarEstado(t, 'CANCELADO')
-                    }
-                  >
-                    <Text style={styles.textoBorde}>
-                      Cancelar
-                    </Text>
-                  </Pressable>
-
-                </View>
-
-              )}
-
-            </View>
-
-          );
-
-        })
-
+      {!!error && (
+        <View style={styles.aviso}>
+          <Text style={styles.avisoTexto}>{error}</Text>
+        </View>
       )}
 
-      <Text style={styles.subtitulo}>
-        Los registros pendientes permanecen almacenados
-        localmente hasta que puedan sincronizarse con FastAPI.
-      </Text>
+      <TextInput
+        value={busqueda}
+        onChangeText={setBusqueda}
+        placeholder="Colmena, tipo o producto"
+        placeholderTextColor={COLORS.textMuted}
+        style={styles.input}
+      />
+      <View style={styles.filtroEstado}>
+        <SelectorLista
+          label="Estado"
+          value={estadoFiltro}
+          opciones={ESTADOS}
+          onChange={setEstadoFiltro}
+          placeholder="Todos los estados"
+        />
+      </View>
 
+      <View style={styles.barraResultados}>
+        <Text style={styles.contador}>{filtrados.length} tratamiento(s)</Text>
+        <Pressable onPress={() => void cargar(true)} disabled={actualizando}>
+          <Text style={styles.actualizar}>{actualizando ? 'Actualizando…' : '⟳ Actualizar'}</Text>
+        </Pressable>
+      </View>
+
+      {filtrados.length === 0 ? (
+        <View style={styles.vacio}>
+          <Text style={styles.vacioTitulo}>No hay tratamientos para mostrar</Text>
+          <Text style={styles.vacioTexto}>{registros.length === 0 ? 'Registra el primer tratamiento sanitario.' : 'Ajusta o limpia los filtros.'}</Text>
+        </View>
+      ) : (
+        <View style={styles.listaTarjetas}>
+          {filtrados.map(item => (
+            <View key={item.key} style={[styles.tarjeta, esTablet && styles.tarjetaTablet]}>
+              <View style={styles.tarjetaCabecera}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.tipo}>{item.tipo}</Text>
+                  <Text style={styles.meta}>{item.codigo} · {item.usuarioNombre}</Text>
+                </View>
+                <InsigniaMovil texto={etiquetaTratamiento(item.estado)} tono={tonoTratamiento(item.estado)} />
+              </View>
+
+              {item.pendiente && <InsigniaMovil texto="Pendiente de sincronización" tono="ambar" />}
+
+              <View style={styles.datosGrid}>
+                <Dato nombre="Producto" valor={textoNulo(item.producto)} />
+                <Dato nombre="Dosis" valor={textoNulo(item.dosis)} />
+                <Dato nombre="Inicio" valor={fechaEtiqueta(item.fechaInicio)} />
+                <Dato nombre="Término" valor={fechaEtiqueta(item.fechaFin)} />
+              </View>
+
+              {!!item.motivo && <Text style={styles.motivo}>Motivo: {item.motivo}</Text>}
+
+              {puedeGestionar(item) && (
+                <View style={styles.acciones}>
+                  {estaAbierto(item) && (
+                    <Pressable style={styles.accion} onPress={() => finalizar(item)}>
+                      <Text style={styles.accionTexto}>✓ Finalizar</Text>
+                    </Pressable>
+                  )}
+                  {(item.serverId !== null || (item.localId !== null && item.pendiente && estaAbierto(item))) && (
+                    <Pressable style={styles.accion} onPress={() => abrirEdicion(item)}>
+                      <Text style={styles.accionTexto}>✎ Editar</Text>
+                    </Pressable>
+                  )}
+                  {estaAbierto(item) && (
+                    <Pressable style={styles.accion} onPress={() => cancelar(item)}>
+                      <Text style={styles.accionTexto}>⊗ Cancelar tratamiento</Text>
+                    </Pressable>
+                  )}
+                </View>
+              )}
+            </View>
+          ))}
+        </View>
+      )}
+
+      <Text style={styles.pie}>Los tratamientos se guardan localmente y se sincronizan con FastAPI cuando hay conexión.</Text>
+
+      {formulario && (
+        <Modal visible transparent animationType="slide" onRequestClose={() => setFormulario(null)}>
+          <View style={styles.overlay}>
+            <View style={styles.modalFormulario}>
+              <View style={styles.modalCabecera}>
+                <Text style={styles.modalTitulo}>{formulario.registro ? 'Editar tratamiento' : 'Registrar tratamiento'}</Text>
+                <Pressable onPress={() => setFormulario(null)} hitSlop={10}>
+                  <Text style={styles.cerrar}>×</Text>
+                </Pressable>
+              </View>
+
+              <ScrollView style={styles.formScroll} contentContainerStyle={styles.formContenido} keyboardShouldPersistTaps="handled">
+                {formulario.registro ? (
+                  <View style={styles.camposDosColumnas}>
+                    <View style={styles.campoMitad}>
+                      <Text style={styles.label}>Colmena *</Text>
+                      <View style={styles.campoSoloLectura}><Text style={styles.soloLecturaTexto}>{formulario.registro.codigo}</Text></View>
+                    </View>
+                    <View style={styles.campoMitad}>
+                      <Text style={styles.label}>Inspección asociada</Text>
+                      <View style={styles.campoSoloLectura}><Text style={styles.soloLecturaTexto}>{formulario.registro.inspeccionId ? `Inspección #${formulario.registro.inspeccionId}` : 'Sin inspecciones'}</Text></View>
+                    </View>
+                  </View>
+                ) : (
+                  <View style={styles.camposDosColumnas}>
+                    <View style={styles.campoMitad}>
+                      <SelectorLista
+                        label="Colmena"
+                        required
+                        value={formulario.colmenaId}
+                        opciones={opcionesColmenas}
+                        onChange={valor => {
+                          cambiarFormulario('colmenaId', valor);
+                          cambiarFormulario('inspeccionLocalId', '');
+                        }}
+                        placeholder="Seleccionar colmena"
+                      />
+                    </View>
+                    <View style={styles.campoMitad}>
+                      <SelectorLista
+                        label="Inspección asociada"
+                        value={formulario.inspeccionLocalId}
+                        opciones={inspeccionesDeColmena}
+                        onChange={valor => cambiarFormulario('inspeccionLocalId', valor)}
+                        placeholder={inspeccionesDeColmena.length ? 'Ninguna' : 'Sin inspecciones'}
+                        disabled={!formulario.colmenaId || inspeccionesDeColmena.length === 0}
+                        helper="Opcional: la inspección que motivó el tratamiento."
+                      />
+                    </View>
+                  </View>
+                )}
+
+                <View style={styles.campo}>
+                  <Text style={styles.label}>Tipo de tratamiento *</Text>
+                  <TextInput
+                    value={formulario.tipo}
+                    onChangeText={valor => cambiarFormulario('tipo', valor)}
+                    style={styles.inputCampo}
+                    placeholder="Por ejemplo: Control de varroa"
+                    placeholderTextColor={COLORS.textMuted}
+                    maxLength={100}
+                  />
+                </View>
+
+                <View style={styles.camposDosColumnas}>
+                  <View style={styles.campoMitad}>
+                    <Text style={styles.label}>Producto</Text>
+                    <TextInput
+                      value={formulario.producto}
+                      onChangeText={valor => cambiarFormulario('producto', valor)}
+                      style={styles.inputCampo}
+                      placeholder="Producto aplicado"
+                      placeholderTextColor={COLORS.textMuted}
+                      maxLength={150}
+                    />
+                  </View>
+                  <View style={styles.campoMitad}>
+                    <Text style={styles.label}>Dosis</Text>
+                    <TextInput
+                      value={formulario.dosis}
+                      onChangeText={valor => cambiarFormulario('dosis', valor)}
+                      style={styles.inputCampo}
+                      placeholder="Ej. 2 tiras"
+                      placeholderTextColor={COLORS.textMuted}
+                      maxLength={100}
+                    />
+                  </View>
+                </View>
+
+                <View style={styles.camposDosColumnas}>
+                  <View style={styles.campoMitad}>
+                    <Text style={styles.label}>Fecha de inicio *</Text>
+                    <Pressable
+                      disabled={Boolean(formulario.registro)}
+                      onPress={() => setFechaVisible('inicio')}
+                      style={[styles.fechaCampo, Boolean(formulario.registro) && styles.campoDeshabilitado]}
+                    >
+                      <Text style={styles.fechaTexto}>{fechaEtiqueta(formulario.fechaInicio)}</Text>
+                      <Text style={styles.calendario}>▣</Text>
+                    </Pressable>
+                  </View>
+                  <View style={styles.campoMitad}>
+                    <Text style={styles.label}>Fecha de término</Text>
+                    <Pressable onPress={() => setFechaVisible('termino')} style={styles.fechaCampo}>
+                      <Text style={formulario.fechaFin ? styles.fechaTexto : styles.fechaPlaceholder}>{fechaEtiqueta(formulario.fechaFin)}</Text>
+                      <Text style={styles.calendario}>▣</Text>
+                    </Pressable>
+                  </View>
+                </View>
+
+                <SelectorLista
+                  label="Estado"
+                  value={formulario.estado}
+                  opciones={(formulario.registro
+                    ? ESTADOS_FORM
+                    : ESTADOS_FORM.filter(item => item.value === 'PLANIFICADO' || item.value === 'EN_CURSO')
+                  ).map(item => ({ value: item.value, label: item.label }))}
+                  onChange={valor => {
+                    cambiarFormulario('estado', valor as EstadoTratamiento);
+                    if (valor === 'EN_CURSO') cambiarFormulario('fechaFin', '');
+                  }}
+                  disabled={Boolean(formulario.registro?.local && formulario.registro.pendiente)}
+                />
+
+                <View style={styles.campo}>
+                  <Text style={styles.label}>Motivo</Text>
+                  <TextInput
+                    value={formulario.motivo}
+                    onChangeText={valor => cambiarFormulario('motivo', valor)}
+                    style={[styles.inputCampo, styles.areaTexto]}
+                    multiline
+                    textAlignVertical="top"
+                    placeholder="Motivo del tratamiento"
+                    placeholderTextColor={COLORS.textMuted}
+                    maxLength={500}
+                  />
+                </View>
+
+                <View style={styles.campo}>
+                  <Text style={styles.label}>Observaciones</Text>
+                  <TextInput
+                    value={formulario.observaciones}
+                    onChangeText={valor => cambiarFormulario('observaciones', valor)}
+                    style={[styles.inputCampo, styles.areaTexto]}
+                    multiline
+                    textAlignVertical="top"
+                    placeholder="Observaciones adicionales"
+                    placeholderTextColor={COLORS.textMuted}
+                    maxLength={1000}
+                  />
+                </View>
+              </ScrollView>
+
+              <View style={styles.modalPie}>
+                <Pressable style={styles.botonSecundario} onPress={() => setFormulario(null)} disabled={guardando}>
+                  <Text style={styles.botonSecundarioTexto}>Cancelar</Text>
+                </Pressable>
+                <Pressable style={[styles.botonPrincipal, guardando && styles.botonDeshabilitado]} onPress={() => void guardar()} disabled={guardando}>
+                  <Text style={styles.botonPrincipalTexto}>{guardando ? 'Guardando…' : formulario.registro ? 'Guardar cambios' : 'Registrar tratamiento'}</Text>
+                </Pressable>
+              </View>
+
+              {fechaVisible && (
+                <DateTimePicker
+                  value={fechaDate(fechaVisible === 'inicio' ? formulario.fechaInicio : formulario.fechaFin || formulario.fechaInicio)}
+                  mode="date"
+                  display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                  minimumDate={fechaVisible === 'termino' ? fechaDate(formulario.fechaInicio) : undefined}
+                  onChange={(evento, fecha) => {
+                    setFechaVisible(null);
+                    if (evento.type === 'dismissed' || !fecha) return;
+                    const valor = `${fecha.getFullYear()}-${String(fecha.getMonth() + 1).padStart(2, '0')}-${String(fecha.getDate()).padStart(2, '0')}`;
+                    if (fechaVisible === 'inicio') cambiarFormulario('fechaInicio', valor);
+                    else cambiarFormulario('fechaFin', valor);
+                  }}
+                />
+              )}
+            </View>
+          </View>
+        </Modal>
+      )}
     </ScrollView>
-
   );
 }
 
-// ==========================================
-// ESTILOS
-// ==========================================
+function Dato({ nombre, valor }: { nombre: string; valor: string }) {
+  return (
+    <View style={styles.dato}>
+      <Text style={styles.datoNombre}>{nombre}</Text>
+      <Text style={styles.datoValor}>{valor}</Text>
+    </View>
+  );
+}
 
 const styles = StyleSheet.create({
-
-  pantalla: {
-    flex: 1,
-    backgroundColor: COLORS.backgroundSoft,
-  },
-
-  contenido: {
-    padding: 20,
-    paddingTop: 60,
-    paddingBottom: 50,
-  },
-
-  titulo: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: COLORS.forestDeep,
-    marginTop: 18,
-    marginBottom: 15,
-  },
-
-  subtitulo: {
-    color: COLORS.textSecondary,
-    fontSize: 13,
-    marginVertical: 12,
-  },
-
-  tituloSeccion: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: COLORS.forestDeep,
-    marginTop: 20,
-    marginBottom: 12,
-  },
-
-  label: {
-    fontWeight: '700',
-    color: COLORS.text,
-    fontSize: 14,
-    marginTop: 12,
-    marginBottom: 8,
-  },
-
-  texto: {
-    color: COLORS.text,
-    fontSize: 14,
-  },
-
-  enlace: {
-    color: COLORS.goldText,
-    fontWeight: '700',
-    marginVertical: 12,
-  },
-
-  input: {
-    backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.borderStrong,
-    borderRadius: 12,
-    padding: 15,
-    fontSize: 15,
-    color: COLORS.forestDeep,
-    marginBottom: 12,
-  },
-
-  area: {
-    minHeight: 100,
-  },
-
-  fila: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginVertical: 10,
-    alignItems: 'center',
-  },
-
-  opcion: {
-    borderWidth: 1,
-    borderColor: COLORS.goldBorder,
-    backgroundColor: COLORS.surface,
-    borderRadius: 10,
-    padding: 12,
-    marginBottom: 7,
-  },
-
-  opcionActiva: {
-    backgroundColor: COLORS.goldSoft,
-    borderColor: COLORS.gold,
-  },
-
-  textoOpcion: {
-    color: COLORS.goldText,
-    fontSize: 13,
-    fontWeight: '700',
-  },
-
-  boton: {
-    backgroundColor: COLORS.gold,
-    padding: 13,
-    borderRadius: 10,
-    alignItems: 'center',
-    marginVertical: 5,
-  },
-
-  botonAncho: {
-    backgroundColor: COLORS.gold,
-    padding: 18,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginVertical: 14,
-  },
-
-  botonSincronizar: {
-    backgroundColor: COLORS.textSecondary,
-    padding: 16,
-    borderRadius: 12,
-    alignItems: 'center',
-    marginBottom: 14,
-    minHeight: 50,
-    justifyContent: 'center',
-  },
-
-  textoBoton: {
-    color: COLORS.surface,
-    fontWeight: '800',
-    fontSize: 15,
-  },
-
-  botonBorde: {
-    borderWidth: 1,
-    borderColor: COLORS.gold,
-    borderRadius: 10,
-    padding: 12,
-    alignItems: 'center',
-  },
-
-  textoBorde: {
-    fontWeight: '700',
-    color: COLORS.goldText,
-  },
-
-  tarjeta: {
-    backgroundColor: COLORS.surface,
-    padding: 18,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    marginBottom: 14,
-  },
-
-  tarjetaTitulo: {
-    fontWeight: '800',
-    fontSize: 18,
-    color: COLORS.forestDeep,
-  },
-
-  codigo: {
-    color: COLORS.goldText,
-    fontWeight: '700',
-    marginVertical: 10,
-  },
-
-  detalle: {
-    color: COLORS.textSecondary,
-    marginVertical: 4,
-    fontSize: 14,
-  },
-
-  resumen: {
-    backgroundColor: COLORS.surface,
-    padding: 20,
-    borderRadius: 14,
-    marginBottom: 10,
-  },
-
-  resumenNumero: {
-    color: COLORS.goldText,
-    fontSize: 21,
-    fontWeight: '800',
-    marginBottom: 8,
-  },
-
-  aviso: {
-    backgroundColor: COLORS.goldSoft,
-    padding: 14,
-    borderRadius: 12,
-    marginVertical: 12,
-  },
-
-  avisoTexto: {
-    color: COLORS.goldText,
-    fontSize: 13,
-    lineHeight: 20,
-    fontWeight: '600',
-  },
-
-  error: {
-    color: COLORS.danger,
-  },
-
-  deshabilitado: {
-    opacity: 0.45,
-  },
-
-  modalFondo: {
-    flex: 1,
-    backgroundColor: '#00000088',
-    justifyContent: 'center',
-    padding: 22,
-  },
-
-  modalCaja: {
-    backgroundColor: COLORS.surface,
-    borderRadius: 20,
-    padding: 20,
-  },
-
+  pantalla: { flex: 1, backgroundColor: COLORS.backgroundSoft },
+  contenido: { paddingHorizontal: 18, paddingTop: 22, paddingBottom: 50 },
+  encabezado: { gap: 14, marginBottom: 18 },
+  volver: { alignSelf: 'flex-start', paddingVertical: 4 },
+  volverTexto: { color: COLORS.goldText, fontSize: 13, fontWeight: '800' },
+  titulo: { color: COLORS.forest, fontSize: 27, fontWeight: '900' },
+  subtitulo: { color: COLORS.textSecondary, fontSize: 12, marginTop: 4 },
+  botonPrincipal: { backgroundColor: COLORS.gold, borderRadius: 12, paddingHorizontal: 15, paddingVertical: 12, alignItems: 'center', justifyContent: 'center' },
+  botonPrincipalTexto: { color: '#35230A', fontSize: 12, fontWeight: '900' },
+  input: { minHeight: 46, borderWidth: 1, borderColor: COLORS.borderStrong, borderRadius: 12, backgroundColor: COLORS.surface, paddingHorizontal: 13, color: COLORS.text, fontSize: 13, marginBottom: 12 },
+  filtroEstado: { marginBottom: 10, maxWidth: 460 },
+  barraResultados: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginVertical: 12 },
+  contador: { color: COLORS.textSecondary, fontSize: 12, fontWeight: '700' },
+  actualizar: { color: COLORS.goldText, fontSize: 12, fontWeight: '800' },
+  listaTarjetas: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  tarjeta: { width: '100%', backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border, borderRadius: 16, padding: 15, gap: 11 },
+  tarjetaTablet: { width: '48.5%' },
+  tarjetaCabecera: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 },
+  tipo: { color: COLORS.forest, fontSize: 16, fontWeight: '900' },
+  meta: { color: COLORS.textSecondary, fontSize: 10, marginTop: 3 },
+  datosGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  dato: { flexBasis: '46%', flexGrow: 1, minWidth: 110, gap: 3 },
+  datoNombre: { color: COLORS.textMuted, fontSize: 10 },
+  datoValor: { color: COLORS.text, fontSize: 12, fontWeight: '700' },
+  motivo: { color: COLORS.textSecondary, fontSize: 11, lineHeight: 16 },
+  acciones: { borderTopWidth: 1, borderTopColor: COLORS.border, paddingTop: 9, flexDirection: 'row', flexWrap: 'wrap', gap: 14 },
+  accion: { paddingVertical: 4 },
+  accionTexto: { color: COLORS.textSecondary, fontSize: 11, fontWeight: '700' },
+  vacio: { backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border, borderRadius: 15, padding: 22, alignItems: 'center', gap: 8 },
+  vacioTitulo: { color: COLORS.forest, fontSize: 15, fontWeight: '800' },
+  vacioTexto: { color: COLORS.textSecondary, fontSize: 12, lineHeight: 18, textAlign: 'center' },
+  aviso: { backgroundColor: COLORS.warningBg, borderWidth: 1, borderColor: COLORS.goldBorder, borderRadius: 11, padding: 11, marginBottom: 12 },
+  avisoTexto: { color: COLORS.goldText, fontSize: 11, lineHeight: 16 },
+  pie: { color: COLORS.textMuted, fontSize: 10, lineHeight: 16, textAlign: 'center', marginTop: 22 },
+  cargandoPantalla: { flex: 1, backgroundColor: COLORS.backgroundSoft, alignItems: 'center', justifyContent: 'center', gap: 12 },
+  textoCargando: { color: COLORS.textSecondary, fontSize: 13 },
+  overlay: { flex: 1, backgroundColor: '#00000077', justifyContent: 'center', alignItems: 'center', padding: 8 },
+  modalFormulario: { width: '100%', maxWidth: 700, maxHeight: '96%', backgroundColor: COLORS.surface, borderRadius: 16, overflow: 'hidden' },
+  modalCabecera: { minHeight: 58, paddingHorizontal: 17, borderBottomWidth: 1, borderBottomColor: COLORS.border, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  modalTitulo: { color: COLORS.forest, fontSize: 15, fontWeight: '900' },
+  cerrar: { color: COLORS.textSecondary, fontSize: 28, lineHeight: 30 },
+  formScroll: { flexGrow: 0 },
+  formContenido: { padding: 16, gap: 14, paddingBottom: 20 },
+  campo: { gap: 6 },
+  label: { color: COLORS.text, fontSize: 11, fontWeight: '800' },
+  inputCampo: { minHeight: 44, borderWidth: 1, borderColor: COLORS.borderStrong, borderRadius: 11, paddingHorizontal: 11, paddingVertical: 9, color: COLORS.text, backgroundColor: COLORS.surface, fontSize: 12 },
+  areaTexto: { minHeight: 70, textAlignVertical: 'top' },
+  camposDosColumnas: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+  campoMitad: { flex: 1, flexBasis: '47%', minWidth: 135 },
+  fechaCampo: { minHeight: 44, borderWidth: 1, borderColor: COLORS.borderStrong, borderRadius: 11, paddingHorizontal: 11, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: COLORS.surface },
+  fechaTexto: { color: COLORS.text, fontSize: 12 },
+  fechaPlaceholder: { color: COLORS.textMuted, fontSize: 12 },
+  calendario: { color: COLORS.forest, fontSize: 15 },
+  campoSoloLectura: { minHeight: 44, borderWidth: 1, borderColor: COLORS.borderStrong, borderRadius: 11, backgroundColor: COLORS.background, justifyContent: 'center', paddingHorizontal: 11 },
+  soloLecturaTexto: { color: COLORS.textSecondary, fontSize: 12 },
+  campoDeshabilitado: { backgroundColor: COLORS.background, opacity: 0.75 },
+  modalPie: { borderTopWidth: 1, borderTopColor: COLORS.border, padding: 12, flexDirection: 'row', justifyContent: 'flex-end', gap: 9 },
+  botonSecundario: { minHeight: 42, borderRadius: 11, borderWidth: 1, borderColor: COLORS.borderStrong, paddingHorizontal: 15, alignItems: 'center', justifyContent: 'center' },
+  botonSecundarioTexto: { color: COLORS.text, fontSize: 12, fontWeight: '700' },
+  botonDeshabilitado: { opacity: 0.6 },
 });

@@ -1,0 +1,32 @@
+COLMENARES TRES PINOS - PARCHE MOBILE
+
+1. Descomprime este ZIP en la RAIZ del repositorio:
+   C:\Users\yarek\Repositorios\Sistema-de-gestion---Colmenares-tres-pinos
+
+2. Acepta reemplazar los archivos de la carpeta mobile.
+
+3. Abre PowerShell en la carpeta mobile y ejecuta:
+   Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+   .\INSTALAR_PARIDAD_QR.ps1
+
+4. Si TypeScript termina sin errores:
+   npx expo start -c
+
+El parche no contiene node_modules, .venv, base de datos, .env ni datos personales.
+No modifica backend ni frontend.
+No borra ni migra registros SQLite.
+
+Incluye:
+- descarga/exportación del PNG QR;
+- cambio de etiqueta escaneando una etiqueta ya impresa;
+- alternativa manual para pegar URL o UUID;
+- generación de código QR nuevo desde FastAPI;
+- protección para no cambiar una etiqueta mientras existan inspecciones/tratamientos locales sin sincronizar;
+- detalle de inspecciones del historial;
+- marcos, tratamientos y transferencias en el detalle cuando existen;
+- última inspección remota/local en la lista;
+- alertas con inspecciones avanzadas guardadas localmente;
+- footer fijo de Registrar tratamiento / Registrar inspección;
+- formulario de tratamiento preseleccionado para la colmena actual.
+
+NOTA: la ejecución real de cámara, almacenamiento y TypeScript debe confirmarse en el teléfono/proyecto local.
