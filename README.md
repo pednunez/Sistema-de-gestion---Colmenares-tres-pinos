@@ -1,16 +1,16 @@
-<div align="center">
-
-<img src="frontend/public/marca/tres-pinos-logo.svg" alt="Colmenares Tres Pinos" width="140" />
-
 # Sistema de Gestión — Colmenares Tres Pinos
 
-**Plataforma web y móvil para el control operativo y la trazabilidad de colmenas**
+<div align="center">
 
-[![Sitio](https://img.shields.io/badge/Sitio-colmenarestrespinos.tech-F2B705?style=for-the-badge&logo=googlechrome&logoColor=black)](https://colmenarestrespinos.tech)
+<img src="frontend/public/marca/tres-pinos-logo.svg" alt="Colmenares Tres Pinos" width="150" />
 
-![React](https://img.shields.io/badge/React_19-61DAFB?style=flat-square&logo=react&logoColor=black)
+### Plataforma web y móvil para el control operativo y la trazabilidad apícola
+
+[![Sitio web](https://img.shields.io/badge/Sitio_web-colmenarestrespinos.tech-F2B705?style=for-the-badge&logo=googlechrome&logoColor=black)](https://colmenarestrespinos.tech)
+
+![React](https://img.shields.io/badge/React_19-20232A?style=flat-square&logo=react&logoColor=61DAFB)
 ![Vite](https://img.shields.io/badge/Vite-646CFF?style=flat-square&logo=vite&logoColor=white)
-![Tailwind](https://img.shields.io/badge/Tailwind_CSS-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS_4-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white)
 ![Expo](https://img.shields.io/badge/Expo-000020?style=flat-square&logo=expo&logoColor=white)
 ![React Native](https://img.shields.io/badge/React_Native-20232A?style=flat-square&logo=react&logoColor=61DAFB)
 ![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white)
@@ -19,22 +19,22 @@
 ![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat-square&logo=docker&logoColor=white)
 ![Caddy](https://img.shields.io/badge/Caddy-1F88C0?style=flat-square&logo=caddy&logoColor=white)
 
-Proyecto Capstone (APT122) · Ingeniería en Informática · DUOC UC Sede Melipilla · 2026
+**Proyecto Capstone APT122 · Ingeniería en Informática · DUOC UC, sede Melipilla · 2026**
 
 </div>
 
 ---
 
-## Tabla de contenidos
+## Índice
 
-- [Descripción](#descripción)
+- [Acerca del proyecto](#acerca-del-proyecto)
 - [Problema y solución](#problema-y-solución)
 - [Funcionalidades](#funcionalidades)
-- [Usuarios y roles](#usuarios-y-roles)
+- [Roles de usuario](#roles-de-usuario)
 - [Arquitectura](#arquitectura)
 - [Tecnologías](#tecnologías)
 - [Estructura del repositorio](#estructura-del-repositorio)
-- [Instalación local](#instalación-local)
+- [Inicio local](#inicio-local)
 - [Variables de entorno](#variables-de-entorno)
 - [Pruebas](#pruebas)
 - [Despliegue](#despliegue)
@@ -44,26 +44,19 @@ Proyecto Capstone (APT122) · Ingeniería en Informática · DUOC UC Sede Melipi
 
 ---
 
-## Descripción
+## Acerca del proyecto
 
-**Sistema de Gestión — Colmenares Tres Pinos** es una plataforma desarrollada como proyecto Capstone para la empresa apícola **Colmenares Tres Pinos**. Su objetivo es apoyar el control operativo y la trazabilidad de sus colmenas.
+**Sistema de Gestión — Colmenares Tres Pinos** es una plataforma web y móvil desarrollada para apoyar la gestión operativa de la empresa apícola Colmenares Tres Pinos.
 
-Reúne en un solo lugar la información de **apiarios, colmenas, inspecciones, tratamientos, transferencias de marcos y stock de materiales**. Así se puede seguir la historia completa de cada colmena, y el apicultor cuenta con datos reales para tomar decisiones.
-
-El proyecto considera tres apiarios: **Mandinga**, **Culiprán** y **Popeta**.
-
----
+Centraliza la información de apiarios, colmenas, inspecciones, tratamientos, transferencias de marcos e inventario. Cada registro contribuye a mantener la trazabilidad y el historial de las colmenas de los apiarios **Mandinga, Culiprán y Popeta**.
 
 ## Problema y solución
 
-| | |
+| Antes | Con el sistema |
 |---|---|
-| **Antes** | Cerca de 400 a 450 colmenas se gestionaban a mano, con marcas en los cajones. No existía historial ni datos digitales, y era difícil saber qué colmena necesitaba revisión o tratamiento. |
-| **Ahora** | Cada colmena tiene un **código QR**. En terreno, el apicultor lo escanea con la **app móvil**, que también funciona **sin conexión**, y registra la inspección. Al volver a tener señal, los datos se sincronizan y quedan disponibles en la **plataforma web** con el historial, las alertas y los reportes. |
+| La información de aproximadamente 400–450 colmenas se registraba manualmente en los cajones. El historial y el seguimiento dependían de anotaciones en terreno. | Los códigos QR permiten identificar las colmenas. La aplicación móvil permite registrar información en terreno y trabajar sin conexión; al recuperar conectividad, sincroniza los registros con la plataforma. |
 
-> **Principio de diseño:** la simplicidad es prioridad. Las pantallas están pensadas para usuarios con poca experiencia digital y para usarse en terreno.
-
----
+> **Diseño para terreno:** la experiencia prioriza pantallas simples y flujos claros para facilitar el uso durante las labores apícolas.
 
 ## Funcionalidades
 
@@ -71,291 +64,263 @@ El proyecto considera tres apiarios: **Mandinga**, **Culiprán** y **Popeta**.
 
 | Módulo | Descripción |
 |---|---|
-| **Dashboard** | Resumen general y por apiario, con alertas de colmenas que requieren atención |
-| **Apiarios y colmenas** | Registro, edición y consulta. Incluye creación de colmenas por lote y paginación |
-| **Códigos QR** | Generación e impresión del QR de cada colmena |
-| **Inspecciones** | Registro detallado: estado general, estado de cada marco y observaciones |
-| **Por revisar** | Lista de colmenas que llevan tiempo sin revisión |
-| **Grupos y revisiones** | Revisión por grupos de colmenas ("colmena n de 5") |
-| **Tratamientos** | Registro de medicamentos y tratamientos aplicados por colmena |
-| **Transferencias** | Transferencia de marcos entre colmenas y control de capacidad |
-| **Historial** | Línea de tiempo completa de cada colmena |
-| **Stock** | Inventario de materiales, movimientos, mínimos y retiro de marcos a bodega |
-| **Reportes** | Reportes exportables a **PDF** y **Excel** |
-| **Usuarios** | Gestión de cuentas, roles y recuperación de contraseña por correo |
-| **Auditoría** | Registro filtrable de quién hizo cada cambio y cuándo |
+| Panel de control | Resumen general y por apiario, con alertas de colmenas que requieren atención. |
+| Apiarios y colmenas | Registro, edición, consulta, creación por lote y paginación. |
+| Códigos QR | Generación e impresión de identificadores para las colmenas. |
+| Inspecciones | Registro del estado general, los marcos y observaciones. |
+| Por revisar | Consulta de colmenas pendientes de inspección. |
+| Grupos y revisiones | Organización de inspecciones por grupos de colmenas. |
+| Tratamientos | Registro de tratamientos aplicados por colmena. |
+| Transferencias | Transferencia de marcos entre colmenas y control de capacidad. |
+| Historial | Línea de tiempo de eventos asociados a cada colmena. |
+| Inventario | Existencias, movimientos, niveles mínimos y retiro de materiales. |
+| Reportes | Generación de reportes exportables a PDF y Excel. |
+| Usuarios | Gestión de cuentas, roles y recuperación de contraseña por correo. |
+| Auditoría | Registro consultable de acciones y cambios. |
 
-### App móvil (Expo / React Native)
+### Aplicación móvil
 
-- Escaneo de códigos QR con la cámara (`expo-camera`)
-- **Modo sin conexión:** base de datos local en el teléfono (`expo-sqlite`)
-- **Sincronización** de inspecciones y tratamientos con una cola de envío que evita registros duplicados
-- Detección de conectividad (`@react-native-community/netinfo`)
-- Sesión guardada de forma segura (`expo-secure-store`)
-- Tutorial integrado para nuevos usuarios
+- Escaneo de códigos QR con la cámara (`expo-camera`).
+- Registro sin conexión mediante base de datos local (`expo-sqlite`).
+- Sincronización de inspecciones y tratamientos con control de duplicados.
+- Detección de conectividad (`@react-native-community/netinfo`).
+- Almacenamiento seguro de sesión (`expo-secure-store`).
+- Tutorial integrado para nuevos usuarios.
 
----
+## Roles de usuario
 
-## Usuarios y roles
-
-| Rol | Descripción | Acceso |
+| Rol | Uso principal | Permisos generales |
 |---|---|---|
-| **ADMIN** | Dueño o administrador de la empresa | Acceso total: usuarios, auditoría, reportes, stock y configuración |
-| **APICULTOR** | Personal de terreno | Registro de inspecciones, tratamientos y transferencias desde la web o el móvil |
-
----
+| **ADMIN** | Administración de la empresa y del sistema. | Acceso a usuarios, auditoría, reportes, inventario y configuración. |
+| **APICULTOR** | Trabajo y registro de actividades en terreno. | Inspecciones, tratamientos y transferencias según permisos asignados. |
 
 ## Arquitectura
 
-Arquitectura por capas con un único backend (API REST) que atiende a dos clientes: la web y la app móvil.
+La solución utiliza una API REST compartida por la plataforma web y la aplicación móvil. La app puede almacenar información localmente mientras no hay conexión y sincronizarla posteriormente.
 
 ```mermaid
 flowchart TD
     subgraph Clientes
-        W["Web<br/>React + Vite"]
-        M["App móvil<br/>Expo / React Native<br/>(SQLite local + cola de sync)"]
+        WEB["Web<br/>React + Vite"]
+        APP["Móvil<br/>Expo + React Native<br/>SQLite y cola de sincronización"]
     end
 
-    subgraph Servidor["Servidor (Docker)"]
-        C["Caddy<br/>HTTPS + proxy inverso"]
-        N["Nginx<br/>archivos del frontend"]
-        A["API REST<br/>FastAPI / Python 3.12"]
+    subgraph Infraestructura["Servidor en contenedores"]
+        PROXY["Caddy<br/>HTTPS y proxy inverso"]
+        FRONT["Nginx<br/>Frontend web"]
+        API["FastAPI<br/>API REST"]
     end
 
     DB[("PostgreSQL")]
 
-    W -->|HTTPS| C
-    M -->|HTTPS + Bearer token| C
-    C --> N
-    C --> A
-    A -->|SQLAlchemy + Psycopg| DB
+    WEB -->|HTTPS| PROXY
+    APP -->|HTTPS y token| PROXY
+    PROXY --> FRONT
+    PROXY --> API
+    API -->|SQLAlchemy y Psycopg| DB
 ```
 
-| Capa | Responsabilidad |
+| Componente | Responsabilidad |
 |---|---|
-| **Presentación** | Web para administración y consulta; app móvil para el trabajo en terreno |
-| **Proxy** | Caddy entrega HTTPS automático y dirige el tráfico al frontend o a la API |
-| **API** | Routers, esquemas Pydantic, servicios con la lógica de negocio y control de acceso |
-| **Datos** | Modelos SQLAlchemy y migraciones con Alembic sobre PostgreSQL |
-
----
+| Web y móvil | Administración, consulta y operación en terreno. |
+| Caddy | Terminación HTTPS y enrutamiento de solicitudes. |
+| Nginx | Entrega de los archivos de la aplicación web. |
+| FastAPI | Endpoints, validación, reglas de negocio y control de acceso. |
+| PostgreSQL | Persistencia relacional mediante SQLAlchemy y migraciones Alembic. |
 
 ## Tecnologías
 
-| Capa | Tecnología | Uso |
-|---|---|---|
-| **Frontend web** | React 19, Vite, Tailwind CSS 4, Lucide | Interfaz de administración y consulta |
-| **Móvil** | Expo, React Native, TypeScript | App de terreno con escaneo QR y modo sin conexión |
-| **Almacenamiento móvil** | expo-sqlite, expo-secure-store | Datos sin conexión y guardado seguro de la sesión |
-| **Backend** | Python 3.12, FastAPI, Uvicorn | API REST y lógica de negocio |
-| **Datos** | SQLAlchemy 2, Psycopg 3, Alembic | ORM, conexión y migraciones |
-| **Base de datos** | PostgreSQL | Persistencia relacional |
-| **Autenticación** | PyJWT, Argon2 (pwdlib) | Tokens, cookies de sesión y hash de contraseñas |
-| **Reportes y QR** | ReportLab, openpyxl, qrcode, Pillow | Generación de PDF, Excel y códigos QR |
-| **Pruebas** | unittest, Vitest, Testing Library, Playwright | Pruebas del backend, de la interfaz y end-to-end |
-| **Infraestructura** | Docker Compose, Caddy, Nginx | Contenedores, HTTPS y publicación |
-| **Diseño y gestión** | Figma, Scrum | Prototipos y desarrollo por sprints |
-
----
+| Área | Tecnologías |
+|---|---|
+| Web | React 19, Vite, Tailwind CSS 4, Lucide. |
+| Móvil | Expo, React Native, TypeScript, expo-sqlite, expo-secure-store. |
+| Backend | Python 3.12, FastAPI, Uvicorn, Pydantic. |
+| Datos | PostgreSQL, SQLAlchemy 2, Psycopg 3, Alembic. |
+| Autenticación | PyJWT, Argon2 (pwdlib), cookies de sesión y tokens Bearer. |
+| Reportes y QR | ReportLab, openpyxl, qrcode, Pillow. |
+| Infraestructura | Docker Compose, Caddy, Nginx. |
+| Calidad | unittest, Vitest, Testing Library, Playwright, ESLint. |
 
 ## Estructura del repositorio
 
 ```text
 .
-├── backend/                 # API REST (FastAPI)
+├── backend/                 # API REST, modelos, servicios y pruebas
 │   ├── app/
-│   │   ├── core/            # Autenticación, seguridad y dependencias
-│   │   ├── models/          # Modelos SQLAlchemy
-│   │   ├── routers/         # Endpoints por módulo
-│   │   ├── schemas/         # Esquemas Pydantic
-│   │   ├── services/        # Lógica de negocio
-│   │   ├── database.py
-│   │   └── main.py          # Punto de entrada
-│   ├── alembic/             # Migraciones del esquema
-│   ├── migrations/          # Scripts SQL de roles y permisos
-│   ├── tests/               # Pruebas del backend
+│   ├── alembic/             # Migraciones de base de datos
+│   ├── migrations/          # Scripts SQL complementarios
+│   ├── tests/
 │   ├── Dockerfile
 │   └── requirements.txt
-├── frontend/                # Aplicación web (React + Vite)
+├── frontend/                # Aplicación web React + Vite
 │   ├── src/
-│   │   ├── components/      # Componentes por módulo
-│   │   ├── context/         # Sesión, datos, avisos y navegación
-│   │   ├── hooks/
-│   │   ├── pages/           # Vistas principales
-│   │   └── services/        # Conexión con la API
-│   ├── tests/               # Pruebas unitarias y de interfaz
-│   ├── e2e/                 # Pruebas end-to-end (Playwright)
+│   ├── tests/
+│   ├── e2e/
 │   ├── Dockerfile
 │   └── nginx.conf
-├── mobile/                  # App móvil (Expo / React Native)
-│   ├── api/                 # Cliente de la API
-│   ├── database/            # Base local SQLite
-│   └── sincronizacion/      # Cola y sincronización sin conexión
-├── docs/
-│   └── API_MOVIL.md         # Guía de la API para la app móvil
-├── compose.yaml             # Backend + frontend
-├── compose.caddy.yaml       # Proxy Caddy con HTTPS
+├── mobile/                  # Aplicación Expo / React Native
+│   ├── api/
+│   ├── database/
+│   └── sincronizacion/
+├── docs/                    # Documentación del sistema
+├── compose.yaml
+├── compose.caddy.yaml
 └── Caddyfile
 ```
 
----
-
-## Instalación local
+## Inicio local
 
 ### Requisitos
 
-- Python 3.12
-- Node.js 20 o superior
-- PostgreSQL
-- Git
-- [Expo Go](https://expo.dev/go) en el teléfono (para la app móvil)
+- Git.
+- Python 3.12.
+- Node.js 20 o superior.
+- PostgreSQL.
+- Expo Go si se desea ejecutar la aplicación móvil en un teléfono.
 
-### 1. Clonar el repositorio
+### Obtener el código
 
 ```bash
 git clone https://github.com/pednunez/Sistema-de-gestion---Colmenares-tres-pinos.git
 cd Sistema-de-gestion---Colmenares-tres-pinos
 ```
 
-### 2. Backend
+### Backend
 
 ```bash
 cd backend
 python -m venv .venv
 
-# Windows
-.venv\Scripts\activate
-# Linux / macOS
+# Windows PowerShell
+.venv\Scripts\Activate.ps1
+
+# Linux o macOS
 source .venv/bin/activate
 
 pip install -r requirements.txt
-cp .env.example .env          # Completar con tus credenciales
-alembic upgrade head          # Crear o actualizar el esquema
+# Crear backend/.env a partir de backend/.env.example y completar sus valores
+alembic upgrade head
 uvicorn app.main:app --reload
 ```
 
-API disponible en `http://localhost:8000` · Swagger en `http://localhost:8000/docs`
+API: `http://localhost:8000` · Swagger: `http://localhost:8000/docs`
 
-### 3. Frontend web
+### Frontend web
+
+En otra terminal, desde la raíz del repositorio:
 
 ```bash
 cd frontend
 npm install
-cp .env.example .env
+# Crear frontend/.env a partir de frontend/.env.example
 npm run dev
 ```
 
-Web disponible en `http://localhost:5173`
+Web: `http://localhost:5173`
 
-### 4. App móvil
+### Aplicación móvil
+
+En otra terminal:
 
 ```bash
 cd mobile
 npm install
-cp .env.example .env          # Poner la IP del computador en EXPO_PUBLIC_API_URL
+# Crear mobile/.env a partir de mobile/.env.example
 npx expo start
 ```
 
-Escanea el QR de la terminal con **Expo Go**. El teléfono y el computador deben estar en la misma red Wi-Fi, y el backend debe iniciarse con `--host 0.0.0.0`. Hay más detalles en [`docs/API_MOVIL.md`](docs/API_MOVIL.md).
-
----
+Configura `EXPO_PUBLIC_API_URL` con una dirección accesible desde el teléfono. En una red local, el teléfono y el computador deben compartir la misma Wi-Fi y el backend debe aceptar conexiones de la red local. Consulta [`docs/API_MOVIL.md`](docs/API_MOVIL.md) si está disponible en esta rama.
 
 ## Variables de entorno
 
-Cada parte tiene su propio archivo `.env.example`. Las variables principales son:
+Usa los archivos `.env.example` de cada componente como referencia y completa los valores en archivos `.env` locales.
 
-| Archivo | Variable | Descripción |
+| Archivo | Variables representativas | Propósito |
 |---|---|---|
-| `backend/.env` | `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT`, `DB_NAME` | Conexión a PostgreSQL con una cuenta de permisos restringidos |
-| | `JWT_SECRET_KEY`, `ACCESS_TOKEN_EXPIRE_MINUTES` | Firma y duración de los tokens |
-| | `SMTP_*`, `PASSWORD_RESET_FRONTEND_URL` | Correo de recuperación de contraseña |
-| | `SESSION_COOKIE_SECURE`, `CORS_ORIGINS` | Cookies de sesión y orígenes permitidos |
-| | `FRONTEND_URL` | URL pública usada en los códigos QR |
-| `frontend/.env` | `VITE_API_URL` | URL del backend |
-| `mobile/.env` | `EXPO_PUBLIC_API_URL` | URL del backend desde el teléfono |
-| | `EXPO_PUBLIC_ENABLE_SYNC` | Activa la sincronización sin conexión |
+| `backend/.env` | `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_PORT`, `DB_NAME` | Conexión a PostgreSQL. |
+| `backend/.env` | `JWT_SECRET_KEY`, `ACCESS_TOKEN_EXPIRE_MINUTES` | Firma y duración de tokens. |
+| `backend/.env` | `SMTP_*`, `PASSWORD_RESET_FRONTEND_URL` | Recuperación de contraseña por correo. |
+| `backend/.env` | `SESSION_COOKIE_SECURE`, `CORS_ORIGINS`, `FRONTEND_URL` | Cookies, orígenes permitidos y URL de la plataforma. |
+| `frontend/.env` | `VITE_API_URL` | Dirección de la API usada por la web. |
+| `mobile/.env` | `EXPO_PUBLIC_API_URL`, `EXPO_PUBLIC_ENABLE_SYNC` | Dirección de la API y sincronización móvil. |
 
-> Los archivos `.env` **nunca** se suben al repositorio; están excluidos en `.gitignore`.
-
----
+> No subas archivos `.env` ni credenciales al repositorio. Deben permanecer excluidos mediante `.gitignore`.
 
 ## Pruebas
 
 ### Backend
 
-```bash
-# Pruebas aisladas: no requieren PostgreSQL ni .env
-python backend/tests/run_isolated.py
+Desde la raíz del repositorio:
 
-# Solo un archivo
+```bash
+python backend/tests/run_isolated.py
+```
+
+Para ejecutar un archivo específico:
+
+```bash
 python backend/tests/run_isolated.py test_reportes.py
 ```
 
-Cubren control de acceso, sesiones con cookie, privilegios de la base de datos, auditoría, sincronización móvil, reportes, stock, transferencias y más.
-
 ### Frontend
 
-```bash
-cd frontend
-npm test                  # Pruebas unitarias y de interfaz (Vitest + Testing Library)
-npm run test:e2e          # Pruebas end-to-end (Playwright)
-npm run lint              # Revisión de estilo con ESLint
-```
+Desde la carpeta `frontend`:
 
----
+```bash
+npm test
+npm run test:e2e
+npm run lint
+```
 
 ## Despliegue
 
-El sistema funciona en contenedores Docker detrás de **Caddy**, que obtiene y renueva los certificados HTTPS automáticamente.
+La aplicación se ejecuta mediante Docker Compose detrás de Caddy, que administra HTTPS y enruta el tráfico al frontend y a la API.
 
-| Dominio | Servicio |
+| Dirección | Servicio |
 |---|---|
-| [`colmenarestrespinos.tech`](https://colmenarestrespinos.tech) | Plataforma web |
-| `api.colmenarestrespinos.tech` | API REST |
-| `pruebas.colmenarestrespinos.tech` | Entorno de pruebas |
+| [colmenarestrespinos.tech](https://colmenarestrespinos.tech) | Plataforma web. |
+| `api.colmenarestrespinos.tech` | API REST. |
+| `pruebas.colmenarestrespinos.tech` | Entorno de pruebas, si está habilitado. |
+
+Comando de referencia para iniciar los servicios:
 
 ```bash
 docker compose -f compose.yaml -f compose.caddy.yaml up -d
 ```
 
----
-
 ## Seguridad
 
-El proyecto sigue el enfoque **Security & Privacy by Design**:
+El sistema incorpora medidas de seguridad en sus componentes:
 
-- **Contraseñas** con hash **Argon2**
-- **Autenticación** con cookie de sesión y protección CSRF en la web, y token Bearer en el móvil
-- **Control de acceso por rol** (ADMIN / APICULTOR) en cada endpoint
-- **Mínimo privilegio en la base de datos:** la app usa una cuenta restringida y las migraciones usan una cuenta propietaria separada
-- **Auditoría** de las acciones relevantes
-- **Correlation ID** en cada petición para rastrear errores
-- **Contenedores sin root** (el backend corre con un usuario sin privilegios)
-- Secretos fuera del código, en variables de entorno
-
----
+- Contraseñas protegidas con hash Argon2.
+- Autenticación web mediante cookie de sesión y protección CSRF.
+- Autenticación móvil mediante token Bearer.
+- Control de acceso por roles en los endpoints.
+- Separación de credenciales para la aplicación y las migraciones de base de datos.
+- Registro de auditoría y `Correlation ID` para apoyar el seguimiento de solicitudes.
+- Backend en contenedor ejecutado con usuario sin privilegios, según la configuración de despliegue.
+- Secretos y credenciales configurados fuera del código fuente.
 
 ## Documentación
 
-| Documento | Contenido |
+| Recurso | Contenido |
 |---|---|
-| [`docs/API_MOVIL.md`](docs/API_MOVIL.md) | Conexión, autenticación y sincronización de la app móvil |
-| [`frontend/SEGURIDAD_DEPENDENCIAS.md`](frontend/SEGURIDAD_DEPENDENCIAS.md) | Revisión de seguridad de dependencias |
-| `/docs` (Swagger) y `/redoc` | Documentación interactiva de la API, generada por FastAPI |
-
----
+| [`docs/API_MOVIL.md`](docs/API_MOVIL.md) | Integración, autenticación y sincronización móvil, si está presente en la rama. |
+| [`frontend/SEGURIDAD_DEPENDENCIAS.md`](frontend/SEGURIDAD_DEPENDENCIAS.md) | Información de revisión de dependencias, si está presente en la rama. |
+| `/docs` | Documentación interactiva de FastAPI (Swagger), cuando la API está en ejecución. |
+| `/redoc` | Documentación alternativa generada por FastAPI, cuando la API está en ejecución. |
 
 ## Equipo
 
-| Integrante | Rol |
+| Integrante | Responsabilidad |
 |---|---|
 | **Pedro Núñez** | Product Owner · Frontend |
 | **José Ballesteros** | Scrum Master · Backend · Base de datos |
-| **Yarek Larraguibel** | Desarrollo móvil (Expo / React Native) |
+| **Yarek Larraguibel** | Desarrollo móvil · Expo / React Native |
 
 **Cliente:** Colmenares Tres Pinos  
-**Institución:** DUOC UC — Sede Melipilla · Ingeniería en Informática · Proyecto APT (APT122)  
-**Metodología:** Scrum, 5 sprints
+**Institución:** DUOC UC · Sede Melipilla · Ingeniería en Informática · APT122  
+**Metodología:** Scrum
 
 ---
 
