@@ -552,7 +552,7 @@ async function prepararInspeccion(
 
 // ==========================================
 // ENVIAR PENDIENTES A FASTAPI
-// TODAVÍA NO SE LLAMA AUTOMÁTICAMENTE
+// Invocada por el controlador al recuperar conexión y al guardar una inspección.
 // ==========================================
 
 export async function sincronizarInspeccionesPendientes():

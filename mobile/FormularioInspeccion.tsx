@@ -54,6 +54,9 @@ import {
 
 import type { InspeccionApi } from './api/inspecciones';
 
+import { listarInspeccionesLocales } from './database/inspecciones';
+import { ejecutarControlador } from './sincronizacion/controlador';
+
 // ==========================================
 // COLMENARES TRES PINOS
 // FORMULARIO DE INSPECCIÓN
@@ -584,13 +587,38 @@ export default function FormularioInspeccion({
         }
       }
 
+      // Una inspección nueva se guarda primero en SQLite para no perder
+      // información. Si hay conexión, intentar enviarla inmediatamente.
+      // Si falla la red o el servidor, se conserva como PENDIENTE.
+      let inspeccionSincronizada = false;
+
+      if (!esEdicion) {
+        try {
+          await ejecutarControlador();
+
+          const registrosLocales = await listarInspeccionesLocales();
+          inspeccionSincronizada =
+            registrosLocales.find(registro => registro.id === id)?.estado ===
+            'SINCRONIZADO';
+        } catch (errorSincronizacion) {
+          console.warn(
+            '[Colmenares] La inspección quedó guardada localmente; no se pudo completar el envío inmediato:',
+            errorSincronizacion
+          );
+        }
+      }
+
+      const mensajeInspeccion = esEdicion
+        ? 'Los datos de la inspección se actualizaron en el servidor. Los movimientos históricos de marcos se conservaron.'
+        : inspeccionSincronizada
+          ? 'La inspección se guardó y se sincronizó correctamente con el servidor.'
+          : esRevision
+            ? 'La inspección quedó guardada y vinculada a la revisión. Se conservará en SQLite hasta completar la sincronización.'
+            : 'La inspección quedó guardada en SQLite y permanece pendiente de sincronización. Se reintentará automáticamente cuando el servidor esté disponible.';
+
       Alert.alert(
         esEdicion ? 'Inspección actualizada' : 'Inspección guardada',
-        (esEdicion
-          ? 'Los datos de la inspección se actualizaron en el servidor. Los movimientos históricos de marcos se conservaron.'
-          : esRevision
-            ? 'La inspección quedó guardada y vinculada a la revisión. Continuaremos con la siguiente colmena disponible.'
-            : 'La inspección quedó guardada en SQLite, pendiente de sincronización.') + avisoTratamiento,
+        mensajeInspeccion + avisoTratamiento,
         [
           {
             text: esRevision && !esEdicion ? 'Guardar y siguiente' : 'Aceptar',

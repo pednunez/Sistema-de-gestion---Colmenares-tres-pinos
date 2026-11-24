@@ -43,8 +43,10 @@ import {
 // CONFIGURACIÓN
 // ==========================================
 
+// La sincronización real queda habilitada por defecto.
+// Solo se desactiva cuando el entorno declara explícitamente 'false'.
 const HABILITAR_ENVIOS_REALES =
-  process.env.EXPO_PUBLIC_ENABLE_SYNC === 'true';
+  process.env.EXPO_PUBLIC_ENABLE_SYNC !== 'false';
 
 // ==========================================
 // ESTADOS
@@ -77,10 +79,18 @@ export type ResultadoControlador = {
 };
 
 // ==========================================
-// BLOQUEO GLOBAL
+// COORDINACIÓN DE SINCRONIZACIONES
 // ==========================================
+//
+// Todas las llamadas concurrentes esperan la misma ejecución.
+// Si llega una nueva solicitud mientras el controlador está
+// trabajando, se agenda una segunda pasada antes de resolver
+// la promesa. Así una inspección recién guardada no queda fuera
+// de una sincronización que comenzó unos milisegundos antes.
+//
 
-let ejecutando = false;
+let ejecucionActual: Promise<ResultadoControlador> | null = null;
+let repetirEjecucion = false;
 
 // ==========================================
 // CONECTIVIDAD
@@ -98,23 +108,11 @@ function hayInternet(
 }
 
 // ==========================================
-// EJECUTAR SINCRONIZACIÓN
+// EJECUTAR UNA PASADA DE SINCRONIZACIÓN
 // ==========================================
 
-export async function ejecutarControlador():
+async function ejecutarControladorInterno():
   Promise<ResultadoControlador> {
-
-  if (ejecutando) {
-
-    return {
-      estado: 'EN_PROCESO',
-      mensaje:
-        'Ya se está comprobando la sincronización.',
-    };
-
-  }
-
-  ejecutando = true;
 
   try {
 
@@ -585,12 +583,46 @@ export async function ejecutarControlador():
 
     };
 
-  } finally {
-
-    ejecutando = false;
-
   }
 
+}
+
+// ==========================================
+// EJECUTAR / ESPERAR SINCRONIZACIÓN
+// ==========================================
+//
+// Si ya existe una ejecución, no devolvemos EN_PROCESO
+// inmediatamente. Solicitamos una pasada adicional y todas
+// las llamadas esperan hasta que esa pasada termine.
+//
+
+export function ejecutarControlador():
+  Promise<ResultadoControlador> {
+
+  if (ejecucionActual) {
+    repetirEjecucion = true;
+    return ejecucionActual;
+  }
+
+  const ejecutarEnCola = async (): Promise<ResultadoControlador> => {
+    let resultado: ResultadoControlador;
+
+    do {
+      repetirEjecucion = false;
+      resultado = await ejecutarControladorInterno();
+    } while (repetirEjecucion);
+
+    return resultado;
+  };
+
+  const promesa = ejecutarEnCola().finally(() => {
+    if (ejecucionActual === promesa) {
+      ejecucionActual = null;
+    }
+  });
+
+  ejecucionActual = promesa;
+  return promesa;
 }
 
 // ==========================================

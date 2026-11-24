@@ -700,6 +700,9 @@ export default function ColmenasLocales({
   const [qrManualError, setQrManualError] = useState('');
   const [guardandoQr, setGuardandoQr] = useState(false);
   const [descargandoQr, setDescargandoQr] = useState(false);
+  const [qrImagenUri, setQrImagenUri] = useState<string | null>(null);
+  const [qrImagenCargando, setQrImagenCargando] = useState(false);
+  const [qrImagenError, setQrImagenError] = useState('');
   const qrEscaneoBloqueado = useRef(false);
   const [inspeccionDetalle, setInspeccionDetalle] = useState<EventoHistorial | null>(null);
   const [detalleMarcosLocales, setDetalleMarcosLocales] = useState<MarcoInspeccionDetalleLocal[]>([]);
@@ -1207,6 +1210,80 @@ export default function ColmenasLocales({
     if (!ficha) return;
     void cargarHistorial(ficha);
   }, [ficha, cargarHistorial]);
+
+  // En Android, mostrar directamente una imagen protegida por Bearer puede
+  // fallar aunque la descarga autenticada funcione. Descargamos el PNG al
+  // caché de la app y mostramos el archivo local.
+  useEffect(() => {
+    let cancelado = false;
+
+    setQrImagenUri(null);
+    setQrImagenError('');
+
+    if (!ficha || !sesion || !tokenVigente(sesion) || !conectado) {
+      setQrImagenCargando(false);
+      return () => {
+        cancelado = true;
+      };
+    }
+
+    const cargarQrParaVista = async () => {
+      setQrImagenCargando(true);
+      try {
+        const directorioCache = FileSystem.cacheDirectory;
+        if (!directorioCache) {
+          throw new Error('El dispositivo no habilitó el caché de imágenes.');
+        }
+
+        const codigoSeguro = String(ficha.codigo_qr || ficha.codigo)
+          .replace(/[^A-Za-z0-9_-]/g, '_');
+        const destino = `${directorioCache}qr-colmena-${ficha.id}-${codigoSeguro}.png`;
+
+        await FileSystem.deleteAsync(destino, { idempotent: true }).catch(() => undefined);
+
+        const descarga = await FileSystem.downloadAsync(
+          `${API_BASE_URL}/colmenas/${ficha.id}/qr`,
+          destino,
+          {
+            headers: {
+              Accept: 'image/png',
+              Authorization: `Bearer ${sesion.accessToken}`,
+            },
+          }
+        );
+
+        if (descarga.status < 200 || descarga.status >= 300) {
+          throw new Error(`No se pudo cargar el QR (HTTP ${descarga.status}).`);
+        }
+
+        const informacion = await FileSystem.getInfoAsync(descarga.uri);
+        if (!informacion.exists || !informacion.size) {
+          throw new Error('El servidor entregó una imagen QR vacía.');
+        }
+
+        if (!cancelado) {
+          setQrImagenUri(descarga.uri);
+        }
+      } catch (error) {
+        console.warn('[Colmenares] No se pudo mostrar el QR de la colmena:', error);
+        if (!cancelado) {
+          setQrImagenError(
+            error instanceof Error ? error.message : 'No se pudo cargar la imagen QR.'
+          );
+        }
+      } finally {
+        if (!cancelado) {
+          setQrImagenCargando(false);
+        }
+      }
+    };
+
+    void cargarQrParaVista();
+
+    return () => {
+      cancelado = true;
+    };
+  }, [ficha?.id, ficha?.codigo, ficha?.codigo_qr, sesion?.accessToken, conectado]);
 
   const abrirNueva = () => {
     if (!esAdmin) return;
@@ -2312,25 +2389,34 @@ export default function ColmenasLocales({
                 </View>
 
                 <View style={styles.qrCaja}>
-
-                  {conectado && sesion && tokenVigente(sesion) ? (
+                  {qrImagenUri ? (
                     <Image
                       key={`${ficha.id}-${ficha.codigo_qr}`}
-                      source={{
-                        uri: `${API_BASE_URL}/colmenas/${ficha.id}/qr`,
-                        headers: {
-                          Authorization: `Bearer ${sesion.accessToken}`,
-                        },
-                      }}
+                      source={{ uri: qrImagenUri }}
                       style={styles.imagenQr}
                       resizeMode="contain"
                     />
                   ) : (
                     <View style={styles.qrSinConexion}>
-                      <Text style={styles.qrIcono}>▦</Text>
-                      <Text style={styles.textoSecundario}>
-                        Imagen QR disponible al conectarse al servidor
-                      </Text>
+                      {qrImagenCargando ? (
+                        <>
+                          <ActivityIndicator size="small" color={COLORS.forest} />
+                          <Text style={styles.textoSecundario}>
+                            Cargando código QR…
+                          </Text>
+                        </>
+                      ) : (
+                        <>
+                          <Text style={styles.qrIcono}>▦</Text>
+                          <Text style={styles.textoSecundario}>
+                            {qrImagenError || (
+                              conectado
+                                ? 'No se pudo mostrar el código QR. Puedes descargar la imagen.'
+                                : 'Imagen QR disponible al conectarse al servidor'
+                            )}
+                          </Text>
+                        </>
+                      )}
                     </View>
                   )}
 
