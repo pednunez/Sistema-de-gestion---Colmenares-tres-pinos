@@ -1,4 +1,3 @@
-
 import * as SecureStore from 'expo-secure-store';
 
 import {
@@ -8,11 +7,11 @@ import {
 
 // ==========================================
 // COLMENARES TRES PINOS
-// AUTENTICACION MOVIL CON FASTAPI
+// AUTENTICACION MOVIL CON SESION PERSISTENTE
 // ==========================================
 
-const CLAVE_SESION =
-  'colmenares_tres_pinos_sesion_v1';
+const CLAVE_SESION = 'colmenares_tres_pinos_sesion_v1';
+const UMBRAL_RENOVACION_MS = 2 * 60 * 1000;
 
 export type UsuarioMovil = {
   id: number;
@@ -25,6 +24,9 @@ export type SesionMovil = {
   accessToken: string;
   expiraEn: number;
   usuario: UsuarioMovil;
+  mantenerSesion?: boolean;
+  refreshToken?: string;
+  refreshExpiraEn?: number;
 };
 
 type RespuestaLogin = {
@@ -32,30 +34,22 @@ type RespuestaLogin = {
   token_type: string;
   expira_en: number;
   usuario: UsuarioMovil;
+  refresh_token?: string | null;
+  refresh_expira_en?: number | null;
 };
 
-// ==========================================
-// VALIDACIONES
-// ==========================================
+type RespuestaRenovacion = {
+  access_token: string;
+  token_type: string;
+  expira_en: number;
+  usuario: UsuarioMovil;
+};
 
-const ROLES_PERMITIDOS = [
-  'ADMIN',
-  'APICULTOR',
-];
+const ROLES_PERMITIDOS = ['ADMIN', 'APICULTOR'];
 
-function usuarioValido(
-  valor: unknown
-): valor is UsuarioMovil {
-  if (
-    !valor ||
-    typeof valor !== 'object'
-  ) {
-    return false;
-  }
-
-  const usuario =
-    valor as Partial<UsuarioMovil>;
-
+function usuarioValido(valor: unknown): valor is UsuarioMovil {
+  if (!valor || typeof valor !== 'object') return false;
+  const usuario = valor as Partial<UsuarioMovil>;
   return (
     typeof usuario.id === 'number' &&
     Number.isInteger(usuario.id) &&
@@ -69,11 +63,81 @@ function usuarioValido(
   );
 }
 
-export function tokenVigente(
+export function tokenVigente(sesion: SesionMovil): boolean {
+  return Date.now() < sesion.expiraEn - 30000;
+}
+
+export function sesionPuedeMantenerseOffline(
   sesion: SesionMovil
 ): boolean {
-  // Margen de seguridad de 30 segundos.
-  return Date.now() < sesion.expiraEn - 30000;
+  return (
+    sesion.mantenerSesion === true &&
+    typeof sesion.refreshToken === 'string' &&
+    sesion.refreshToken.length > 0 &&
+    typeof sesion.refreshExpiraEn === 'number' &&
+    Date.now() < sesion.refreshExpiraEn - 30000
+  );
+}
+
+async function guardarSesion(sesion: SesionMovil): Promise<void> {
+  await SecureStore.setItemAsync(CLAVE_SESION, JSON.stringify(sesion));
+}
+
+// Evita que varias pantallas soliciten renovar el mismo token al mismo tiempo.
+const renovacionesEnCurso = new Map<string, Promise<SesionMovil>>();
+
+export async function renovarSesion(
+  sesion: SesionMovil
+): Promise<SesionMovil> {
+  if (!sesionPuedeMantenerseOffline(sesion)) {
+    throw new ErrorAPI(401, 'La sesión persistente venció. Inicia sesión nuevamente.');
+  }
+
+  const refreshToken = sesion.refreshToken!;
+  const existente = renovacionesEnCurso.get(refreshToken);
+  if (existente) return existente;
+
+  const solicitud = (async (): Promise<SesionMovil> => {
+    const respuesta = await solicitarAPI<RespuestaRenovacion>(
+      '/auth/refresh',
+      {
+        method: 'POST',
+        body: { refresh_token: refreshToken },
+      }
+    );
+
+    if (
+      !respuesta ||
+      typeof respuesta.access_token !== 'string' ||
+      respuesta.access_token.length === 0 ||
+      respuesta.token_type?.toLowerCase() !== 'bearer' ||
+      !Number.isInteger(respuesta.expira_en) ||
+      respuesta.expira_en <= 0 ||
+      !usuarioValido(respuesta.usuario) ||
+      respuesta.usuario.id !== sesion.usuario.id
+    ) {
+      throw new ErrorAPI(0, 'El servidor devolvió una respuesta de renovación inválida.');
+    }
+
+    const renovada: SesionMovil = {
+      ...sesion,
+      accessToken: respuesta.access_token,
+      expiraEn: Date.now() + respuesta.expira_en * 1000,
+      usuario: respuesta.usuario,
+    };
+
+    await guardarSesion(renovada);
+    return renovada;
+  })();
+
+  renovacionesEnCurso.set(refreshToken, solicitud);
+  try {
+    return await solicitud;
+  } finally {
+    if (renovacionesEnCurso.get(refreshToken) === solicitud) {
+      renovacionesEnCurso.delete(refreshToken);
+    }
+  }
 }
 
 // ==========================================
@@ -83,147 +147,126 @@ export function tokenVigente(
 
 export async function iniciarSesion(
   correoIngresado: string,
-  password: string
+  password: string,
+  mantenerSesion: boolean = true
 ): Promise<SesionMovil> {
-  const email = correoIngresado
-    .trim()
-    .toLowerCase();
+  const email = correoIngresado.trim().toLowerCase();
 
-  // Validar correo.
   if (
     email.length < 5 ||
     email.length > 150 ||
     !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
   ) {
-    throw new Error(
-      'Ingresa un correo electrónico válido.'
-    );
+    throw new Error('Ingresa un correo electrónico válido.');
   }
 
-  // Validar contraseña.
-  if (
-    password.length < 8 ||
-    password.length > 128
-  ) {
-    throw new Error(
-      'La contraseña debe tener entre 8 y 128 caracteres.'
-    );
+  if (password.length < 8 || password.length > 128) {
+    throw new Error('La contraseña debe tener entre 8 y 128 caracteres.');
   }
 
   let respuesta: RespuestaLogin;
-
   try {
-    respuesta =
-      await solicitarAPI<RespuestaLogin>(
-        '/auth/token',
-        {
-          method: 'POST',
-          body: {
-            email,
-            password,
-          },
-        }
-      );
+    respuesta = await solicitarAPI<RespuestaLogin>('/auth/token', {
+      method: 'POST',
+      body: { email, password, mantener_sesion: mantenerSesion },
+    });
   } catch (error) {
-    if (
-      error instanceof ErrorAPI &&
-      error.estado === 404
-    ) {
-      throw new Error(
-        'El servidor conectado no tiene disponible /auth/token. Debe utilizarse el backend actualizado del equipo.'
-      );
+    if (error instanceof ErrorAPI && error.estado === 404) {
+      throw new Error('El backend todavía no tiene disponible la autenticación persistente. Debe actualizarse FastAPI.');
     }
-
     throw error;
   }
 
-  // ========================================
-  // VALIDAR RESPUESTA DEL SERVIDOR
-  // ========================================
-
   if (
     !respuesta ||
-    typeof respuesta.access_token !==
-      'string' ||
+    typeof respuesta.access_token !== 'string' ||
     respuesta.access_token.length === 0 ||
-    respuesta.token_type?.toLowerCase() !==
-      'bearer' ||
+    respuesta.token_type?.toLowerCase() !== 'bearer' ||
     !Number.isInteger(respuesta.expira_en) ||
     respuesta.expira_en <= 0 ||
     !usuarioValido(respuesta.usuario)
   ) {
-    throw new Error(
-      'El servidor devolvió una respuesta de autenticación inválida.'
-    );
+    throw new Error('El servidor devolvió una respuesta de autenticación inválida.');
   }
 
-  // ========================================
-  // CREAR SESION
-  // ========================================
+  if (
+    mantenerSesion &&
+    (
+      typeof respuesta.refresh_token !== 'string' ||
+      respuesta.refresh_token.length === 0 ||
+      !Number.isInteger(respuesta.refresh_expira_en) ||
+      (respuesta.refresh_expira_en ?? 0) <= 0
+    )
+  ) {
+    throw new Error('El backend no entregó el token para mantener la sesión. Actualiza el servidor e inténtalo nuevamente.');
+  }
 
   const sesion: SesionMovil = {
     accessToken: respuesta.access_token,
-    expiraEn:
-      Date.now() +
-      respuesta.expira_en * 1000,
+    expiraEn: Date.now() + respuesta.expira_en * 1000,
     usuario: respuesta.usuario,
+    mantenerSesion,
+    refreshToken: mantenerSesion ? respuesta.refresh_token! : undefined,
+    refreshExpiraEn: mantenerSesion
+      ? Date.now() + respuesta.refresh_expira_en! * 1000
+      : undefined,
   };
 
-  // Guardar token y datos de sesion
-  // en almacenamiento seguro.
-  await SecureStore.setItemAsync(
-    CLAVE_SESION,
-    JSON.stringify(sesion)
-  );
-
+  await guardarSesion(sesion);
   return sesion;
 }
 
 // ==========================================
-// RECUPERAR SESION GUARDADA
+// RECUPERAR SESION GUARDADA Y RENOVARLA
 // ==========================================
 
-export async function leerSesionGuardada():
-  Promise<SesionMovil | null> {
-  const texto =
-    await SecureStore.getItemAsync(
-      CLAVE_SESION
-    );
+export async function leerSesionGuardada(): Promise<SesionMovil | null> {
+  const texto = await SecureStore.getItemAsync(CLAVE_SESION);
+  if (!texto) return null;
 
-  if (!texto) {
-    return null;
-  }
-
+  let sesion: SesionMovil;
   try {
-    const datos: unknown =
-      JSON.parse(texto);
+    const datos: unknown = JSON.parse(texto);
+    if (!datos || typeof datos !== 'object') return null;
 
+    const parcial = datos as Partial<SesionMovil>;
     if (
-      !datos ||
-      typeof datos !== 'object'
+      typeof parcial.accessToken !== 'string' ||
+      !parcial.accessToken ||
+      typeof parcial.expiraEn !== 'number' ||
+      !Number.isFinite(parcial.expiraEn) ||
+      !usuarioValido(parcial.usuario)
     ) {
       return null;
     }
 
-    const sesion =
-      datos as Partial<SesionMovil>;
-
-    if (
-      typeof sesion.accessToken !==
-        'string' ||
-      !sesion.accessToken ||
-      typeof sesion.expiraEn !==
-        'number' ||
-      !Number.isFinite(sesion.expiraEn) ||
-      !usuarioValido(sesion.usuario)
-    ) {
-      return null;
-    }
-
-    return sesion as SesionMovil;
+    sesion = parcial as SesionMovil;
   } catch {
     return null;
   }
+
+  if (sesion.mantenerSesion === true) {
+    if (!sesionPuedeMantenerseOffline(sesion)) {
+      await SecureStore.deleteItemAsync(CLAVE_SESION);
+      return null;
+    }
+
+    if (sesion.expiraEn <= Date.now() + UMBRAL_RENOVACION_MS) {
+      try {
+        return await renovarSesion(sesion);
+      } catch (error) {
+        if (error instanceof ErrorAPI && (error.estado === 401 || error.estado === 403)) {
+          await SecureStore.deleteItemAsync(CLAVE_SESION);
+          return null;
+        }
+        // Si no hay red o el servidor está temporalmente indisponible,
+        // se conserva la sesión para seguir trabajando con SQLite.
+        return sesion;
+      }
+    }
+  }
+
+  return sesion;
 }
 
 // ==========================================
@@ -231,48 +274,27 @@ export async function leerSesionGuardada():
 // GET /auth/me
 // ==========================================
 
-export async function verificarUsuario(
-  sesion: SesionMovil
-): Promise<void> {
+export async function verificarUsuario(sesion: SesionMovil): Promise<void> {
   if (!tokenVigente(sesion)) {
-    throw new ErrorAPI(
-      401,
-      'El token ha vencido.'
-    );
+    throw new ErrorAPI(401, 'El token ha vencido.');
   }
 
-  const usuario =
-    await solicitarAPI<UsuarioMovil>(
-      '/auth/me',
-      {
-        token: sesion.accessToken,
-      }
-    );
+  const usuario = await solicitarAPI<UsuarioMovil>('/auth/me', {
+    token: sesion.accessToken,
+  });
 
-  if (
-    !usuarioValido(usuario) ||
-    usuario.id !== sesion.usuario.id
-  ) {
-    throw new ErrorAPI(
-      401,
-      'La identidad de la sesión no coincide.'
-    );
+  if (!usuarioValido(usuario) || usuario.id !== sesion.usuario.id) {
+    throw new ErrorAPI(401, 'La identidad de la sesión no coincide.');
   }
 }
 
 // ==========================================
 // COMPROBAR DISPONIBILIDAD DE FASTAPI
-// GET /health
 // ==========================================
 
-export async function comprobarServidor():
-  Promise<boolean> {
+export async function comprobarServidor(): Promise<boolean> {
   try {
-    const resultado =
-      await solicitarAPI<{
-        status: string;
-      }>('/health');
-
+    const resultado = await solicitarAPI<{ status: string }>('/health');
     return resultado.status === 'ok';
   } catch {
     return false;
@@ -283,12 +305,7 @@ export async function comprobarServidor():
 // CERRAR SESION EN ESTE DISPOSITIVO
 // ==========================================
 
-export async function salirDeEsteDispositivo():
-  Promise<void> {
-  await SecureStore.deleteItemAsync(
-    CLAVE_SESION
-  );
-
-  // No se eliminan inspecciones,
-  // tratamientos ni registros SQLite.
+export async function salirDeEsteDispositivo(): Promise<void> {
+  await SecureStore.deleteItemAsync(CLAVE_SESION);
+  // Se eliminan access y refresh tokens; los registros SQLite se conservan.
 }

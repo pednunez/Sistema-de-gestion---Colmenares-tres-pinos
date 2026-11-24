@@ -18,7 +18,9 @@ import Login from './Login';
 import {
   iniciarSesion,
   leerSesionGuardada,
+  renovarSesion,
   salirDeEsteDispositivo,
+  sesionPuedeMantenerseOffline,
   tokenVigente,
   verificarUsuario,
 } from './api/auth';
@@ -120,6 +122,54 @@ export default function AppAutenticado() {
   const sesionActivaRef =
     useRef<SesionMovil | null>(null);
 
+  // Renovar el access token antes de que venza mientras la app permanece abierta.
+  // Si no hay conexión, se conserva la sesión local y se reintenta más tarde.
+  useEffect(() => {
+    if (!sesion || !sesionPuedeMantenerseOffline(sesion)) return;
+
+    let cancelado = false;
+    let temporizador: ReturnType<typeof setTimeout>;
+
+    const intentarRenovacion = async () => {
+      try {
+        const renovada = await renovarSesion(sesion);
+        if (cancelado) return;
+        if (sesionActivaRef.current?.refreshToken !== sesion.refreshToken) return;
+
+        sesionActivaRef.current = renovada;
+        setSesion(renovada);
+      } catch (error) {
+        if (cancelado) return;
+
+        if (error instanceof ErrorAPI && (error.estado === 401 || error.estado === 403)) {
+          await salirDeEsteDispositivo().catch(() => undefined);
+          if (cancelado) return;
+          sesionActivaRef.current = null;
+          setSesion(null);
+          setMensajeLogin('Tu sesión venció o fue revocada. Inicia sesión nuevamente.');
+          setEstado('LOGIN');
+          return;
+        }
+
+        setEstado('SIN_CONEXION');
+        setAvisoCatalogo('Sin conexión con el servidor. Se conservará la información local y se reintentará renovar la sesión.');
+        temporizador = setTimeout(() => {
+          void intentarRenovacion();
+        }, 60_000);
+      }
+    };
+
+    const espera = Math.max(1000, sesion.expiraEn - Date.now() - 2 * 60 * 1000);
+    temporizador = setTimeout(() => {
+      void intentarRenovacion();
+    }, espera);
+
+    return () => {
+      cancelado = true;
+      clearTimeout(temporizador);
+    };
+  }, [sesion]);
+
   // La descarga del catálogo nunca debe bloquear la entrada
   // cuando ya existe una sesión válida. Se actualiza en segundo plano.
   const refrescarCatalogoEnSegundoPlano = useCallback(
@@ -210,10 +260,25 @@ export default function AppAutenticado() {
         }
 
         if (!tokenVigente(guardada)) {
+          if (sesionPuedeMantenerseOffline(guardada)) {
+            const local = await leerCatalogoLocal(
+              guardada.usuario.id
+            ).catch(() => null);
+
+            if (!activo) return;
+            sesionActivaRef.current = guardada;
+            setSesion(guardada);
+            setAvisoCatalogo(
+              local
+                ? 'Sin conexión: la sesión se renovará cuando vuelva Internet. Se utilizará el catálogo local.'
+                : 'Sin conexión: la sesión se renovará cuando vuelva Internet. No hay catálogo local disponible.'
+            );
+            setEstado('SIN_CONEXION');
+            return;
+          }
+
           await salirDeEsteDispositivo();
-
           if (!activo) return;
-
           sesionActivaRef.current = null;
           setMensajeLogin(
             'Tu sesión ha vencido. Debes iniciar sesión nuevamente.'
@@ -249,7 +314,7 @@ export default function AppAutenticado() {
           if (
             error instanceof ErrorAPI &&
             error.estado === 0 &&
-            tokenVigente(guardada)
+            (tokenVigente(guardada) || sesionPuedeMantenerseOffline(guardada))
           ) {
             const local = await leerCatalogoLocal(
               guardada.usuario.id
@@ -315,9 +380,10 @@ export default function AppAutenticado() {
 
   const ingresar = async (
     email: string,
-    password: string
+    password: string,
+    mantenerSesion: boolean
   ): Promise<void> => {
-    const nuevaSesion = await iniciarSesion(email, password);
+    const nuevaSesion = await iniciarSesion(email, password, mantenerSesion);
 
     sesionActivaRef.current = nuevaSesion;
     setSesion(nuevaSesion);
@@ -340,21 +406,23 @@ export default function AppAutenticado() {
     setEstado('CARGANDO');
 
     try {
-      await verificarUsuario(sesion);
+      const sesionActualizada = await leerSesionGuardada();
+      if (!sesionActualizada) {
+        throw new ErrorAPI(401, 'La sesión ya no es válida.');
+      }
+      await verificarUsuario(sesionActualizada);
 
-      sesionActivaRef.current = sesion;
+      sesionActivaRef.current = sesionActualizada;
+      setSesion(sesionActualizada);
       setAvisoCatalogo(
         'Conexión restablecida. Actualizando el catálogo...'
       );
       setEstado('AUTENTICADO');
-      refrescarCatalogoEnSegundoPlano(sesion);
+      refrescarCatalogoEnSegundoPlano(sesionActualizada);
     } catch (error) {
       if (
-        !tokenVigente(sesion) ||
-        (
-          error instanceof ErrorAPI &&
-          (error.estado === 401 || error.estado === 403)
-        )
+        error instanceof ErrorAPI &&
+        (error.estado === 401 || error.estado === 403)
       ) {
         try {
           await salirDeEsteDispositivo();

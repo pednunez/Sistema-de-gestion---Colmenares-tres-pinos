@@ -3,7 +3,7 @@ import secrets
 from app.schemas.auditoria import AuditoriaCreate
 from app.services import auditoria as auditoria_service
 from fastapi import Request, Response
-from sqlalchemy import update
+from sqlalchemy import select, update
 
 from fastapi import (
     APIRouter,
@@ -13,13 +13,20 @@ from fastapi import (
 )
 from sqlalchemy.orm import Session
 
-from app.core.auth import crear_access_token
+from app.core.auth import (
+    REFRESH_TOKEN_EXPIRE_DAYS,
+    crear_access_token,
+    crear_refresh_token,
+    decodificar_refresh_token,
+)
 from app.core.dependencies import obtener_usuario_actual, validar_origen
 from app.database import get_db, settings
 from app.models.usuario import Usuario
 
 from app.schemas.auth import (
     LoginRequest,
+    LoginMovilRequest,
+    RefreshTokenRequest,
     MensajeResponse,
     RestablecerPasswordRequest,
     SolicitarRecuperacionPasswordRequest,
@@ -117,7 +124,7 @@ def login(
     response_model=TokenMovilResponse
 )
 def login_movil(
-    datos: LoginRequest,
+    datos: LoginMovilRequest,
     request: Request,
     response: Response,
     db: Session = Depends(get_db)
@@ -150,12 +157,93 @@ def login_movil(
         rol=usuario.rol,
         version_sesion=usuario.version_sesion
     )
+
+    refresh_token = None
+    refresh_expira_en = None
+    if datos.mantener_sesion:
+        refresh_token = crear_refresh_token(
+            usuario_id=usuario.id,
+            version_sesion=usuario.version_sesion
+        )
+        refresh_expira_en = REFRESH_TOKEN_EXPIRE_DAYS * 24 * 60 * 60
+
     response.headers["Cache-Control"] = "no-store"
     return TokenMovilResponse(
         access_token=token,
         expira_en=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
         usuario=UsuarioAutenticado(id=usuario.id, nombre=usuario.nombre,
-            email=usuario.email, rol=usuario.rol)
+            email=usuario.email, rol=usuario.rol),
+        refresh_token=refresh_token,
+        refresh_expira_en=refresh_expira_en
+    )
+
+
+@router.post(
+    "/refresh",
+    response_model=TokenMovilResponse
+)
+def renovar_sesion_movil(
+    datos: RefreshTokenRequest,
+    request: Request,
+    response: Response,
+    db: Session = Depends(get_db)
+):
+    # Igual que /auth/token, este endpoint es exclusivo de la app nativa.
+    if request.headers.get("origin") is not None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Este acceso es solo para la app móvil"
+        )
+
+    payload = decodificar_refresh_token(datos.refresh_token)
+    if payload is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="La sesión persistente venció o no es válida. Inicia sesión nuevamente."
+        )
+
+    try:
+        usuario_id = int(payload["sub"])
+    except (ValueError, TypeError, KeyError):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="La sesión persistente no es válida."
+        )
+
+    usuario = db.scalar(
+        select(Usuario).where(
+            Usuario.id == usuario_id,
+            Usuario.activo == True
+        )
+    )
+
+    if (
+        usuario is None
+        or type(payload.get("ver")) is not int
+        or payload["ver"] != usuario.version_sesion
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="La sesión fue revocada o el usuario está inactivo. Inicia sesión nuevamente."
+        )
+
+    access_token = crear_access_token(
+        usuario_id=usuario.id,
+        email=usuario.email,
+        rol=usuario.rol,
+        version_sesion=usuario.version_sesion
+    )
+
+    response.headers["Cache-Control"] = "no-store"
+    return TokenMovilResponse(
+        access_token=access_token,
+        expira_en=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,
+        usuario=UsuarioAutenticado(
+            id=usuario.id,
+            nombre=usuario.nombre,
+            email=usuario.email,
+            rol=usuario.rol
+        )
     )
 
 

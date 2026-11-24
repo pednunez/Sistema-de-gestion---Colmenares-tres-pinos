@@ -22,6 +22,18 @@ class LoginRequest(BaseModel):
     )
 
 
+class LoginMovilRequest(LoginRequest):
+    # La app móvil solicita explícitamente una sesión persistente.
+    mantener_sesion: bool = False
+
+
+class RefreshTokenRequest(BaseModel):
+    refresh_token: str = Field(
+        min_length=20,
+        max_length=4096
+    )
+
+
 # ==========================================================
 # RESPUESTA DEL LOGIN
 # ==========================================================
@@ -153,6 +165,9 @@ class LoginResponse(BaseModel):
 class TokenMovilResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
-    # Segundos de validez desde que se emitio.
+    # Segundos de validez del access token desde que se emitió.
     expira_en: int
     usuario: UsuarioAutenticado
+    # Se devuelven solo al iniciar sesión con "mantener sesión" activado.
+    refresh_token: str | None = None
+    refresh_expira_en: int | None = None

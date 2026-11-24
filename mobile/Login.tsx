@@ -26,7 +26,8 @@ import {
 type Props = {
   onIngresar: (
     email: string,
-    password: string
+    password: string,
+    mantenerSesion: boolean
   ) => Promise<void>;
 
   mensaje?: string;
@@ -43,6 +44,8 @@ export default function Login({
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+
+  const [mantenerSesion, setMantenerSesion] = useState(true);
 
   const [mostrarPassword, setMostrarPassword] =
     useState(false);
@@ -92,7 +95,8 @@ export default function Login({
       // mediante el modulo api/auth.ts.
       await onIngresar(
         correoLimpio,
-        password
+        password,
+        mantenerSesion
       );
 
       // No mantener la contraseña escrita
@@ -245,6 +249,35 @@ export default function Login({
             </Pressable>
 
           </View>
+
+          {/* MANTENER SESION INICIADA */}
+
+          <Pressable
+            style={styles.opcionMantenerSesion}
+            onPress={() => setMantenerSesion(valor => !valor)}
+            disabled={cargando}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: mantenerSesion }}
+            accessibilityLabel="Mantener sesión iniciada durante 30 días"
+          >
+            <View style={[
+              styles.checkboxMantenerSesion,
+              mantenerSesion && styles.checkboxMantenerSesionActivo,
+            ]}>
+              {mantenerSesion ? (
+                <Text style={styles.checkboxMantenerSesionMarca}>✓</Text>
+              ) : null}
+            </View>
+
+            <View style={styles.textosMantenerSesion}>
+              <Text style={styles.tituloMantenerSesion}>
+                Mantener sesión iniciada
+              </Text>
+              <Text style={styles.descripcionMantenerSesion}>
+                No tendrás que ingresar nuevamente durante 30 días en este dispositivo.
+              </Text>
+            </View>
+          </Pressable>
 
           {/* ERRORES */}
 
@@ -431,6 +464,54 @@ const styles = StyleSheet.create({
     color: COLORS.goldText,
     fontSize: 13,
     fontWeight: '700',
+  },
+
+  opcionMantenerSesion: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginTop: 18,
+    gap: 11,
+  },
+
+  checkboxMantenerSesion: {
+    width: 21,
+    height: 21,
+    borderRadius: 5,
+    borderWidth: 1.5,
+    borderColor: COLORS.borderStrong,
+    backgroundColor: COLORS.surface,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 1,
+  },
+
+  checkboxMantenerSesionActivo: {
+    backgroundColor: COLORS.forest,
+    borderColor: COLORS.forest,
+  },
+
+  checkboxMantenerSesionMarca: {
+    color: COLORS.surface,
+    fontSize: 14,
+    lineHeight: 17,
+    fontWeight: '800',
+  },
+
+  textosMantenerSesion: {
+    flex: 1,
+  },
+
+  tituloMantenerSesion: {
+    color: COLORS.forest,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+
+  descripcionMantenerSesion: {
+    color: COLORS.textSecondary,
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 3,
   },
 
   contenedorError: {
