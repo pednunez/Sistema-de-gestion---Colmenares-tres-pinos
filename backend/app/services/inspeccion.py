@@ -75,15 +75,25 @@ TIPO_POR_CONTENIDO = {
 # CONSULTAR INSPECCIONES
 # ==========================================================
 
-def listar_inspecciones(db: Session):
-    return db.scalars(
+def listar_inspecciones(
+    db: Session,
+    colmena_id: int | None = None,
+):
+    consulta = (
         select(Inspeccion)
         .where(Inspeccion.activo.is_(True))
         .order_by(
             Inspeccion.fecha_inspeccion.desc(),
             Inspeccion.id.desc(),
         )
-    ).all()
+    )
+
+    if colmena_id is not None:
+        consulta = consulta.where(
+            Inspeccion.colmena_id == colmena_id
+        )
+
+    return db.scalars(consulta).all()
 
 
 def obtener_inspeccion(

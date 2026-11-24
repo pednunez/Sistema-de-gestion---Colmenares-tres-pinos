@@ -81,9 +81,13 @@ def transferencia_a_dict(transferencia):
     response_model=list[TransferenciaMarcoResponse],
 )
 def listar_transferencias(
+    colmena_id: int | None = None,
     db: Session = Depends(get_db),
 ):
-    return transferencia_service.listar_transferencias(db)
+    return transferencia_service.listar_transferencias(
+        db,
+        colmena_id=colmena_id,
+    )
 
 
 # ==========================================================

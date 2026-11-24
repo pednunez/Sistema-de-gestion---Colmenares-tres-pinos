@@ -102,9 +102,13 @@ def inspeccion_a_dict(inspeccion):
     response_model=list[InspeccionResponse],
 )
 def listar_inspecciones(
+    colmena_id: int | None = None,
     db: Session = Depends(get_db),
 ):
-    return inspeccion_service.listar_inspecciones(db)
+    return inspeccion_service.listar_inspecciones(
+        db,
+        colmena_id=colmena_id,
+    )
 
 
 # ==========================================================

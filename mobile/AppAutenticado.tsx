@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 
 import { COLORS } from './theme';
 
@@ -26,6 +26,7 @@ import {
 import type { SesionMovil } from './api/auth';
 
 import { ErrorAPI } from './api/cliente';
+import { ejecutarControlador } from './sincronizacion/controlador';
 
 import {
   descargarCatalogo,
@@ -113,159 +114,190 @@ export default function AppAutenticado() {
   const [avisoCatalogo, setAvisoCatalogo] =
     useState('');
 
+  const [catalogoVersion, setCatalogoVersion] =
+    useState(0);
+
+  const sesionActivaRef =
+    useRef<SesionMovil | null>(null);
+
+  // La descarga del catálogo nunca debe bloquear la entrada
+  // cuando ya existe una sesión válida. Se actualiza en segundo plano.
+  const refrescarCatalogoEnSegundoPlano = useCallback(
+    (sesionObjetivo: SesionMovil): void => {
+      void actualizarCatalogo(sesionObjetivo)
+        .then((aviso) => {
+          if (
+            sesionActivaRef.current?.accessToken !==
+            sesionObjetivo.accessToken
+          ) {
+            return;
+          }
+
+          setAvisoCatalogo(aviso);
+
+          if (!aviso) {
+            setCatalogoVersion((actual) => actual + 1);
+
+            // El controlador pudo ejecutarse antes de que existiera
+            // el catálogo local. Se vuelve a revisar ahora que está listo.
+            void ejecutarControlador().catch((error) => {
+              console.warn(
+                '[Colmenares] No se pudo iniciar la revisión posterior al catálogo:',
+                error
+              );
+            });
+          }
+        })
+        .catch(async (error: unknown) => {
+          if (
+            sesionActivaRef.current?.accessToken !==
+            sesionObjetivo.accessToken
+          ) {
+            return;
+          }
+
+          if (
+            error instanceof ErrorAPI &&
+            (error.estado === 401 || error.estado === 403)
+          ) {
+            try {
+              await salirDeEsteDispositivo();
+            } catch {
+              // La sesión local se invalida igualmente en memoria.
+            }
+
+            if (
+              sesionActivaRef.current?.accessToken !==
+              sesionObjetivo.accessToken
+            ) {
+              return;
+            }
+
+            sesionActivaRef.current = null;
+            setSesion(null);
+            setMensajeLogin(
+              'Tu sesión ya no es válida. Inicia sesión nuevamente.'
+            );
+            setEstado('LOGIN');
+            return;
+          }
+
+          setAvisoCatalogo(
+            'No se pudo actualizar el catálogo. Se conserva la información local disponible.'
+          );
+        });
+    },
+    []
+  );
+
   // ========================================
-  // RECUPERAR SESION AL ABRIR EXPO
+  // RECUPERAR SESIÓN AL ABRIR LA APLICACIÓN
   // ========================================
 
   useEffect(() => {
-
     let activo = true;
 
     const recuperarSesion = async () => {
-
       try {
-        const guardada =
-          await leerSesionGuardada();
+        const guardada = await leerSesionGuardada();
 
         if (!activo) return;
 
         if (!guardada) {
+          sesionActivaRef.current = null;
           setEstado('LOGIN');
           return;
         }
 
         if (!tokenVigente(guardada)) {
-
           await salirDeEsteDispositivo();
 
           if (!activo) return;
 
+          sesionActivaRef.current = null;
           setMensajeLogin(
-            'Tu sesión ha vencido. ' +
-            'Debes iniciar sesión nuevamente.'
+            'Tu sesión ha vencido. Debes iniciar sesión nuevamente.'
           );
-
           setEstado('LOGIN');
           return;
         }
 
-        // VERIFICAR USUARIO CON FASTAPI
         try {
           await verificarUsuario(guardada);
-
         } catch (error) {
-
           if (!activo) return;
 
           if (
             error instanceof ErrorAPI &&
-            (
-              error.estado === 401 ||
-              error.estado === 403
-            )
+            (error.estado === 401 || error.estado === 403)
           ) {
-
             await salirDeEsteDispositivo();
 
             if (!activo) return;
 
+            sesionActivaRef.current = null;
             setSesion(null);
-
             setMensajeLogin(
-              'Tu sesión ya no es válida. ' +
-              'Inicia sesión nuevamente.'
+              'Tu sesión ya no es válida. Inicia sesión nuevamente.'
             );
-
             setEstado('LOGIN');
             return;
           }
 
-          // MODO SIN CONEXION
+          // Sin internet se permite trabajar con la sesión y el
+          // catálogo previamente guardados en el dispositivo.
           if (
             error instanceof ErrorAPI &&
             error.estado === 0 &&
             tokenVigente(guardada)
           ) {
-
-            const local =
-              await leerCatalogoLocal(
-                guardada.usuario.id
-              ).catch(() => null);
+            const local = await leerCatalogoLocal(
+              guardada.usuario.id
+            ).catch(() => null);
 
             if (!activo) return;
 
+            sesionActivaRef.current = guardada;
             setSesion(guardada);
-
             setAvisoCatalogo(
               local
-                ? 'Se utilizará el catálogo local guardado.'
-                : 'No hay un catálogo oficial descargado.'
+                ? 'Sin conexión: se utilizará el catálogo local guardado.'
+                : 'Sin conexión: todavía no hay un catálogo oficial descargado.'
             );
-
             setEstado('SIN_CONEXION');
             return;
           }
 
+          sesionActivaRef.current = null;
           setMensajeLogin(
-            'No se pudo verificar la sesión. ' +
-            'Intenta iniciar sesión nuevamente.'
+            'No se pudo verificar la sesión. Intenta iniciar sesión nuevamente.'
           );
-
           setEstado('LOGIN');
           return;
         }
 
-        // ACTUALIZAR CATALOGO
-        let aviso = '';
-
-        try {
-          aviso = await actualizarCatalogo(
-            guardada
-          );
-
-        } catch (error) {
-
-          if (
-            error instanceof ErrorAPI &&
-            (
-              error.estado === 401 ||
-              error.estado === 403
-            )
-          ) {
-
-            await salirDeEsteDispositivo();
-
-            if (!activo) return;
-
-            setSesion(null);
-
-            setMensajeLogin(
-              'El servidor rechazó tu sesión. ' +
-              'Debes iniciar sesión nuevamente.'
-            );
-
-            setEstado('LOGIN');
-            return;
-          }
-
-          aviso =
-            'No se pudo comprobar el catálogo oficial.';
-        }
-
         if (!activo) return;
 
+        // Mostrar la aplicación inmediatamente después de validar
+        // la sesión. La descarga grande del catálogo queda en segundo plano.
+        sesionActivaRef.current = guardada;
         setSesion(guardada);
-        setAvisoCatalogo(aviso);
+        setMensajeLogin('');
+        setAvisoCatalogo('');
         setEstado('AUTENTICADO');
-
-      } catch {
-
+        refrescarCatalogoEnSegundoPlano(guardada);
+      } catch (error) {
         if (!activo) return;
 
+        console.error(
+          '[Colmenares] No se pudo recuperar la sesión:',
+          error
+        );
+
+        sesionActivaRef.current = null;
         setMensajeLogin(
           'No se pudo recuperar la sesión guardada.'
         );
-
         setEstado('LOGIN');
       }
     };
@@ -275,104 +307,66 @@ export default function AppAutenticado() {
     return () => {
       activo = false;
     };
-
-  }, []);
+  }, [refrescarCatalogoEnSegundoPlano]);
 
   // ========================================
-  // INICIAR SESION
+  // INICIAR SESIÓN
   // ========================================
 
   const ingresar = async (
     email: string,
     password: string
   ): Promise<void> => {
+    const nuevaSesion = await iniciarSesion(email, password);
 
-    const nuevaSesion = await iniciarSesion(
-      email,
-      password
-    );
-
-    let aviso = '';
-
-    try {
-
-      aviso = await actualizarCatalogo(
-        nuevaSesion
-      );
-
-    } catch (error) {
-
-      await salirDeEsteDispositivo();
-
-      if (
-        error instanceof ErrorAPI &&
-        (
-          error.estado === 401 ||
-          error.estado === 403
-        )
-      ) {
-        throw new Error(
-          'El servidor rechazó la sesión al ' +
-          'consultar el catálogo.'
-        );
-      }
-
-      throw error;
-    }
-
+    sesionActivaRef.current = nuevaSesion;
     setSesion(nuevaSesion);
     setMensajeLogin('');
-    setAvisoCatalogo(aviso);
+    setAvisoCatalogo(
+      'Actualizando el catálogo en segundo plano...'
+    );
     setEstado('AUTENTICADO');
+
+    refrescarCatalogoEnSegundoPlano(nuevaSesion);
   };
 
   // ========================================
-  // REINTENTAR CONEXION
+  // REINTENTAR CONEXIÓN
   // ========================================
 
   const reintentarConexion = async () => {
-
     if (!sesion) return;
 
     setEstado('CARGANDO');
 
     try {
-
       await verificarUsuario(sesion);
 
-      const aviso = await actualizarCatalogo(
-        sesion
+      sesionActivaRef.current = sesion;
+      setAvisoCatalogo(
+        'Conexión restablecida. Actualizando el catálogo...'
       );
-
-      setAvisoCatalogo(aviso);
       setEstado('AUTENTICADO');
-
+      refrescarCatalogoEnSegundoPlano(sesion);
     } catch (error) {
-
       if (
         !tokenVigente(sesion) ||
         (
           error instanceof ErrorAPI &&
-          (
-            error.estado === 401 ||
-            error.estado === 403
-          )
+          (error.estado === 401 || error.estado === 403)
         )
       ) {
-
         try {
           await salirDeEsteDispositivo();
         } catch {
           // No habilitar una sesión inválida.
         }
 
+        sesionActivaRef.current = null;
         setSesion(null);
-
         setMensajeLogin(
-          'Tu sesión ya no es válida. ' +
-          'Inicia sesión nuevamente.'
+          'Tu sesión ya no es válida. Inicia sesión nuevamente.'
         );
-
         setEstado('LOGIN');
         return;
       }
@@ -381,15 +375,12 @@ export default function AppAutenticado() {
         error instanceof ErrorAPI &&
         error.estado === 0
       ) {
-
         setEstado('SIN_CONEXION');
 
         Alert.alert(
           'Sin conexión',
-          'FastAPI no está disponible. ' +
-          'Tus registros locales se conservan.'
+          'FastAPI no está disponible. Tus registros locales se conservan.'
         );
-
         return;
       }
 
@@ -403,15 +394,13 @@ export default function AppAutenticado() {
   };
 
   // ========================================
-  // CERRAR SESION LOCAL
+  // CERRAR SESIÓN LOCAL
   // ========================================
 
   const cerrarSesion = () => {
-
     Alert.alert(
       'Cerrar sesión',
-      'Se cerrará la sesión en este dispositivo. ' +
-      'Los registros SQLite no se eliminarán.',
+      'Se cerrará la sesión en este dispositivo. Los registros SQLite no se eliminarán.',
       [
         {
           text: 'Cancelar',
@@ -420,28 +409,22 @@ export default function AppAutenticado() {
         {
           text: 'Cerrar sesión',
           style: 'destructive',
-
           onPress: () => {
-
             void (async () => {
-
               try {
-
                 await salirDeEsteDispositivo();
 
+                sesionActivaRef.current = null;
                 setSesion(null);
                 setAvisoCatalogo('');
                 setMensajeLogin('');
                 setEstado('LOGIN');
-
               } catch {
-
                 Alert.alert(
                   'Error',
                   'No fue posible cerrar la sesión.'
                 );
               }
-
             })();
           },
         },
@@ -464,7 +447,7 @@ export default function AppAutenticado() {
         />
 
         <Text style={styles.cargandoTexto}>
-          Comprobando sesión y catálogo...
+          Comprobando sesión...
         </Text>
 
       </View>
@@ -499,6 +482,7 @@ export default function AppAutenticado() {
         usuario={sesion.usuario}
         sinConexion={estado === 'SIN_CONEXION'}
         avisoCatalogo={avisoCatalogo}
+        catalogoVersion={catalogoVersion}
         onReintentarConexion={() => {
           void reintentarConexion();
         }}

@@ -1,8 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  FlatList,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StatusBar,
@@ -22,12 +24,16 @@ import {
 } from './api/auth';
 import type { SesionMovil } from './api/auth';
 import {
-  listarInspecciones,
+  listarInspeccionesResumen,
   obtenerInspeccion,
   actualizarInspeccion,
   anularInspeccion,
 } from './api/inspecciones';
-import type { InspeccionApi, InspeccionUpdateApi } from './api/inspecciones';
+import type {
+  InspeccionApi,
+  InspeccionDashboardServidor,
+  InspeccionUpdateApi,
+} from './api/inspecciones';
 import { listarUsuarios } from './api/usuarios';
 import type { UsuarioAPI } from './api/usuarios';
 
@@ -156,11 +162,11 @@ function tonoEstado(valor: string | null): 'verde' | 'azul' | 'ambar' | 'rojo' |
 }
 
 function usuarioNombre(
-  id: number | null,
+  id: number | null | undefined,
   sesion: SesionMovil | null,
   usuarios: UsuarioAPI[]
 ): string {
-  if (id === null) return 'Usuario local';
+  if (id == null) return 'Usuario local';
   if (sesion?.usuario.id === id) return sesion.usuario.nombre;
   const usuario = usuarios.find(item => item.id === id);
   return usuario
@@ -176,7 +182,7 @@ export default function InspeccionesLocales({ onVolver }: Props) {
   const [sesion, setSesion] = useState<SesionMovil | null>(null);
   const [catalogo, setCatalogo] = useState<CatalogoMovil | null>(null);
   const [locales, setLocales] = useState<InspeccionGuardada[]>([]);
-  const [servidor, setServidor] = useState<InspeccionApi[]>([]);
+  const [servidor, setServidor] = useState<InspeccionDashboardServidor[]>([]);
   const [usuarios, setUsuarios] = useState<UsuarioAPI[]>([]);
   const [cargando, setCargando] = useState(true);
   const [actualizando, setActualizando] = useState(false);
@@ -185,6 +191,10 @@ export default function InspeccionesLocales({ onVolver }: Props) {
   const [apiarioFiltro, setApiarioFiltro] = useState('');
   const [estadoFiltro, setEstadoFiltro] = useState('');
   const [detalle, setDetalle] = useState<InspeccionVista | null>(null);
+  const [detalleCargando, setDetalleCargando] = useState(false);
+  const [detalleError, setDetalleError] = useState('');
+  const detalleSolicitudRef = useRef(0);
+  const catalogoSolicitadoRef = useRef(false);
   const [formulario, setFormulario] = useState<FormularioActivo | null>(null);
   const [selectorColmena, setSelectorColmena] = useState(false);
   const [busquedaColmena, setBusquedaColmena] = useState('');
@@ -196,37 +206,73 @@ export default function InspeccionesLocales({ onVolver }: Props) {
 
     try {
       const sesionActual = await leerSesionGuardada();
-      if (!sesionActual) throw new Error('No existe una sesión móvil activa. Vuelve a iniciar sesión.');
+      if (!sesionActual) {
+        throw new Error('No existe una sesión móvil activa. Vuelve a iniciar sesión.');
+      }
+
       setSesion(sesionActual);
 
-      let catalogoActual = await leerCatalogoLocal(sesionActual.usuario.id);
-      if (tokenVigente(sesionActual)) {
-        try {
-          catalogoActual = await descargarCatalogo(sesionActual);
-        } catch (err) {
-          if (!catalogoActual) throw err;
-        }
-      }
-      setCatalogo(catalogoActual);
+      // Primero se muestran los datos del dispositivo. La pantalla no
+      // espera a descargar todos los detalles de marcos desde FastAPI.
+      const [catalogoLocal, registrosLocales] = await Promise.all([
+        leerCatalogoLocal(sesionActual.usuario.id).catch(() => null),
+        listarInspeccionesLocales(),
+      ]);
 
-      const registrosLocales = await listarInspeccionesLocales();
+      setCatalogo(catalogoLocal);
       setLocales(registrosLocales);
 
-      try {
-        const registrosServidor = await listarInspecciones(sesionActual.accessToken);
-        setServidor(registrosServidor.filter(item => item.activo));
-        if (sesionActual.usuario.rol === 'ADMIN') {
-          setUsuarios(await listarUsuarios(sesionActual.accessToken).catch(() => []));
-        } else {
-          setUsuarios([]);
-        }
-      } catch (err) {
-        setServidor([]);
+      if (catalogoLocal || registrosLocales.length > 0) {
+        setCargando(false);
+      }
+
+      const necesitaCatalogoRemoto =
+        !catalogoLocal || forzar || !catalogoSolicitadoRef.current;
+      const tareas: Promise<unknown>[] = [
+        listarInspeccionesResumen(sesionActual.accessToken),
+        sesionActual.usuario.rol === 'ADMIN'
+          ? listarUsuarios(sesionActual.accessToken)
+          : Promise.resolve([] as UsuarioAPI[]),
+      ];
+
+      if (tokenVigente(sesionActual) && necesitaCatalogoRemoto) {
+        catalogoSolicitadoRef.current = true;
+        tareas.push(descargarCatalogo(sesionActual));
+      }
+
+      const resultados = await Promise.allSettled(tareas);
+
+      const resultadoInspecciones = resultados[0];
+      const resultadoUsuarios = resultados[1];
+
+      if (resultadoInspecciones.status === 'fulfilled') {
+        setServidor(
+          resultadoInspecciones.value as InspeccionDashboardServidor[]
+        );
+      } else {
         setError(
-          err instanceof Error
-            ? `No se pudo actualizar el listado del servidor. Se muestran los registros guardados en el teléfono. ${err.message}`
+          resultadoInspecciones.reason instanceof Error
+            ? `No se pudo actualizar el listado del servidor. Se muestran los registros guardados en el teléfono. ${resultadoInspecciones.reason.message}`
             : 'No se pudo conectar con FastAPI. Se muestran los registros guardados en el teléfono.'
         );
+      }
+
+      if (resultadoUsuarios.status === 'fulfilled') {
+        setUsuarios(resultadoUsuarios.value as UsuarioAPI[]);
+      } else if (sesionActual.usuario.rol !== 'ADMIN') {
+        setUsuarios([]);
+      }
+
+      if (tareas.length > 2) {
+        const resultadoCatalogo = resultados[2];
+        if (resultadoCatalogo.status === 'fulfilled') {
+          setCatalogo(resultadoCatalogo.value as CatalogoMovil);
+        } else {
+          catalogoSolicitadoRef.current = false;
+          if (!catalogoLocal) {
+            throw resultadoCatalogo.reason;
+          }
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudieron cargar las inspecciones.');
@@ -267,7 +313,7 @@ export default function InspeccionesLocales({ onVolver }: Props) {
         codigo: colmena?.codigo ?? `Colmena #${item.colmena_id}`,
         apiarioId: colmena?.apiario_id ?? null,
         fecha: item.fecha_inspeccion,
-        usuarioId: item.usuario_id,
+        usuarioId: item.usuario_id ?? null,
         usuarioNombre: usuarioNombre(item.usuario_id, sesion, usuarios),
         cantidadMarcos: item.cantidad_marcos,
         estadoGeneral: item.estado_general,
@@ -277,14 +323,13 @@ export default function InspeccionesLocales({ onVolver }: Props) {
         miel: item.miel,
         poblacion: item.nivel_poblacion,
         reservas: item.reservas_alimento,
-        signosEnfermedad: item.signos_enfermedad,
+        signosEnfermedad: Boolean(item.signos_enfermedad),
         enfermedadObservada: item.enfermedad_observada,
         tirasMedicamento: item.tiras_medicamento,
         alimentacion: item.alimentacion_suministrada,
         observaciones: item.observaciones ?? '',
-        marcos: item.marcos ?? [],
+        marcos: [],
         sincronizacion: 'SINCRONIZADO',
-        server: item,
         local,
       };
     });
@@ -370,11 +415,75 @@ export default function InspeccionesLocales({ onVolver }: Props) {
       }
       const colmena = catalogo?.colmenas.find(registro => registro.id === inspeccion?.colmena_id);
       if (!colmena) throw new Error('La colmena no está disponible en el catálogo local. Actualiza el catálogo e inténtalo nuevamente.');
-      setDetalle(null);
+      cerrarDetalle();
       setFormulario({ codigoQR: colmena.codigo_qr, inspeccion });
     } catch (err) {
       Alert.alert('No se pudo abrir la edición', err instanceof Error ? err.message : 'Intenta nuevamente.');
     }
+  };
+
+  const abrirDetalle = async (item: InspeccionVista) => {
+    const solicitud = ++detalleSolicitudRef.current;
+    setDetalle(item);
+    setDetalleError('');
+    setDetalleCargando(false);
+
+    if (!item.serverId || !sesion || !tokenVigente(sesion)) {
+      return;
+    }
+
+    setDetalleCargando(true);
+
+    try {
+      const completo = await obtenerInspeccion(
+        item.serverId,
+        sesion.accessToken
+      );
+
+      if (detalleSolicitudRef.current !== solicitud) return;
+
+      setDetalle((actual) => {
+        if (!actual || actual.serverId !== item.serverId) return actual;
+
+        return {
+          ...actual,
+          cantidadMarcos: completo.cantidad_marcos,
+          estadoGeneral: completo.estado_general,
+          reinaObservada: completo.reina_observada,
+          presenciaCria: completo.presencia_cria,
+          postura: completo.postura,
+          miel: completo.miel,
+          poblacion: completo.nivel_poblacion,
+          reservas: completo.reservas_alimento,
+          signosEnfermedad: Boolean(completo.signos_enfermedad),
+          enfermedadObservada: completo.enfermedad_observada,
+          tirasMedicamento: completo.tiras_medicamento,
+          alimentacion: completo.alimentacion_suministrada,
+          observaciones: completo.observaciones ?? '',
+          marcos: completo.marcos ?? [],
+          server: completo,
+        };
+      });
+    } catch (err) {
+      if (detalleSolicitudRef.current === solicitud) {
+        setDetalleError(
+          err instanceof Error
+            ? err.message
+            : 'No se pudo cargar el detalle de esta inspección.'
+        );
+      }
+    } finally {
+      if (detalleSolicitudRef.current === solicitud) {
+        setDetalleCargando(false);
+      }
+    }
+  };
+
+  const cerrarDetalle = () => {
+    detalleSolicitudRef.current += 1;
+    setDetalle(null);
+    setDetalleCargando(false);
+    setDetalleError('');
   };
 
   const anular = (item: InspeccionVista) => {
@@ -399,7 +508,7 @@ export default function InspeccionesLocales({ onVolver }: Props) {
                 } else if (item.localId) {
                   await anularInspeccionLocal(item.localId);
                 }
-                setDetalle(null);
+                cerrarDetalle();
                 await cargar(true);
                 Alert.alert('Inspección anulada', 'El registro quedó anulado correctamente.');
               } catch (err) {
@@ -455,139 +564,147 @@ export default function InspeccionesLocales({ onVolver }: Props) {
   }
 
   return (
-    <ScrollView
-      style={styles.pantalla}
-      contentContainerStyle={styles.contenido}
-      keyboardShouldPersistTaps="handled"
-    >
+    <View style={styles.pantalla}>
       <StatusBar barStyle="dark-content" />
+      <FlatList
+        style={{ flex: 1 }}
+        data={filtrados}
+        keyExtractor={(item) => item.key}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={styles.contenido}
+        initialNumToRender={10}
+        maxToRenderPerBatch={8}
+        updateCellsBatchingPeriod={50}
+        windowSize={7}
+        removeClippedSubviews={Platform.OS === 'android'}
+        ListHeaderComponent={
+          <View>
+            <View style={styles.encabezado}>
+              <View style={styles.encabezadoTexto}>
+                <Pressable onPress={onVolver} style={styles.volver}>
+                  <Text style={styles.volverTexto}>‹ Volver</Text>
+                </Pressable>
+                <Text style={styles.titulo}>Inspecciones</Text>
+                <Text style={styles.subtitulo}>Revisiones registradas en terreno, de la más reciente a la más antigua.</Text>
+              </View>
+              <Pressable style={styles.botonPrincipal} onPress={() => setSelectorColmena(true)}>
+                <Text style={styles.botonPrincipalTexto}>＋ Registrar inspección</Text>
+              </Pressable>
+            </View>
 
-      <View style={styles.encabezado}>
-        <View style={styles.encabezadoTexto}>
-          <Pressable onPress={onVolver} style={styles.volver}>
-            <Text style={styles.volverTexto}>‹ Volver</Text>
-          </Pressable>
-          <Text style={styles.titulo}>Inspecciones</Text>
-          <Text style={styles.subtitulo}>Revisiones registradas en terreno, de la más reciente a la más antigua.</Text>
-        </View>
-        <Pressable style={styles.botonPrincipal} onPress={() => setSelectorColmena(true)}>
-          <Text style={styles.botonPrincipalTexto}>＋ Registrar inspección</Text>
-        </Pressable>
-      </View>
+            {!!error && (
+              <View style={styles.aviso}>
+                <Text style={styles.avisoTexto}>{error}</Text>
+              </View>
+            )}
 
-      {!!error && (
-        <View style={styles.aviso}>
-          <Text style={styles.avisoTexto}>{error}</Text>
-        </View>
-      )}
+            <TextInput
+              value={busqueda}
+              onChangeText={setBusqueda}
+              placeholder="Buscar por código de colmena"
+              placeholderTextColor={COLORS.textMuted}
+              style={styles.input}
+              autoCapitalize="characters"
+            />
 
-      <TextInput
-        value={busqueda}
-        onChangeText={setBusqueda}
-        placeholder="Buscar por código de colmena"
-        placeholderTextColor={COLORS.textMuted}
-        style={styles.input}
-        autoCapitalize="characters"
-      />
-
-      <View style={styles.filtros}>
-        <View style={styles.filtroItem}>
-          <SelectorLista
-            label="Apiario"
-            value={apiarioFiltro}
-            opciones={[{ value: '', label: 'Todos los apiarios' }, ...apiarios]}
-            onChange={setApiarioFiltro}
-            placeholder="Todos los apiarios"
-          />
-        </View>
-        <View style={styles.filtroItem}>
-          <SelectorLista
-            label="Estado"
-            value={estadoFiltro}
-            opciones={ESTADOS}
-            onChange={setEstadoFiltro}
-            placeholder="Todos los estados"
-          />
-        </View>
-      </View>
-
-      <View style={styles.barraResultados}>
-        <Text style={styles.contador}>{filtrados.length} inspección(es)</Text>
-        <Pressable onPress={() => void cargar(true)} disabled={actualizando}>
-          <Text style={styles.actualizar}>{actualizando ? 'Actualizando…' : '⟳ Actualizar'}</Text>
-        </Pressable>
-      </View>
-
-      {filtrados.length === 0 ? (
-        <View style={styles.vacio}>
-          <Text style={styles.vacioTitulo}>No hay inspecciones para mostrar</Text>
-          <Text style={styles.vacioTexto}>
-            {registros.length === 0
-              ? 'Registra la primera inspección desde aquí o escaneando el QR de una colmena.'
-              : 'Ajusta o limpia los filtros para ver otros registros.'}
-          </Text>
-        </View>
-      ) : (
-        <View style={styles.listaTarjetas}>
-          {filtrados.map(item => (
-            <View key={item.key} style={styles.tarjeta}>
-              <View style={styles.tarjetaCabecera}>
-                <View style={styles.tarjetaTituloGrupo}>
-                  <Text style={styles.codigo}>{item.codigo}</Text>
-                  <Text style={styles.apiario}>{catalogo?.apiarios.find(a => a.id === item.apiarioId)?.nombre ?? 'Apiario no disponible'}</Text>
-                </View>
-                <InsigniaMovil
-                  texto={item.estadoGeneral ? etiquetaEstado(item.estadoGeneral) : item.sincronizacion === 'PENDIENTE' ? 'Pendiente' : 'Sin estado'}
-                  tono={item.estadoGeneral ? tonoEstado(item.estadoGeneral) : item.sincronizacion === 'PENDIENTE' ? 'ambar' : 'neutral'}
+            <View style={styles.filtros}>
+              <View style={styles.filtroItem}>
+                <SelectorLista
+                  label="Apiario"
+                  value={apiarioFiltro}
+                  opciones={[{ value: '', label: 'Todos los apiarios' }, ...apiarios]}
+                  onChange={setApiarioFiltro}
+                  placeholder="Todos los apiarios"
                 />
               </View>
-
-              <Text style={styles.meta}>{fechaHora(item.fecha)} · {item.usuarioNombre} · {item.cantidadMarcos ?? '—'} marcos</Text>
-
-              <View style={styles.datosGrid}>
-                <Dato nombre="Reina observada" valor={textoSiNo(item.reinaObservada)} />
-                <Dato nombre="Presencia de cría" valor={textoSiNo(item.presenciaCria)} />
-                <Dato nombre="Postura" valor={textoSiNo(item.postura)} />
-                <Dato nombre="Miel" valor={item.miel ?? 'No revisado'} />
-                <Dato nombre="Población" valor={item.poblacion ?? 'No revisado'} />
-                <Dato nombre="Reservas de alimento" valor={item.reservas ?? 'No revisado'} />
-              </View>
-
-              {item.signosEnfermedad && (
-                <View style={styles.alertaSanitaria}>
-                  <Text style={styles.alertaSanitariaTexto}>Signos de enfermedad{item.enfermedadObservada ? ` · ${item.enfermedadObservada}` : ''}</Text>
-                </View>
-              )}
-              {!!item.alimentacion && <Text style={styles.textoSecundario}>Alimentación: {item.alimentacion}</Text>}
-              {!!item.observaciones && <Text style={styles.observaciones} numberOfLines={2}>{item.observaciones}</Text>}
-
-              {item.sincronizacion === 'PENDIENTE' && (
-                <View style={styles.pendienteLocal}>
-                  <Text style={styles.pendienteTexto}>Pendiente de sincronización. Se conserva en el teléfono.</Text>
-                </View>
-              )}
-
-              <View style={styles.acciones}>
-                <Pressable style={styles.accion} onPress={() => setDetalle(item)}>
-                  <Text style={styles.accionTexto}>◉ Ver detalle</Text>
-                </Pressable>
-                {puedeGestionar(item) && item.serverId !== null && (
-                  <Pressable style={styles.accion} onPress={() => void abrirEdicion(item)}>
-                    <Text style={styles.accionTexto}>✎ Editar</Text>
-                  </Pressable>
-                )}
-                {puedeGestionar(item) && (item.serverId !== null || item.sincronizacion === 'PENDIENTE') && (
-                  <Pressable style={styles.accion} onPress={() => anular(item)}>
-                    <Text style={styles.accionTexto}>▣ Anular</Text>
-                  </Pressable>
-                )}
+              <View style={styles.filtroItem}>
+                <SelectorLista
+                  label="Estado"
+                  value={estadoFiltro}
+                  opciones={ESTADOS}
+                  onChange={setEstadoFiltro}
+                  placeholder="Todos los estados"
+                />
               </View>
             </View>
-          ))}
-        </View>
-      )}
 
-      <Text style={styles.pie}>Los registros nuevos se guardan primero en SQLite y se sincronizan con FastAPI cuando hay conexión.</Text>
+            <View style={styles.barraResultados}>
+              <Text style={styles.contador}>{filtrados.length} inspección(es)</Text>
+              <Pressable onPress={() => void cargar(true)} disabled={actualizando}>
+                <Text style={styles.actualizar}>{actualizando ? 'Actualizando…' : '⟳ Actualizar'}</Text>
+              </Pressable>
+            </View>
+          </View>
+        }
+        ListEmptyComponent={
+          <View style={styles.vacio}>
+            <Text style={styles.vacioTitulo}>No hay inspecciones para mostrar</Text>
+            <Text style={styles.vacioTexto}>
+              {registros.length === 0
+                ? 'Registra la primera inspección desde aquí o escaneando el QR de una colmena.'
+                : 'Ajusta o limpia los filtros para ver otros registros.'}
+            </Text>
+          </View>
+        }
+        renderItem={({ item }) => (
+          <View style={styles.tarjeta}>
+            <View style={styles.tarjetaCabecera}>
+              <View style={styles.tarjetaTituloGrupo}>
+                <Text style={styles.codigo}>{item.codigo}</Text>
+                <Text style={styles.apiario}>{catalogo?.apiarios.find(a => a.id === item.apiarioId)?.nombre ?? 'Apiario no disponible'}</Text>
+              </View>
+              <InsigniaMovil
+                texto={item.estadoGeneral ? etiquetaEstado(item.estadoGeneral) : item.sincronizacion === 'PENDIENTE' ? 'Pendiente' : 'Sin estado'}
+                tono={item.estadoGeneral ? tonoEstado(item.estadoGeneral) : item.sincronizacion === 'PENDIENTE' ? 'ambar' : 'neutral'}
+              />
+            </View>
+
+            <Text style={styles.meta}>{fechaHora(item.fecha)} · {item.usuarioNombre} · {item.cantidadMarcos ?? '—'} marcos</Text>
+
+            <View style={styles.datosGrid}>
+              <Dato nombre="Reina observada" valor={textoSiNo(item.reinaObservada)} />
+              <Dato nombre="Presencia de cría" valor={textoSiNo(item.presenciaCria)} />
+              <Dato nombre="Postura" valor={textoSiNo(item.postura)} />
+              <Dato nombre="Miel" valor={item.miel ?? 'No revisado'} />
+              <Dato nombre="Población" valor={item.poblacion ?? 'No revisado'} />
+              <Dato nombre="Reservas de alimento" valor={item.reservas ?? 'No revisado'} />
+            </View>
+
+            {item.signosEnfermedad && (
+              <View style={styles.alertaSanitaria}>
+                <Text style={styles.alertaSanitariaTexto}>Signos de enfermedad{item.enfermedadObservada ? ` · ${item.enfermedadObservada}` : ''}</Text>
+              </View>
+            )}
+            {!!item.alimentacion && <Text style={styles.textoSecundario}>Alimentación: {item.alimentacion}</Text>}
+            {!!item.observaciones && <Text style={styles.observaciones} numberOfLines={2}>{item.observaciones}</Text>}
+
+            {item.sincronizacion === 'PENDIENTE' && (
+              <View style={styles.pendienteLocal}>
+                <Text style={styles.pendienteTexto}>Pendiente de sincronización. Se conserva en el teléfono.</Text>
+              </View>
+            )}
+
+            <View style={styles.acciones}>
+              <Pressable style={styles.accion} onPress={() => void abrirDetalle(item)}>
+                <Text style={styles.accionTexto}>◉ Ver detalle</Text>
+              </Pressable>
+              {puedeGestionar(item) && item.serverId !== null && (
+                <Pressable style={styles.accion} onPress={() => void abrirEdicion(item)}>
+                  <Text style={styles.accionTexto}>✎ Editar</Text>
+                </Pressable>
+              )}
+              {puedeGestionar(item) && (item.serverId !== null || item.sincronizacion === 'PENDIENTE') && (
+                <Pressable style={styles.accion} onPress={() => anular(item)}>
+                  <Text style={styles.accionTexto}>▣ Anular</Text>
+                </Pressable>
+              )}
+            </View>
+          </View>
+        )}
+        ListFooterComponent={
+          <Text style={styles.pie}>Los registros nuevos se guardan primero en SQLite y se sincronizan con FastAPI cuando hay conexión.</Text>
+        }
+      />
 
       {/* SELECCIÓN DE COLMENA PARA UNA NUEVA INSPECCIÓN */}
       <Modal visible={selectorColmena} transparent animationType="slide" onRequestClose={() => setSelectorColmena(false)}>
@@ -631,7 +748,7 @@ export default function InspeccionesLocales({ onVolver }: Props) {
       </Modal>
 
       {/* DETALLE DE INSPECCIÓN */}
-      <Modal visible={Boolean(detalle)} transparent animationType="fade" onRequestClose={() => setDetalle(null)}>
+      <Modal visible={Boolean(detalle)} transparent animationType="fade" onRequestClose={cerrarDetalle}>
         {detalle && (
           <View style={styles.overlay}>
             <View style={styles.modalGrande}>
@@ -640,7 +757,7 @@ export default function InspeccionesLocales({ onVolver }: Props) {
                   <Text style={styles.modalTitulo}>Inspección de {detalle.codigo}</Text>
                   <Text style={styles.modalSubtitulo}>{catalogo?.apiarios.find(a => a.id === detalle.apiarioId)?.nombre ?? 'Apiario'} · {fechaHora(detalle.fecha)}</Text>
                 </View>
-                <Pressable onPress={() => setDetalle(null)}><Text style={styles.cerrar}>×</Text></Pressable>
+                <Pressable onPress={cerrarDetalle}><Text style={styles.cerrar}>×</Text></Pressable>
               </View>
               <ScrollView style={styles.detalleScroll}>
                 <View style={styles.datosGrid}>
@@ -660,7 +777,16 @@ export default function InspeccionesLocales({ onVolver }: Props) {
                 </View>
 
                 <Text style={styles.seccion}>Revisión de marcos</Text>
-                {detalle.marcos.length > 0 ? detalle.marcos.map(marco => (
+                {detalleCargando ? (
+                  <View style={{ paddingVertical: 16, alignItems: 'center' }}>
+                    <ActivityIndicator color={COLORS.gold} />
+                    <Text style={styles.textoSecundario}>Cargando detalle de marcos...</Text>
+                  </View>
+                ) : detalleError ? (
+                  <Text style={styles.textoSecundario}>
+                    No se pudo cargar el detalle de marcos. {detalleError}
+                  </Text>
+                ) : detalle.marcos.length > 0 ? detalle.marcos.map(marco => (
                   <View key={`${marco.ubicacion}-${marco.numero}`} style={styles.marcoFila}>
                     <Text style={styles.marcoTitulo}>{marco.ubicacion === 'ALZA' ? 'Alza' : 'Cámara de cría'} · Marco {marco.numero}</Text>
                     <Text style={styles.marcoTexto}>{marco.contenido ?? 'Sin registrar'}</Text>
@@ -673,7 +799,7 @@ export default function InspeccionesLocales({ onVolver }: Props) {
                 <Text style={styles.textoSecundario}>{detalle.observaciones.trim() || 'Sin observaciones'}</Text>
               </ScrollView>
               <View style={styles.modalPie}>
-                <Pressable style={styles.botonSecundario} onPress={() => setDetalle(null)}>
+                <Pressable style={styles.botonSecundario} onPress={cerrarDetalle}>
                   <Text style={styles.botonSecundarioTexto}>Cerrar</Text>
                 </Pressable>
                 {puedeGestionar(detalle) && detalle.serverId !== null && (
@@ -686,7 +812,7 @@ export default function InspeccionesLocales({ onVolver }: Props) {
           </View>
         )}
       </Modal>
-    </ScrollView>
+    </View>
   );
 }
 

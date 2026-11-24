@@ -16,9 +16,10 @@ export type InspeccionDashboardServidor = {
   id: number;
   colmena_id: number;
   usuario_id?: number;
+  id_cliente?: string | null;
   fecha_inspeccion: string;
   estado_general: string | null;
-  signos_enfermedad: boolean | number;
+  signos_enfermedad: boolean | number | null;
   enfermedad_observada: string | null;
   cantidad_marcos: number | null;
   reina_observada: boolean | null;
@@ -110,8 +111,28 @@ export function anularInspeccion(id: number, token: string) {
 }
 
 
-// Alias utilizado por el Dashboard móvil para combinar las inspecciones
-// recibidas desde FastAPI con las copias locales guardadas en SQLite.
+// Resumen liviano para pantallas de listado y alertas.
+// Evita descargar los marcos de todas las inspecciones cuando solo se
+// necesitan fechas, estados y datos generales.
+export function listarInspeccionesResumen(
+  token: string,
+  ultimasPorColmena = false
+): Promise<InspeccionDashboardServidor[]> {
+  const query = ultimasPorColmena
+    ? '?ultimas_por_colmena=true'
+    : '';
+
+  return solicitarAPI<InspeccionDashboardServidor[]>(
+    `/movil/inspecciones-resumen${query}`,
+    {
+      method: 'GET',
+      token,
+    }
+  );
+}
+
+// Alias utilizado por el Dashboard móvil. Mantiene el contrato existente,
+// pero ahora obtiene el resumen sin cargar el detalle pesado de marcos.
 export function listarInspeccionesServidor(token: string) {
-  return listarInspecciones(token) as Promise<InspeccionDashboardServidor[]>;
+  return listarInspeccionesResumen(token);
 }

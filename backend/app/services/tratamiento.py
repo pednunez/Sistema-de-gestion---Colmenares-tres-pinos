@@ -15,10 +15,19 @@ from app.schemas.tratamiento import (
 # LISTAR TRATAMIENTOS
 # ==========================================================
 
-def listar_tratamientos(db: Session):
-    consulta = (
-        select(Tratamiento)
-        .order_by(Tratamiento.fecha_inicio.desc())
+def listar_tratamientos(
+    db: Session,
+    colmena_id: int | None = None,
+):
+    consulta = select(Tratamiento)
+
+    if colmena_id is not None:
+        consulta = consulta.where(
+            Tratamiento.colmena_id == colmena_id
+        )
+
+    consulta = consulta.order_by(
+        Tratamiento.fecha_inicio.desc()
     )
 
     return db.scalars(consulta).all()

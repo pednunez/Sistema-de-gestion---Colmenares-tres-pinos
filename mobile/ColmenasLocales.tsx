@@ -10,6 +10,7 @@ import FormularioInspeccion from './FormularioInspeccion';
 import {
   ActivityIndicator,
   Alert,
+  FlatList,
   Image,
   Linking,
   Modal,
@@ -67,6 +68,7 @@ type Props = {
   apiarioIdInicial?: number;
   colmenaIdsIniciales?: number[];
   colmenaIdInicial?: number;
+  catalogoVersion?: number;
   rol?: string;
 };
 
@@ -635,6 +637,7 @@ export default function ColmenasLocales({
   apiarioIdInicial,
   colmenaIdsIniciales,
   colmenaIdInicial,
+  catalogoVersion = 0,
   rol,
 }: Props) {
   const [sesion, setSesion] = useState<SesionMovil | null>(null);
@@ -702,48 +705,85 @@ export default function ColmenasLocales({
   const [detalleMarcosLocales, setDetalleMarcosLocales] = useState<MarcoInspeccionDetalleLocal[]>([]);
   const [cargandoDetalleLocal, setCargandoDetalleLocal] = useState(false);
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
+  const solicitudCargaRef = useRef(0);
 
   const esAdmin = sesion?.usuario.rol === 'ADMIN' || rol === 'ADMIN';
 
   const cargarDatos = useCallback(async (manual = false) => {
+    const solicitud = ++solicitudCargaRef.current;
+    const sigueVigente = () => solicitudCargaRef.current === solicitud;
+
     if (manual) setActualizando(true);
     else setCargando(true);
+
     setError('');
-    setAviso('');
+    if (manual) setAviso('');
 
     try {
       const sesionActual = await leerSesionGuardada();
+      if (!sigueVigente()) return;
+
       setSesion(sesionActual);
 
-      const [catalogoLocal, inspecciones, tratamientos, transferencias, inspeccionesCache] = await Promise.all([
-        sesionActual ? leerCatalogoLocal(sesionActual.usuario.id).catch(() => null) : Promise.resolve(null),
-        listarInspeccionesDashboardLocales().catch(() => [] as InspeccionDashboardLocal[]),
-        listarTratamientosLocales().catch(() => [] as TratamientoGuardado[]),
-        listarTransferenciasPreparadas().catch(() => [] as TransferenciaLocal[]),
+      const [
+        catalogoLocal,
+        inspecciones,
+        tratamientos,
+        transferencias,
+        inspeccionesCache,
+        colmenasCache,
+      ] = await Promise.all([
         sesionActual
-          ? leerInspeccionesServidorCache(sesionActual.usuario.id).catch(() => [] as InspeccionServidor[])
+          ? leerCatalogoLocal(sesionActual.usuario.id).catch(() => null)
+          : Promise.resolve(null),
+        listarInspeccionesDashboardLocales().catch(
+          () => [] as InspeccionDashboardLocal[]
+        ),
+        listarTratamientosLocales().catch(
+          () => [] as TratamientoGuardado[]
+        ),
+        listarTransferenciasPreparadas().catch(
+          () => [] as TransferenciaLocal[]
+        ),
+        sesionActual
+          ? leerInspeccionesServidorCache(sesionActual.usuario.id).catch(
+              () => [] as InspeccionServidor[]
+            )
           : Promise.resolve([] as InspeccionServidor[]),
+        sesionActual
+          ? leerColmenasCache(sesionActual.usuario.id).catch(
+              () => null
+            )
+          : Promise.resolve(null),
       ]);
 
-      setCatalogo(catalogoLocal);
+      if (!sigueVigente()) return;
+
       const usuarioId = sesionActual?.usuario.id ?? null;
       const inspeccionesPropias = inspecciones.filter((item) =>
-        usuarioId == null ? item.usuario_id == null : item.usuario_id === usuarioId || item.usuario_id == null
+        usuarioId == null
+          ? item.usuario_id == null
+          : item.usuario_id === usuarioId || item.usuario_id == null
       );
-      const idsInspeccionesPropias = new Set(inspeccionesPropias.map((item) => item.id));
+
+      const idsInspeccionesPropias = new Set(
+        inspeccionesPropias.map((item) => item.id)
+      );
+
       const tratamientosPropios = tratamientos.filter((item) =>
-        usuarioId == null ? item.usuario_local_id == null : item.usuario_local_id === usuarioId || item.usuario_local_id == null
+        usuarioId == null
+          ? item.usuario_local_id == null
+          : item.usuario_local_id === usuarioId || item.usuario_local_id == null
       );
-      const transferenciasPropias = transferencias.filter((item) => idsInspeccionesPropias.has(item.inspeccion_local_id));
 
-      setInspeccionesLocales(inspeccionesPropias);
-      setTratamientosLocales(tratamientosPropios);
-      setTransferenciasLocales(transferenciasPropias);
+      const transferenciasPropias = transferencias.filter((item) =>
+        idsInspeccionesPropias.has(item.inspeccion_local_id)
+      );
 
-      let lista: ColmenaApi[] = [];
-      if (sesionActual) {
-        lista = await leerColmenasCache(sesionActual.usuario.id).catch(() => []) ?? [];
-      }
+      let lista: ColmenaApi[] = Array.isArray(colmenasCache)
+        ? colmenasCache
+        : [];
+
       if (lista.length === 0 && catalogoLocal) {
         lista = catalogoLocal.colmenas.map((item) => ({
           id: item.id,
@@ -761,63 +801,214 @@ export default function ColmenasLocales({
         }));
       }
 
+      // PRIMERO se muestran los datos locales. No se espera a FastAPI
+      // para pintar la lista de trabajo en terreno.
+      setCatalogo(catalogoLocal);
+      setInspeccionesLocales(inspeccionesPropias);
+      setTratamientosLocales(tratamientosPropios);
+      setTransferenciasLocales(transferenciasPropias);
+      setColmenas(lista);
+      setInspeccionesServidor(inspeccionesCache);
+
+      if (lista.length > 0) {
+        setCargando(false);
+      }
+
       let online = false;
       let inspeccionesActuales = inspeccionesCache;
       const mensajesAviso: string[] = [];
 
       if (sesionActual && tokenVigente(sesionActual)) {
-        try {
-          const servidor = await listarColmenas(sesionActual.accessToken, { orden: 'codigo' });
-          lista = servidor.filter((item) => item.activo !== false && item.estado !== 'BAJA');
-          await guardarColmenasCache(sesionActual.usuario.id, lista);
+        // Las dos consultas remotas son independientes: ejecutarlas
+        // en paralelo evita sumar innecesariamente sus latencias.
+        const [resultadoColmenas, resultadoInspecciones] =
+          await Promise.allSettled([
+            listarColmenas(sesionActual.accessToken, {
+              orden: 'codigo',
+            }),
+            solicitarAPI<InspeccionServidor[]>(
+              '/movil/inspecciones-resumen?ultimas_por_colmena=true',
+              {
+                method: 'GET',
+                token: sesionActual.accessToken,
+              }
+            ),
+          ] as const);
+
+        if (!sigueVigente()) return;
+
+        if (resultadoColmenas.status === 'fulfilled') {
+          lista = resultadoColmenas.value.filter(
+            (item) =>
+              item.activo !== false &&
+              item.estado !== 'BAJA'
+          );
+
+          setColmenas(lista);
           online = true;
-        } catch (e) {
-          const mensaje = e instanceof Error ? e.message : 'No se pudo consultar FastAPI.';
-          mensajesAviso.push(lista.length
-            ? `Sin conexión con el servidor. Se muestra la última copia guardada. ${mensaje}`
-            : mensaje);
+
+          // La escritura de caché no bloquea el refresco visual.
+          void guardarColmenasCache(
+            sesionActual.usuario.id,
+            lista
+          ).catch((error) => {
+            console.warn(
+              '[Colmenares] No se pudo guardar la caché de colmenas:',
+              error
+            );
+          });
+        } else {
+          const mensaje =
+            resultadoColmenas.reason instanceof Error
+              ? resultadoColmenas.reason.message
+              : 'No se pudo consultar FastAPI.';
+
+          mensajesAviso.push(
+            lista.length
+              ? `Sin conexión con el servidor. Se muestra la última copia guardada. ${mensaje}`
+              : mensaje
+          );
         }
 
-        try {
-          const inspeccionesRemotas = await solicitarAPI<InspeccionServidor[]>('/inspecciones/', {
-            method: 'GET',
-            token: sesionActual.accessToken,
+        if (resultadoInspecciones.status === 'fulfilled') {
+          inspeccionesActuales = Array.isArray(
+            resultadoInspecciones.value
+          )
+            ? resultadoInspecciones.value
+            : [];
+
+          setInspeccionesServidor(inspeccionesActuales);
+
+          void guardarInspeccionesServidorCache(
+            sesionActual.usuario.id,
+            inspeccionesActuales
+          ).catch((error) => {
+            console.warn(
+              '[Colmenares] No se pudo guardar la caché de inspecciones:',
+              error
+            );
           });
-          inspeccionesActuales = Array.isArray(inspeccionesRemotas) ? inspeccionesRemotas : [];
-          await guardarInspeccionesServidorCache(sesionActual.usuario.id, inspeccionesActuales);
-        } catch (e) {
-          const mensaje = e instanceof Error ? e.message : 'No se pudieron actualizar las inspecciones.';
+        } else {
+          const mensaje =
+            resultadoInspecciones.reason instanceof Error
+              ? resultadoInspecciones.reason.message
+              : 'No se pudieron actualizar las inspecciones.';
+
           mensajesAviso.push(
             inspeccionesActuales.length
               ? `Se conserva la última copia de inspecciones. ${mensaje}`
-              : `No se pudieron cargar las inspecciones del servidor. ${mensaje}`
+              : `No se pudieron cargar las alertas del servidor. ${mensaje}`
           );
         }
       } else if (sesionActual) {
-        mensajesAviso.push('La sesión venció. Se muestran las últimas copias guardadas en el dispositivo.');
+        mensajesAviso.push(
+          'La sesión venció. Se muestran las últimas copias guardadas en el dispositivo.'
+        );
       } else {
-        mensajesAviso.push('No hay una sesión activa. Se muestran los datos locales disponibles.');
+        mensajesAviso.push(
+          'No hay una sesión activa. Se muestran los datos locales disponibles.'
+        );
       }
 
+      if (!sigueVigente()) return;
+
+      // Si el catálogo se terminó de descargar mientras se consultaba
+      // FastAPI, usar la versión recién guardada y no la copia anterior.
+      let catalogoFinal = catalogoLocal;
+
+      if (sesionActual) {
+        const catalogoActualizado = await leerCatalogoLocal(
+          sesionActual.usuario.id
+        ).catch(() => null);
+
+        if (catalogoActualizado) {
+          catalogoFinal = catalogoActualizado;
+        }
+      }
+
+      if (!sigueVigente()) return;
+
+      if (!catalogoFinal) {
+        mensajesAviso.push(
+          'No hay un catálogo oficial guardado en este dispositivo.'
+        );
+      } else if (!online) {
+        mensajesAviso.push(
+          'Se está utilizando la última información guardada en el dispositivo.'
+        );
+      }
+
+      setCatalogo(catalogoFinal);
       setInspeccionesServidor(inspeccionesActuales);
       setAviso(mensajesAviso.join(' '));
       setConectado(online);
       setColmenas(lista);
-      if (lista.length === 0 && !catalogoLocal) {
-        setError('No hay colmenas guardadas en el dispositivo. Conéctate al servidor para descargar el catálogo oficial.');
+
+      if (lista.length === 0 && !catalogoFinal) {
+        setError(
+          'No hay colmenas guardadas en el dispositivo. Conéctate al servidor para descargar el catálogo oficial.'
+        );
       }
-    } catch (e) {
-      console.error('Error cargando módulo Colmenas:', e);
-      setError(e instanceof Error ? e.message : 'No se pudieron cargar las colmenas.');
+    } catch (error) {
+      if (!sigueVigente()) return;
+
+      console.error(
+        '[Colmenares] Error cargando módulo Colmenas:',
+        error
+      );
+
+      setError(
+        error instanceof Error
+          ? error.message
+          : 'No se pudieron cargar las colmenas.'
+      );
     } finally {
-      setCargando(false);
-      setActualizando(false);
+      if (sigueVigente()) {
+        setCargando(false);
+        setActualizando(false);
+      }
     }
   }, []);
 
   useEffect(() => {
     void cargarDatos(false);
+
+    return () => {
+      solicitudCargaRef.current += 1;
+    };
   }, [cargarDatos]);
+
+  // Cuando el catálogo se actualiza en segundo plano, refrescar solo
+  // la copia local del catálogo sin repetir todas las consultas remotas.
+  useEffect(() => {
+    if (catalogoVersion <= 0) return;
+
+    let activo = true;
+
+    const actualizarCatalogoLocal = async () => {
+      const sesionActual = await leerSesionGuardada();
+      if (!sesionActual) return;
+
+      const catalogoActual = await leerCatalogoLocal(
+        sesionActual.usuario.id
+      ).catch(() => null);
+
+      if (activo && catalogoActual) {
+        setCatalogo(catalogoActual);
+      }
+    };
+
+    void actualizarCatalogoLocal().catch((error) => {
+      console.warn(
+        '[Colmenares] No se pudo releer el catálogo actualizado:',
+        error
+      );
+    });
+
+    return () => {
+      activo = false;
+    };
+  }, [catalogoVersion]);
 
   useEffect(() => {
     if (apiarioIdInicial) setApiarioFiltro(String(apiarioIdInicial));
@@ -876,6 +1067,35 @@ export default function ColmenasLocales({
     [colmenas, inspeccionesParaAlertas]
   );
 
+  // Un solo recorrido para encontrar la última inspección por colmena.
+  // Evita filtrar y ordenar toda la colección una vez por cada tarjeta.
+  const ultimasInspeccionesPorColmena = useMemo(() => {
+    const ultimas = new Map<number, InspeccionServidor>();
+
+    for (const inspeccion of inspeccionesParaAlertas) {
+      const actual = ultimas.get(inspeccion.colmena_id);
+      const fechaNueva = Date.parse(inspeccion.fecha_inspeccion);
+      const fechaActual = actual
+        ? Date.parse(actual.fecha_inspeccion)
+        : Number.NEGATIVE_INFINITY;
+
+      if (
+        !actual ||
+        (
+          Number.isFinite(fechaNueva) &&
+          (
+            !Number.isFinite(fechaActual) ||
+            fechaNueva > fechaActual
+          )
+        )
+      ) {
+        ultimas.set(inspeccion.colmena_id, inspeccion);
+      }
+    }
+
+    return ultimas;
+  }, [inspeccionesParaAlertas]);
+
   const colmenasFiltradas = useMemo(() => {
     const termino = busqueda.trim().toLowerCase();
     return colmenas.filter((item) => {
@@ -920,13 +1140,16 @@ export default function ColmenasLocales({
 
   const ultimaInspeccion = useMemo(() => {
     if (!ficha) return null;
-    const ultima = inspeccionesParaAlertas
-      .filter((item) => item.colmena_id === ficha.id)
-      .sort((a, b) => new Date(b.fecha_inspeccion).getTime() - new Date(a.fecha_inspeccion).getTime())[0];
+
+    const ultima = ultimasInspeccionesPorColmena.get(ficha.id);
+
     return ultima
-      ? { fecha: ultima.fecha_inspeccion, estado: ultima.estado_general ?? null }
+      ? {
+          fecha: ultima.fecha_inspeccion,
+          estado: ultima.estado_general ?? null,
+        }
       : null;
-  }, [ficha, inspeccionesParaAlertas]);
+  }, [ficha, ultimasInspeccionesPorColmena]);
 
   const cargarHistorial = useCallback(async (colmena: ColmenaApi) => {
     setHistorialCargando(true);
@@ -951,9 +1174,9 @@ export default function ColmenasLocales({
       const token = sesion.accessToken;
       const [eventos, inspecciones, tratamientos, transferencias] = await Promise.all([
         solicitarAPI<EventoServidor[]>(`/historial/colmenas/${colmena.id}`, { method: 'GET', token }).catch(() => null),
-        solicitarAPI<InspeccionServidor[]>('/inspecciones/', { method: 'GET', token }).catch(() => null),
-        solicitarAPI<TratamientoServidor[]>('/tratamientos/', { method: 'GET', token }).catch(() => null),
-        listarTransferencias(sesion).catch(() => null),
+        solicitarAPI<InspeccionServidor[]>(`/inspecciones/?colmena_id=${colmena.id}`, { method: 'GET', token }).catch(() => null),
+        solicitarAPI<TratamientoServidor[]>(`/tratamientos/?colmena_id=${colmena.id}`, { method: 'GET', token }).catch(() => null),
+        listarTransferencias(sesion, colmena.id).catch(() => null),
       ]);
 
       const actualizado: PaqueteHistorial = {
@@ -1530,164 +1753,302 @@ export default function ColmenasLocales({
   return (
     <View style={styles.pantalla}>
       <StatusBar barStyle="dark-content" />
-      <ScrollView
-        contentContainerStyle={styles.contenido}
+      <FlatList
+        style={{ flex: 1 }}
+        data={colmenasFiltradas}
+        keyExtractor={(item) => String(item.id)}
         keyboardShouldPersistTaps="handled"
-        refreshControl={<RefreshControl refreshing={actualizando} onRefresh={() => void cargarDatos(true)} tintColor={COLORS.goldText} />}
-      >
-        <View style={styles.barraSuperiorListado}>
-          <Text style={styles.descripcionListado}>
-            {busqueda.trim() || apiarioFiltro || filtroEstado !== 'TODAS' || soloAtencion
-              ? `${colmenasFiltradas.length} de ${colmenas.length} colmenas registradas.`
-              : `${colmenas.length} colmenas registradas.`}
-          </Text>
-          <View style={styles.accionesEncabezado}>
-            <Pressable style={styles.botonAccionSecundario} onPress={() => void iniciarEscaneoListado()}>
-              <Text style={styles.botonAccionTexto}>▦ Escanear QR</Text>
-            </Pressable>
-            {esAdmin && (
-              <>
-                <Pressable style={styles.botonAccionSecundario} onPress={abrirCrearLote}>
-                  <Text style={styles.botonAccionTexto}>▤ Crear en lote</Text>
-                </Pressable>
-                <Pressable style={styles.botonAccionPrincipal} onPress={abrirNueva}>
-                  <Text style={styles.botonAccionPrincipalTexto}>＋ Nueva colmena</Text>
-                </Pressable>
-              </>
-            )}
-          </View>
-        </View>
-
-        {!!aviso && <View style={styles.aviso}><Text style={styles.avisoTexto}>{aviso}</Text></View>}
-        {!!error && <View style={styles.errorCaja}><Text style={styles.errorTexto}>{error}</Text></View>}
-
-        {(apiarioFiltro || idsFiltroDashboard) && (
-          <View style={styles.filtroDashboard}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.filtroDashboardTitulo}>Filtro aplicado desde Dashboard</Text>
-              <Text style={styles.filtroDashboardTexto}>{idsFiltroDashboard ? `${idsFiltroDashboard.length} colmenas seleccionadas` : 'Colmenas del apiario seleccionado'}</Text>
-            </View>
-            <Pressable onPress={() => { setApiarioFiltro(''); setIdsFiltroDashboard(null); }} style={styles.quitarFiltro}>
-              <Text style={styles.quitarFiltroTexto}>Quitar</Text>
-            </Pressable>
-          </View>
-        )}
-
-        <View style={styles.filtrosListado}>
-          <Text style={styles.labelFiltro}>Buscar por código</Text>
-          <TextInput
-            style={styles.inputFiltro}
-            value={busqueda}
-            onChangeText={setBusqueda}
-            placeholder="Buscar por código"
-            placeholderTextColor={COLORS.textMuted}
-            autoCapitalize="none"
-            autoCorrect={false}
+        contentContainerStyle={styles.contenido}
+        refreshControl={
+          <RefreshControl
+            refreshing={actualizando}
+            onRefresh={() => void cargarDatos(true)}
+            tintColor={COLORS.goldText}
           />
-
-          <View style={styles.filaSelectoresFiltro}>
-            <View style={styles.controlFiltro}>
-              <Text style={styles.labelFiltro}>Apiario</Text>
-              <Pressable style={styles.selectorFiltro} onPress={() => setApiarioFiltroPickerVisible(true)}>
-                <Text style={styles.selectorFiltroTexto} numberOfLines={1}>
-                  {apiarioFiltro ? nombreApiario(Number(apiarioFiltro)) : 'Todos los apiarios'}
-                </Text>
-                <Text style={styles.selectorFiltroFlecha}>⌄</Text>
-              </Pressable>
+        }
+        initialNumToRender={12}
+        maxToRenderPerBatch={8}
+        updateCellsBatchingPeriod={50}
+        windowSize={7}
+        removeClippedSubviews={Platform.OS === 'android'}
+        ListHeaderComponent={
+          <View>
+            <View style={styles.barraSuperiorListado}>
+              <Text style={styles.descripcionListado}>
+                {busqueda.trim() || apiarioFiltro || filtroEstado !== 'TODAS' || soloAtencion
+                  ? `${colmenasFiltradas.length} de ${colmenas.length} colmenas registradas.`
+                  : `${colmenas.length} colmenas registradas.`}
+              </Text>
+              <View style={styles.accionesEncabezado}>
+                <Pressable
+                  style={styles.botonAccionSecundario}
+                  onPress={() => void iniciarEscaneoListado()}
+                >
+                  <Text style={styles.botonAccionTexto}>▦ Escanear QR</Text>
+                </Pressable>
+                {esAdmin && (
+                  <>
+                    <Pressable
+                      style={styles.botonAccionSecundario}
+                      onPress={abrirCrearLote}
+                    >
+                      <Text style={styles.botonAccionTexto}>▤ Crear en lote</Text>
+                    </Pressable>
+                    <Pressable
+                      style={styles.botonAccionPrincipal}
+                      onPress={abrirNueva}
+                    >
+                      <Text style={styles.botonAccionPrincipalTexto}>＋ Nueva colmena</Text>
+                    </Pressable>
+                  </>
+                )}
+              </View>
             </View>
 
-            <View style={styles.controlFiltro}>
-              <Text style={styles.labelFiltro}>Estado</Text>
-              <Pressable style={styles.selectorFiltro} onPress={() => setEstadoFiltroPickerVisible(true)}>
-                <Text style={styles.selectorFiltroTexto} numberOfLines={1}>
-                  {filtroEstado === 'TODAS' ? 'Todos los estados' : ESTADOS.find((item) => item.valor === filtroEstado)?.texto ?? 'Todos los estados'}
-                </Text>
-                <Text style={styles.selectorFiltroFlecha}>⌄</Text>
-              </Pressable>
-            </View>
-          </View>
+            {!!aviso && (
+              <View style={styles.aviso}>
+                <Text style={styles.avisoTexto}>{aviso}</Text>
+              </View>
+            )}
+            {!!error && (
+              <View style={styles.errorCaja}>
+                <Text style={styles.errorTexto}>{error}</Text>
+              </View>
+            )}
 
-          <Pressable
-            style={styles.checkboxFiltro}
-            onPress={() => setSoloAtencion((actual) => !actual)}
-            accessibilityRole="checkbox"
-            accessibilityState={{ checked: soloAtencion }}
-          >
-            <View style={[styles.checkboxCuadro, soloAtencion && styles.checkboxCuadroActivo]}>
-              {soloAtencion && <Text style={styles.checkboxMarca}>✓</Text>}
-            </View>
-            <Text style={styles.checkboxTexto}>Solo las que requieren atención</Text>
-          </Pressable>
-        </View>
-
-        <View style={styles.barraAcciones}>
-          <Text style={styles.resultados}>{colmenasFiltradas.length} resultado(s)</Text>
-          <Pressable onPress={() => void cargarDatos(true)} disabled={actualizando} style={styles.botonTexto}>
-            <Text style={styles.botonTextoLabel}>{actualizando ? 'Actualizando…' : '⟳ Actualizar'}</Text>
-          </Pressable>
-        </View>
-
-        {cargando ? (
-          <ActivityIndicator size="large" color={COLORS.gold} style={{ marginTop: 28 }} />
-        ) : colmenasFiltradas.length === 0 ? (
-          <View style={styles.tarjetaVacia}>
-            <Text style={styles.tarjetaTitulo}>No hay colmenas con estos filtros</Text>
-            <Text style={styles.textoSecundario}>Ajusta o limpia los filtros para ver el inventario disponible.</Text>
-          </View>
-        ) : (
-          colmenasFiltradas.map((colmena) => {
-            const ultima = inspeccionesParaAlertas
-              .filter((item) => item.colmena_id === colmena.id)
-              .sort((a, b) => new Date(b.fecha_inspeccion).getTime() - new Date(a.fecha_inspeccion).getTime())[0];
-            return (
-              <View key={colmena.id} style={styles.tarjetaColmena}>
-                <View style={styles.tarjetaColmenaTop}>
-                  <View style={{ flex: 1 }}>
-                    <View style={styles.codigoConAlerta}>
-                      <Pressable onPress={() => { setInspeccionFichaVisible(false); setFichaId(colmena.id); }}>
-                        <Text style={styles.codigoColmena}>{colmena.codigo}</Text>
-                      </Pressable>
-                      {colmenasConAtencion.has(colmena.id) && <View style={styles.puntoAtencion} />}
-                    </View>
-                    <Text style={styles.apiarioTexto}>{nombreApiario(colmena.apiario_id)}</Text>
-                  </View>
-                  <View style={[styles.insigniaEstado, colmena.estado === 'ACTIVA' ? styles.estadoActiva : colmena.estado === 'EN_OBSERVACION' ? styles.estadoObservacion : styles.estadoInactiva]}>
-                    <Text style={styles.insigniaEstadoTexto}>{estadoColmenaTexto(colmena.estado)}</Text>
-                  </View>
+            {(apiarioFiltro || idsFiltroDashboard) && (
+              <View style={styles.filtroDashboard}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.filtroDashboardTitulo}>
+                    Filtro aplicado desde Dashboard
+                  </Text>
+                  <Text style={styles.filtroDashboardTexto}>
+                    {idsFiltroDashboard
+                      ? `${idsFiltroDashboard.length} colmenas seleccionadas`
+                      : 'Colmenas del apiario seleccionado'}
+                  </Text>
                 </View>
+                <Pressable
+                  onPress={() => {
+                    setApiarioFiltro('');
+                    setIdsFiltroDashboard(null);
+                  }}
+                  style={styles.quitarFiltro}
+                >
+                  <Text style={styles.quitarFiltroTexto}>Quitar</Text>
+                </Pressable>
+              </View>
+            )}
 
-                <View style={styles.datosFila}>
-                  <View style={styles.datoTarjeta}>
-                    <Text style={styles.datoTarjetaEtiqueta}>Última inspección</Text>
-                    <Text style={styles.datoTarjetaValor}>{ultima ? formatearFecha(ultima.fecha_inspeccion) : 'Sin inspecciones'}</Text>
-                    {ultima?.estado_general && <Text style={styles.datoTarjetaEstado}>{estadoGeneralTexto(ultima.estado_general)}</Text>}
-                  </View>
-                  <View style={styles.datoTarjeta}>
-                    <Text style={styles.datoTarjetaEtiqueta}>Instalación</Text>
-                    <Text style={styles.datoTarjetaValor}>{formatearFecha(colmena.fecha_instalacion)}</Text>
-                  </View>
-                </View>
+            <View style={styles.filtrosListado}>
+              <Text style={styles.labelFiltro}>Buscar por código</Text>
+              <TextInput
+                style={styles.inputFiltro}
+                value={busqueda}
+                onChangeText={setBusqueda}
+                placeholder="Buscar por código"
+                placeholderTextColor={COLORS.textMuted}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
 
-                <View style={styles.tarjetaColmenaBottom}>
-                  <Pressable onPress={() => { setInspeccionFichaVisible(false); setFichaId(colmena.id); }} style={styles.accionVerFicha}>
-                    <Text style={styles.verFicha}>◉  Ver ficha</Text>
+              <View style={styles.filaSelectoresFiltro}>
+                <View style={styles.controlFiltro}>
+                  <Text style={styles.labelFiltro}>Apiario</Text>
+                  <Pressable
+                    style={styles.selectorFiltro}
+                    onPress={() => setApiarioFiltroPickerVisible(true)}
+                  >
+                    <Text
+                      style={styles.selectorFiltroTexto}
+                      numberOfLines={1}
+                    >
+                      {apiarioFiltro
+                        ? nombreApiario(Number(apiarioFiltro))
+                        : 'Todos los apiarios'}
+                    </Text>
+                    <Text style={styles.selectorFiltroFlecha}>⌄</Text>
                   </Pressable>
-                  {esAdmin && (
-                    <View style={styles.accionesTarjeta}>
-                      <Pressable onPress={() => abrirEdicion(colmena)} style={styles.accionTarjeta}>
-                        <Text style={styles.accionTarjetaTexto}>✎ Editar</Text>
-                      </Pressable>
-                      <Pressable onPress={() => confirmarBaja(colmena)} style={styles.accionTarjeta}>
-                        <Text style={styles.accionTarjetaPeligro}>▣ Dar de baja</Text>
-                      </Pressable>
-                    </View>
-                  )}
+                </View>
+
+                <View style={styles.controlFiltro}>
+                  <Text style={styles.labelFiltro}>Estado</Text>
+                  <Pressable
+                    style={styles.selectorFiltro}
+                    onPress={() => setEstadoFiltroPickerVisible(true)}
+                  >
+                    <Text
+                      style={styles.selectorFiltroTexto}
+                      numberOfLines={1}
+                    >
+                      {filtroEstado === 'TODAS'
+                        ? 'Todos los estados'
+                        : ESTADOS.find((item) => item.valor === filtroEstado)?.texto ??
+                          'Todos los estados'}
+                    </Text>
+                    <Text style={styles.selectorFiltroFlecha}>⌄</Text>
+                  </Pressable>
                 </View>
               </View>
-            );
-          })
-        )}
-      </ScrollView>
+
+              <Pressable
+                style={styles.checkboxFiltro}
+                onPress={() => setSoloAtencion((actual) => !actual)}
+                accessibilityRole="checkbox"
+                accessibilityState={{ checked: soloAtencion }}
+              >
+                <View
+                  style={[
+                    styles.checkboxCuadro,
+                    soloAtencion && styles.checkboxCuadroActivo,
+                  ]}
+                >
+                  {soloAtencion && (
+                    <Text style={styles.checkboxMarca}>✓</Text>
+                  )}
+                </View>
+                <Text style={styles.checkboxTexto}>
+                  Solo las que requieren atención
+                </Text>
+              </Pressable>
+            </View>
+
+            <View style={styles.barraAcciones}>
+              <Text style={styles.resultados}>
+                {colmenasFiltradas.length} resultado(s)
+              </Text>
+              <Pressable
+                onPress={() => void cargarDatos(true)}
+                disabled={actualizando}
+                style={styles.botonTexto}
+              >
+                <Text style={styles.botonTextoLabel}>
+                  {actualizando ? 'Actualizando…' : '⟳ Actualizar'}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        }
+        ListEmptyComponent={
+          cargando ? (
+            <ActivityIndicator
+              size="large"
+              color={COLORS.gold}
+              style={{ marginTop: 28 }}
+            />
+          ) : (
+            <View style={styles.tarjetaVacia}>
+              <Text style={styles.tarjetaTitulo}>
+                No hay colmenas con estos filtros
+              </Text>
+              <Text style={styles.textoSecundario}>
+                Ajusta o limpia los filtros para ver el inventario disponible.
+              </Text>
+            </View>
+          )
+        }
+        renderItem={({ item: colmena }) => {
+          const ultima =
+            ultimasInspeccionesPorColmena.get(colmena.id);
+
+          return (
+            <View style={styles.tarjetaColmena}>
+              <View style={styles.tarjetaColmenaTop}>
+                <View style={{ flex: 1 }}>
+                  <View style={styles.codigoConAlerta}>
+                    <Pressable
+                      onPress={() => {
+                        setInspeccionFichaVisible(false);
+                        setFichaId(colmena.id);
+                      }}
+                    >
+                      <Text style={styles.codigoColmena}>
+                        {colmena.codigo}
+                      </Text>
+                    </Pressable>
+                    {colmenasConAtencion.has(colmena.id) && (
+                      <View style={styles.puntoAtencion} />
+                    )}
+                  </View>
+                  <Text style={styles.apiarioTexto}>
+                    {nombreApiario(colmena.apiario_id)}
+                  </Text>
+                </View>
+                <View
+                  style={[
+                    styles.insigniaEstado,
+                    colmena.estado === 'ACTIVA'
+                      ? styles.estadoActiva
+                      : colmena.estado === 'EN_OBSERVACION'
+                        ? styles.estadoObservacion
+                        : styles.estadoInactiva,
+                  ]}
+                >
+                  <Text style={styles.insigniaEstadoTexto}>
+                    {estadoColmenaTexto(colmena.estado)}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.datosFila}>
+                <View style={styles.datoTarjeta}>
+                  <Text style={styles.datoTarjetaEtiqueta}>
+                    Última inspección
+                  </Text>
+                  <Text style={styles.datoTarjetaValor}>
+                    {ultima
+                      ? formatearFecha(ultima.fecha_inspeccion)
+                      : 'Sin inspecciones'}
+                  </Text>
+                  {ultima?.estado_general && (
+                    <Text style={styles.datoTarjetaEstado}>
+                      {estadoGeneralTexto(ultima.estado_general)}
+                    </Text>
+                  )}
+                </View>
+                <View style={styles.datoTarjeta}>
+                  <Text style={styles.datoTarjetaEtiqueta}>
+                    Instalación
+                  </Text>
+                  <Text style={styles.datoTarjetaValor}>
+                    {formatearFecha(colmena.fecha_instalacion)}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.tarjetaColmenaBottom}>
+                <Pressable
+                  onPress={() => {
+                    setInspeccionFichaVisible(false);
+                    setFichaId(colmena.id);
+                  }}
+                  style={styles.accionVerFicha}
+                >
+                  <Text style={styles.verFicha}>◉  Ver ficha</Text>
+                </Pressable>
+                {esAdmin && (
+                  <View style={styles.accionesTarjeta}>
+                    <Pressable
+                      onPress={() => abrirEdicion(colmena)}
+                      style={styles.accionTarjeta}
+                    >
+                      <Text style={styles.accionTarjetaTexto}>✎ Editar</Text>
+                    </Pressable>
+                    <Pressable
+                      onPress={() => confirmarBaja(colmena)}
+                      style={styles.accionTarjeta}
+                    >
+                      <Text style={styles.accionTarjetaPeligro}>
+                        ▣ Dar de baja
+                      </Text>
+                    </Pressable>
+                  </View>
+                )}
+              </View>
+            </View>
+          );
+        }}
+      />
 
       {/* FICHA COMPLETA */}
       <Modal

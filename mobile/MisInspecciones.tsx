@@ -10,9 +10,10 @@ import { COLORS } from './theme';
 import {
   View,
   Text,
-  ScrollView,
+  FlatList,
   Pressable,
   ActivityIndicator,
+  Platform,
   StyleSheet,
   StatusBar,
 } from 'react-native';
@@ -88,134 +89,87 @@ export default function MisInspecciones({
   ).length;
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.content}
-      showsVerticalScrollIndicator={true}
-    >
+    <View style={styles.container}>
       <StatusBar barStyle="dark-content" />
+      <FlatList
+        style={{ flex: 1 }}
+        data={inspecciones}
+        keyExtractor={(item) => String(item.id)}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator
+        initialNumToRender={10}
+        maxToRenderPerBatch={8}
+        updateCellsBatchingPeriod={50}
+        windowSize={7}
+        removeClippedSubviews={Platform.OS === 'android'}
+        ListHeaderComponent={
+          <View>
+            <Pressable
+              style={styles.botonVolver}
+              onPress={onVolver}
+            >
+              <Text style={styles.textoVolver}>‹ Volver al inicio</Text>
+            </Pressable>
 
-      {/* VOLVER AL INICIO */}
-      <Pressable
-        style={styles.botonVolver}
-        onPress={onVolver}
-      >
-        <Text style={styles.textoVolver}>
-          ‹ Volver al inicio
-        </Text>
-      </Pressable>
+            <Text style={styles.icon}>🐝</Text>
+            <Text style={styles.title}>Mis inspecciones</Text>
+            <Text style={styles.subtitle}>
+              Registros guardados en este dispositivo
+            </Text>
 
-      {/* ENCABEZADO */}
-      <Text style={styles.icon}>
-        🐝
-      </Text>
+            <View style={styles.resumen}>
+              <View style={styles.resumenItem}>
+                <Text style={styles.numero}>{inspecciones.length}</Text>
+                <Text style={styles.resumenLabel}>Total local</Text>
+              </View>
+              <View style={styles.resumenItem}>
+                <Text style={styles.numero}>{pendientes}</Text>
+                <Text style={styles.resumenLabel}>Pendientes</Text>
+              </View>
+            </View>
 
-      <Text style={styles.title}>
-        Mis inspecciones
-      </Text>
-
-      <Text style={styles.subtitle}>
-        Registros guardados en este dispositivo
-      </Text>
-
-      {/* RESUMEN */}
-      <View style={styles.resumen}>
-
-        <View style={styles.resumenItem}>
-          <Text style={styles.numero}>
-            {inspecciones.length}
-          </Text>
-
-          <Text style={styles.resumenLabel}>
-            Total local
-          </Text>
-        </View>
-
-        <View style={styles.resumenItem}>
-          <Text style={styles.numero}>
-            {pendientes}
-          </Text>
-
-          <Text style={styles.resumenLabel}>
-            Pendientes
-          </Text>
-        </View>
-
-      </View>
-
-      {/* ACTUALIZAR */}
-      <Pressable
-        style={styles.actualizar}
-        onPress={() => void cargarInspecciones()}
-        disabled={cargando}
-      >
-        <Text style={styles.actualizarTexto}>
-          Actualizar historial
-        </Text>
-      </Pressable>
-
-      {/* CARGANDO */}
-      {cargando ? (
-        <ActivityIndicator
-          size="large"
-          color={COLORS.gold}
-          style={styles.loading}
-        />
-      ) : error ? (
-
-        // ERROR DE SQLITE
-        <View style={styles.card}>
-          <Text style={styles.error}>
-            {error}
-          </Text>
-        </View>
-
-      ) : inspecciones.length === 0 ? (
-
-        // SIN REGISTROS
-        <View style={styles.card}>
-          <Text style={styles.emptyTitle}>
-            Todavía no hay inspecciones
-          </Text>
-
-          <Text style={styles.detalle}>
-            Escanea una colmena y guarda tu primera
-            inspección para verla aquí.
-          </Text>
-        </View>
-
-      ) : (
-
-        // LISTADO DE INSPECCIONES
-        inspecciones.map((item) => {
-          const sincronizado =
-            item.estado === 'SINCRONIZADO';
+            <Pressable
+              style={styles.actualizar}
+              onPress={() => void cargarInspecciones()}
+              disabled={cargando}
+            >
+              <Text style={styles.actualizarTexto}>Actualizar historial</Text>
+            </Pressable>
+          </View>
+        }
+        ListEmptyComponent={
+          cargando ? (
+            <ActivityIndicator
+              size="large"
+              color={COLORS.gold}
+              style={styles.loading}
+            />
+          ) : error ? (
+            <View style={styles.card}>
+              <Text style={styles.error}>{error}</Text>
+            </View>
+          ) : (
+            <View style={styles.card}>
+              <Text style={styles.emptyTitle}>Todavía no hay inspecciones</Text>
+              <Text style={styles.detalle}>
+                Escanea una colmena y guarda tu primera inspección para verla aquí.
+              </Text>
+            </View>
+          )
+        }
+        renderItem={({ item }) => {
+          const sincronizado = item.estado === 'SINCRONIZADO';
 
           return (
-            <View
-              key={item.id}
-              style={styles.card}
-            >
+            <View style={styles.card}>
+              <Text style={styles.cardTitle}>Inspección N.º {item.id}</Text>
+              <Text style={styles.codigo}>{item.codigo_qr}</Text>
+              <Text style={styles.fecha}>{formatearFecha(item.fecha_local)}</Text>
 
-              <Text style={styles.cardTitle}>
-                Inspección N.º {item.id}
-              </Text>
-
-              <Text style={styles.codigo}>
-                {item.codigo_qr}
-              </Text>
-
-              <Text style={styles.fecha}>
-                {formatearFecha(item.fecha_local)}
-              </Text>
-
-              {/* ESTADO DE SINCRONIZACIÓN */}
               <View
                 style={[
                   styles.estado,
-                  sincronizado
-                    ? styles.sincronizado
-                    : styles.pendiente,
+                  sincronizado ? styles.sincronizado : styles.pendiente,
                 ]}
               >
                 <Text style={styles.estadoTexto}>
@@ -225,55 +179,32 @@ export default function MisInspecciones({
                 </Text>
               </View>
 
-              {/* DETALLES */}
               <View style={styles.detalles}>
-
-                <Text style={styles.detalle}>
-                  Marcos totales: {item.marcos_totales}
-                </Text>
-
-                <Text style={styles.detalle}>
-                  Marcos con cría: {item.marcos_cria}
-                </Text>
-
-                <Text style={styles.detalle}>
-                  Marcos con miel: {item.marcos_miel}
-                </Text>
-
-                <Text style={styles.detalle}>
-                  Estado de la reina: {item.reina}
-                </Text>
-
+                <Text style={styles.detalle}>Marcos totales: {item.marcos_totales}</Text>
+                <Text style={styles.detalle}>Marcos con cría: {item.marcos_cria}</Text>
+                <Text style={styles.detalle}>Marcos con miel: {item.marcos_miel}</Text>
+                <Text style={styles.detalle}>Estado de la reina: {item.reina}</Text>
               </View>
 
-              {/* OBSERVACIONES */}
               {item.observaciones.trim() !== '' && (
                 <View style={styles.observaciones}>
-
-                  <Text style={styles.observacionesTitulo}>
-                    Observaciones
-                  </Text>
-
-                  <Text style={styles.detalle}>
-                    {item.observaciones}
-                  </Text>
-
+                  <Text style={styles.observacionesTitulo}>Observaciones</Text>
+                  <Text style={styles.detalle}>{item.observaciones}</Text>
                 </View>
               )}
-
             </View>
           );
-        })
-      )}
-
-      {/* PIE DE PÁGINA */}
-      <Text style={styles.footer}>
-        Las inspecciones permanecen guardadas localmente.
-        La sincronización con FastAPI todavía está en desarrollo.
-      </Text>
-
-    </ScrollView>
+        }}
+        ListFooterComponent={
+          <Text style={styles.footer}>
+            Las inspecciones permanecen guardadas localmente.
+            La sincronización con FastAPI todavía está en desarrollo.
+          </Text>
+        }
+      />
+    </View>
   );
+
 }
 
 // ESTILOS

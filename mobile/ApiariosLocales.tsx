@@ -63,6 +63,19 @@ type Catalogo = NonNullable<
 
 type ColmenaCatalogo = Catalogo['colmenas'][number];
 
+function apiariosDesdeCatalogo(catalogo: Catalogo | null): Apiario[] {
+  return (catalogo?.apiarios ?? []).map((item) => ({
+    id: item.id,
+    nombre: item.nombre,
+    ubicacion: item.ubicacion ?? null,
+    descripcion: null,
+    activo: true,
+    fecha_creacion: null,
+    fecha_actualizacion: null,
+    fecha_eliminacion: null,
+  }));
+}
+
 type InspeccionDashboard = {
   id?: number;
   colmena_id: number;
@@ -334,70 +347,93 @@ export default function ApiariosLocales({ onVolver, rol }: Props) {
         throw new Error('Tu sesión ha vencido. Inicia sesión nuevamente.');
       }
 
-      let catalogoLocal = await leerCatalogoLocal(sesion.usuario.id).catch(() => null);
-      let aviso = '';
-
-      if (conInternet) {
-        try {
-          await descargarCatalogo(sesion);
-          catalogoLocal = await leerCatalogoLocal(sesion.usuario.id);
-        } catch {
-          aviso = catalogoLocal
-            ? 'No se pudo actualizar el catálogo. Se utiliza la última versión guardada en el dispositivo.'
-            : 'No se pudo descargar el catálogo oficial de colmenas.';
-        }
-      } else if (catalogoLocal) {
-        aviso = 'Sin conexión: se muestran las colmenas guardadas en el dispositivo.';
-      }
+      // Pintar primero la copia local. La red se consulta después y en paralelo.
+      let catalogoLocal = await leerCatalogoLocal(
+        sesion.usuario.id
+      ).catch(() => null);
 
       setCatalogo(catalogoLocal);
+      if (catalogoLocal) {
+        setApiarios(apiariosDesdeCatalogo(catalogoLocal));
+        setCargando(false);
+      }
 
-      if (conInternet) {
-        try {
-          const resultadoApiarios = await listarApiarios(sesion.accessToken);
-          setApiarios(resultadoApiarios);
-        } catch (err) {
-          if (catalogoLocal) {
-            setApiarios(catalogoLocal.apiarios as unknown as Apiario[]);
-            aviso = [aviso, 'No se pudo actualizar el listado de apiarios; se muestra la última versión local.']
-              .filter(Boolean)
-              .join(' ');
-          } else {
-            throw err;
-          }
+      let aviso = '';
+      if (!conInternet) {
+        setApiarios(apiariosDesdeCatalogo(catalogoLocal));
+        setInspecciones([]);
+        setAlertasDisponibles(false);
+
+        if (!catalogoLocal) {
+          aviso = 'Sin conexión y todavía no hay un catálogo guardado en este dispositivo.';
+        } else {
+          aviso = 'Sin conexión: se muestran los apiarios y colmenas guardados en el dispositivo.';
         }
 
-        try {
-          const resultadoInspecciones = await solicitarAPI<InspeccionDashboard[]>(
-            '/inspecciones/',
-            { method: 'GET', token: sesion.accessToken }
-          );
-          setInspecciones(resultadoInspecciones.filter(item => item.activo !== false));
-          setAlertasDisponibles(true);
-        } catch {
-          setInspecciones([]);
-          setAlertasDisponibles(false);
-          aviso = [aviso, 'No se pudieron actualizar las alertas de inspección.']
+        setAvisoDatos(aviso);
+        return;
+      }
+
+      const tareas: Promise<unknown>[] = [
+        listarApiarios(sesion.accessToken),
+        solicitarAPI<InspeccionDashboard[]>(
+          '/movil/inspecciones-resumen?ultimas_por_colmena=true',
+          { method: 'GET', token: sesion.accessToken }
+        ),
+      ];
+
+      // Actualizar el catálogo en paralelo. La copia local ya está visible
+      // y la descarga compartida evita duplicar solicitudes simultáneas.
+      tareas.push(descargarCatalogo(sesion));
+
+      const resultados = await Promise.allSettled(tareas);
+      const resultadoApiarios = resultados[0];
+      const resultadoInspecciones = resultados[1];
+
+      if (resultadoApiarios.status === 'fulfilled') {
+        setApiarios(resultadoApiarios.value as Apiario[]);
+      } else if (catalogoLocal) {
+        aviso = 'No se pudo actualizar el listado de apiarios; se muestra la última versión local.';
+      } else {
+        setApiarios([]);
+        aviso = 'No se pudieron cargar los apiarios desde el servidor.';
+      }
+
+      if (resultadoInspecciones.status === 'fulfilled') {
+        setInspecciones(
+          (resultadoInspecciones.value as InspeccionDashboard[])
+            .filter(item => item.activo !== false)
+        );
+        setAlertasDisponibles(true);
+      } else {
+        setInspecciones([]);
+        setAlertasDisponibles(false);
+        aviso = [aviso, 'No se pudieron actualizar las alertas de inspección.']
+          .filter(Boolean)
+          .join(' ');
+      }
+
+      if (tareas.length > 2) {
+        const resultadoCatalogo = resultados[2];
+        if (resultadoCatalogo.status === 'fulfilled') {
+          catalogoLocal = resultadoCatalogo.value as Catalogo;
+          setCatalogo(catalogoLocal);
+          if (resultadoApiarios.status !== 'fulfilled') {
+            setApiarios(apiariosDesdeCatalogo(catalogoLocal));
+          }
+        } else if (!catalogoLocal) {
+          throw resultadoCatalogo.reason;
+        } else {
+          aviso = [aviso, 'No se pudo actualizar el catálogo; se conserva la última copia local.']
             .filter(Boolean)
             .join(' ');
         }
-      } else {
-        setApiarios(catalogoLocal
-          ? catalogoLocal.apiarios as unknown as Apiario[]
-          : []);
-        setInspecciones([]);
-        setAlertasDisponibles(false);
       }
 
       if (!catalogoLocal) {
         aviso = [aviso, 'No hay un catálogo de colmenas disponible en este dispositivo.']
           .filter(Boolean)
           .join(' ');
-      }
-
-      if (!conInternet) {
-        setInspecciones([]);
-        setAlertasDisponibles(false);
       }
 
       setAvisoDatos(aviso);

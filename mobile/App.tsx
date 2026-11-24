@@ -126,6 +126,7 @@ type Props = {
   usuario: UsuarioMovil;
   sinConexion: boolean;
   avisoCatalogo: string;
+  catalogoVersion: number;
   onReintentarConexion: () => void;
   onCerrarSesion: () => void;
 };
@@ -183,7 +184,7 @@ const MENU: ItemMenu[] = [
     id: 'colmenas',
     nombre: 'Colmenas',
     icono: '🐝',
-    roles: SOLO_ADMIN,
+    roles: TODOS,
     destino: 'colmenas-locales',
     disponible: true,
   },
@@ -389,6 +390,7 @@ export default function App({
   usuario,
   sinConexion,
   avisoCatalogo,
+  catalogoVersion,
   onReintentarConexion,
   onCerrarSesion,
 }: Props) {
@@ -1185,6 +1187,7 @@ export default function App({
 
     contenido = (
       <InicioModulos
+        catalogoVersion={catalogoVersion}
 
         onEscanear={() => {
           void abrirEscaner();
@@ -1365,6 +1368,7 @@ export default function App({
         apiarioIdInicial={filtroColmenasDashboard?.apiarioId}
         colmenaIdsIniciales={filtroColmenasDashboard?.colmenaIds}
         colmenaIdInicial={filtroColmenasDashboard?.colmenaId}
+        catalogoVersion={catalogoVersion}
         rol={usuario.rol}
 
       />

@@ -52,7 +52,7 @@ function obtenerDetalle(datos: unknown): string | null {
 // REALIZAR PETICIONES A FASTAPI
 // ============================================
 
-export async function solicitarAPI<T>(
+async function ejecutarSolicitudAPI<T>(
   ruta: string,
   opciones: OpcionesPeticion = {}
 ): Promise<T> {
@@ -159,4 +159,44 @@ export async function solicitarAPI<T>(
   } finally {
     clearTimeout(temporizador);
   }
+}
+
+// ============================================
+// COALESCENCIA DE CONSULTAS GET SIMULTÁNEAS
+// ============================================
+//
+// Si dos pantallas solicitan exactamente el mismo recurso al mismo tiempo,
+// comparten una única petición de red. No se guarda una caché persistente:
+// la siguiente consulta posterior vuelve a consultar FastAPI y obtiene datos
+// actuales. Las escrituras POST/PATCH/PUT/DELETE nunca se agrupan.
+const solicitudesGetEnCurso = new Map<string, Promise<unknown>>();
+
+export function solicitarAPI<T>(
+  ruta: string,
+  opciones: OpcionesPeticion = {}
+): Promise<T> {
+  const metodo = opciones.method ?? 'GET';
+
+  if (metodo !== 'GET') {
+    return ejecutarSolicitudAPI<T>(ruta, opciones);
+  }
+
+  const clave = `${API_BASE_URL}${ruta}::${opciones.token ?? ''}`;
+  const existente = solicitudesGetEnCurso.get(clave);
+
+  if (existente) {
+    return existente as Promise<T>;
+  }
+
+  const solicitud = ejecutarSolicitudAPI<T>(ruta, opciones);
+  solicitudesGetEnCurso.set(clave, solicitud);
+
+  const limpiar = () => {
+    if (solicitudesGetEnCurso.get(clave) === solicitud) {
+      solicitudesGetEnCurso.delete(clave);
+    }
+  };
+
+  void solicitud.then(limpiar, limpiar);
+  return solicitud;
 }

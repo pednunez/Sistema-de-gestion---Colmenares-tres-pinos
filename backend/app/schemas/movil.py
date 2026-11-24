@@ -62,6 +62,30 @@ class UsuarioCatalogo(BaseModel):
     rol: str
 
 
+class InspeccionResumenMovil(BaseModel):
+    """Inspección sin el detalle pesado de marcos para listados móviles."""
+
+    id: int
+    colmena_id: int
+    usuario_id: int
+    id_cliente: UUID | None = None
+    fecha_inspeccion: datetime
+    estado_general: str | None = None
+    reina_observada: bool | None = None
+    presencia_cria: bool | None = None
+    postura: bool | None = None
+    nivel_poblacion: str | None = None
+    reservas_alimento: str | None = None
+    cantidad_marcos: int | None = None
+    tiene_alza: bool | None = None
+    miel: str | None = None
+    alimentacion_suministrada: str | None = None
+    signos_enfermedad: bool | None = None
+    enfermedad_observada: str | None = None
+    tiras_medicamento: int | None = None
+    observaciones: str | None = None
+
+
 class CatalogoMovilResponse(BaseModel):
     # Hora del servidor: la app la guarda como "catalogo al".
     generado_en: datetime

@@ -172,6 +172,7 @@ export default function TratamientosLocales({ onVolver, colmenaIdInicial }: Prop
   const { width } = useWindowDimensions();
   const esTablet = width >= 760;
   const [sesion, setSesion] = useState<SesionMovil | null>(null);
+  const catalogoSolicitadoRef = useRef(false);
   const [catalogo, setCatalogo] = useState<CatalogoMovil | null>(null);
   const [locales, setLocales] = useState<TratamientoGuardado[]>([]);
   const [servidor, setServidor] = useState<TratamientoApi[]>([]);
@@ -194,41 +195,74 @@ export default function TratamientosLocales({ onVolver, colmenaIdInicial }: Prop
 
     try {
       const sesionActual = await leerSesionGuardada();
-      if (!sesionActual) throw new Error('No existe una sesión móvil activa. Vuelve a iniciar sesión.');
+      if (!sesionActual) {
+        throw new Error('No existe una sesión móvil activa. Vuelve a iniciar sesión.');
+      }
       setSesion(sesionActual);
 
-      let catalogoActual = await leerCatalogoLocal(sesionActual.usuario.id);
-      if (tokenVigente(sesionActual)) {
-        try {
-          catalogoActual = await descargarCatalogo(sesionActual);
-        } catch (err) {
-          if (!catalogoActual) throw err;
-        }
-      }
-      setCatalogo(catalogoActual);
-
-      const [registrosLocales, inspecciones] = await Promise.all([
+      // Cargar primero SQLite para que el usuario pueda consultar lo
+      // disponible mientras FastAPI actualiza los datos del servidor.
+      const [catalogoLocal, registrosLocales, inspecciones] = await Promise.all([
+        leerCatalogoLocal(sesionActual.usuario.id).catch(() => null),
         listarTratamientosLocales(),
         listarInspeccionesLocales(),
       ]);
+
+      setCatalogo(catalogoLocal);
       setLocales(registrosLocales);
       setInspeccionesLocales(inspecciones);
 
-      try {
-        const registrosServidor = await listarTratamientos(sesionActual.accessToken);
-        setServidor(registrosServidor);
-        if (sesionActual.usuario.rol === 'ADMIN') {
-          setUsuarios(await listarUsuarios(sesionActual.accessToken).catch(() => []));
-        } else {
-          setUsuarios([]);
-        }
-      } catch (err) {
+      if (catalogoLocal || registrosLocales.length > 0) {
+        setCargando(false);
+      }
+
+      if (!tokenVigente(sesionActual)) {
         setServidor([]);
+        setUsuarios([]);
+        setError('La sesión venció. Se muestran los tratamientos guardados en el teléfono.');
+        return;
+      }
+
+      const tareas: Promise<unknown>[] = [
+        listarTratamientos(sesionActual.accessToken),
+        sesionActual.usuario.rol === 'ADMIN'
+          ? listarUsuarios(sesionActual.accessToken)
+          : Promise.resolve([] as UsuarioAPI[]),
+      ];
+
+      if (!catalogoLocal || forzar || !catalogoSolicitadoRef.current) {
+        catalogoSolicitadoRef.current = true;
+        tareas.push(descargarCatalogo(sesionActual));
+      }
+
+      const resultados = await Promise.allSettled(tareas);
+
+      if (resultados[0].status === 'fulfilled') {
+        setServidor(resultados[0].value as TratamientoApi[]);
+      } else {
         setError(
-          err instanceof Error
-            ? `No se pudo actualizar el listado del servidor. Se muestran los registros guardados en el teléfono. ${err.message}`
+          resultados[0].reason instanceof Error
+            ? `No se pudo actualizar el listado del servidor. Se muestran los registros guardados en el teléfono. ${resultados[0].reason.message}`
             : 'No se pudo conectar con FastAPI. Se muestran los registros guardados en el teléfono.'
         );
+      }
+
+      if (resultados[1].status === 'fulfilled') {
+        setUsuarios(resultados[1].value as UsuarioAPI[]);
+      } else if (sesionActual.usuario.rol !== 'ADMIN') {
+        setUsuarios([]);
+      }
+
+      if (tareas.length > 2) {
+        const resultadoCatalogo = resultados[2];
+        if (resultadoCatalogo.status === 'fulfilled') {
+          setCatalogo(resultadoCatalogo.value as CatalogoMovil);
+        } else {
+          catalogoSolicitadoRef.current = false;
+          if (!catalogoLocal) {
+            throw resultadoCatalogo.reason;
+          }
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'No se pudieron cargar los tratamientos.');

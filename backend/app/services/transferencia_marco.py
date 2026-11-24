@@ -11,7 +11,7 @@ NO modificar una base sin aplicar previamente la migracion e9a3c2d5f704.
 
 from datetime import datetime, timezone
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.models.colmena import Colmena
@@ -29,13 +29,26 @@ from app.services.capacidad_marcos import (
 )
 
 
-def listar_transferencias(db: Session):
-    return db.scalars(
-        select(TransferenciaMarco).order_by(
-            TransferenciaMarco.fecha_transferencia.desc(),
-            TransferenciaMarco.id.desc(),
+def listar_transferencias(
+    db: Session,
+    colmena_id: int | None = None,
+):
+    consulta = select(TransferenciaMarco)
+
+    if colmena_id is not None:
+        consulta = consulta.where(
+            or_(
+                TransferenciaMarco.colmena_origen_id == colmena_id,
+                TransferenciaMarco.colmena_destino_id == colmena_id,
+            )
         )
-    ).all()
+
+    consulta = consulta.order_by(
+        TransferenciaMarco.fecha_transferencia.desc(),
+        TransferenciaMarco.id.desc(),
+    )
+
+    return db.scalars(consulta).all()
 
 
 def obtener_transferencia(db: Session, transferencia_id: int):

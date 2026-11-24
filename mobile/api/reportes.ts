@@ -3,6 +3,7 @@ import * as Sharing from 'expo-sharing';
 
 import { solicitarAPI } from './cliente';
 import { API_BASE_URL } from './config';
+import { listarInspeccionesResumen } from './inspecciones';
 
 export type TipoReporte = 'INSPECCIONES' | 'TRATAMIENTOS' | 'COLMENAS';
 export type FormatoReporte = 'pdf' | 'xlsx' | 'csv';
@@ -60,7 +61,7 @@ export type ColmenaReporte = {
   id: number; apiario_id: number; codigo: string; estado: string; activo: boolean;
 };
 export type InspeccionReporte = {
-  id: number; colmena_id: number; usuario_id: number; fecha_inspeccion: string;
+  id: number; colmena_id: number; usuario_id: number | null; fecha_inspeccion: string;
   estado_general: string | null; signos_enfermedad: boolean | null;
   enfermedad_observada: string | null; cantidad_marcos: number | null;
   tiene_alza: boolean | null; observaciones: string | null; activo?: boolean;
@@ -89,13 +90,31 @@ export type VistaReporte = {
 
 // La vista previa no usa /reportes: ese endpoint genera una descarga auditada.
 export async function cargarDatosReportes(token: string): Promise<DatosReportes> {
-  const [apiarios, colmenas, inspecciones, tratamientos, usuarios] = await Promise.all([
+  const [apiarios, colmenas, inspeccionesResumen, tratamientos, usuarios] = await Promise.all([
     solicitarAPI<ApiarioReporte[]>('/apiarios/', { token }),
     solicitarAPI<ColmenaReporte[]>('/colmenas/', { token }),
-    solicitarAPI<InspeccionReporte[]>('/inspecciones/', { token }),
+    listarInspeccionesResumen(token),
     solicitarAPI<TratamientoReporte[]>('/tratamientos/', { token }),
     solicitarAPI<UsuarioReporte[]>('/usuarios/', { token }),
   ]);
+
+  // Los reportes solo usan datos generales de la inspección. No se descargan
+  // los marcos de cada registro, que se consultan únicamente en su detalle.
+  const inspecciones: InspeccionReporte[] = inspeccionesResumen.map(item => ({
+    id: item.id,
+    colmena_id: item.colmena_id,
+    usuario_id: item.usuario_id ?? null,
+    fecha_inspeccion: item.fecha_inspeccion,
+    estado_general: item.estado_general,
+    signos_enfermedad: item.signos_enfermedad == null
+      ? null
+      : Boolean(item.signos_enfermedad),
+    enfermedad_observada: item.enfermedad_observada,
+    cantidad_marcos: item.cantidad_marcos,
+    tiene_alza: item.tiene_alza,
+    observaciones: item.observaciones,
+  }));
+
   return { apiarios, colmenas, inspecciones, tratamientos, usuarios };
 }
 
@@ -152,7 +171,8 @@ export function armarVistaReporte(f: FiltrosReporte, datos: DatosReportes): Vist
     return apiario?.activo === false ? 'Apiario dado de baja' : (apiario?.nombre ?? '—');
   };
   const codigo = (colmenaId: number) => colmenas.get(colmenaId)?.codigo ?? '—';
-  const responsable = (id: number) => {
+  const responsable = (id: number | null) => {
+    if (id === null) return 'No registrado';
     const u = usuarios.get(id);
     if (!u || !u.activo) return `Usuario #${id}`;
     return [u.nombre, u.apellido].filter(Boolean).join(' ');

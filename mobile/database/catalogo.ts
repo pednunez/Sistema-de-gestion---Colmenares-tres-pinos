@@ -329,7 +329,7 @@ async function obtenerBD() {
 // GET /movil/catalogo
 // ==========================================
 
-export async function descargarCatalogo(
+async function descargarCatalogoInterno(
   sesion: SesionMovil
 ): Promise<CatalogoMovil> {
 
@@ -379,6 +379,36 @@ export async function descargarCatalogo(
   );
 
   return respuesta;
+}
+
+// ==========================================
+// COALESCENCIA DE DESCARGAS DEL CATÁLOGO
+// ==========================================
+
+const descargasCatalogoEnCurso =
+  new Map<string, Promise<CatalogoMovil>>();
+
+export function descargarCatalogo(
+  sesion: SesionMovil
+): Promise<CatalogoMovil> {
+  const clave = `${sesion.usuario.id}:${sesion.accessToken}`;
+  const existente = descargasCatalogoEnCurso.get(clave);
+
+  if (existente) {
+    return existente;
+  }
+
+  const descarga = descargarCatalogoInterno(sesion);
+  descargasCatalogoEnCurso.set(clave, descarga);
+
+  const limpiar = () => {
+    if (descargasCatalogoEnCurso.get(clave) === descarga) {
+      descargasCatalogoEnCurso.delete(clave);
+    }
+  };
+
+  void descarga.then(limpiar, limpiar);
+  return descarga;
 }
 
 // ==========================================

@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import * as SQLite from 'expo-sqlite';
 import {
   ActivityIndicator,
+  FlatList,
+  Platform,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -422,141 +424,156 @@ export default function TransferenciasLocales({ onEscanear: _onEscanear }: Props
   const llegadas = filtradas.filter((item) => String(item.destino.apiarioId) === apiarioElegido).length;
 
   return (
-    <ScrollView
-      style={styles.pantalla}
-      contentContainerStyle={styles.contenido}
-      keyboardShouldPersistTaps="handled"
-      refreshControl={
-        <RefreshControl refreshing={actualizando} onRefresh={() => void cargar(true)} tintColor={COLORS.forestMid} />
-      }
-    >
-      <Text style={styles.titulo}>Transferencias</Text>
-      <Text style={styles.descripcion}>
-        Historial de marcos movidos entre colmenas. Las transferencias se registran durante la inspección.
-      </Text>
-
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
+    <View style={styles.pantalla}>
+      <FlatList
+        style={{ flex: 1 }}
+        data={filtradas}
+        keyExtractor={(item) => String(item.id)}
+        contentContainerStyle={styles.contenido}
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={styles.filaApiarios}
-      >
-        <Text style={styles.ver}>Ver:</Text>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityState={{ selected: apiarioElegido === '' }}
-          onPress={() => setApiarioElegido('')}
-          style={[styles.chip, apiarioElegido === '' && styles.chipActivo]}
-        >
-          <Text style={[styles.chipTexto, apiarioElegido === '' && styles.chipTextoActivo]}>Todos los apiarios</Text>
-        </Pressable>
-        {apiariosOrdenados.map((apiario) => {
-          const elegido = apiarioElegido === String(apiario.id);
-          return (
-            <Pressable
-              key={apiario.id}
-              accessibilityRole="button"
-              accessibilityState={{ selected: elegido }}
-              onPress={() => setApiarioElegido(String(apiario.id))}
-              style={[styles.chip, elegido && styles.chipActivo]}
+        refreshControl={
+          <RefreshControl
+            refreshing={actualizando}
+            onRefresh={() => void cargar(true)}
+            tintColor={COLORS.forestMid}
+          />
+        }
+        initialNumToRender={10}
+        maxToRenderPerBatch={8}
+        updateCellsBatchingPeriod={50}
+        windowSize={7}
+        removeClippedSubviews={Platform.OS === 'android'}
+        ListHeaderComponent={
+          <View>
+            <Text style={styles.titulo}>Transferencias</Text>
+            <Text style={styles.descripcion}>
+              Historial de marcos movidos entre colmenas. Las transferencias se registran durante la inspección.
+            </Text>
+
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+              contentContainerStyle={styles.filaApiarios}
             >
-              <Text style={[styles.chipTexto, elegido && styles.chipTextoActivo]}>{apiario.nombre}</Text>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
+              <Text style={styles.ver}>Ver:</Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ selected: apiarioElegido === '' }}
+                onPress={() => setApiarioElegido('')}
+                style={[styles.chip, apiarioElegido === '' && styles.chipActivo]}
+              >
+                <Text style={[styles.chipTexto, apiarioElegido === '' && styles.chipTextoActivo]}>Todos los apiarios</Text>
+              </Pressable>
+              {apiariosOrdenados.map((apiario) => {
+                const elegido = apiarioElegido === String(apiario.id);
+                return (
+                  <Pressable
+                    key={apiario.id}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: elegido }}
+                    onPress={() => setApiarioElegido(String(apiario.id))}
+                    style={[styles.chip, elegido && styles.chipActivo]}
+                  >
+                    <Text style={[styles.chipTexto, elegido && styles.chipTextoActivo]}>{apiario.nombre}</Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
 
-      {nombreElegido ? (
-        <Text style={styles.resumenApiario}>
-          {nombreElegido}: {filtradas.length} {filtradas.length === 1 ? 'transferencia' : 'transferencias'} · {salidas} {salidas === 1 ? 'salida' : 'salidas'} · {llegadas} {llegadas === 1 ? 'llegada' : 'llegadas'}
-        </Text>
-      ) : null}
+            {nombreElegido ? (
+              <Text style={styles.resumenApiario}>
+                {nombreElegido}: {filtradas.length} {filtradas.length === 1 ? 'transferencia' : 'transferencias'} · {salidas} {salidas === 1 ? 'salida' : 'salidas'} · {llegadas} {llegadas === 1 ? 'llegada' : 'llegadas'}
+              </Text>
+            ) : null}
 
-      <View style={styles.filtros}>
-        <TextInput
-          style={styles.buscador}
-          placeholder="Buscar por código de colmena"
-          placeholderTextColor={COLORS.textMuted}
-          autoCapitalize="none"
-          autoCorrect={false}
-          clearButtonMode="while-editing"
-          accessibilityLabel="Buscar por código de colmena"
-          value={busqueda}
-          onChangeText={setBusqueda}
-        />
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Actualizar transferencias"
-          onPress={() => void cargar(true)}
-          disabled={actualizando}
-          style={styles.actualizar}
-        >
-          <Text style={styles.actualizarTexto}>{actualizando ? '…' : '⟳'}</Text>
-        </Pressable>
-      </View>
-
-      {mensaje ? (
-        <View style={styles.aviso}>
-          <Text style={styles.avisoTexto}>{mensaje}</Text>
-        </View>
-      ) : !online && !cargando && sesion ? (
-        <Text style={styles.avisoPequeno}>Consulta local. Desliza hacia abajo para intentar actualizar.</Text>
-      ) : null}
-
-      {cargando && tarjetas.length === 0 ? (
-        <View style={styles.cargando}>
-          <ActivityIndicator color={COLORS.forestMid} size="large" />
-          <Text style={styles.cargandoTexto}>Cargando transferencias...</Text>
-        </View>
-      ) : filtradas.length === 0 ? (
-        <View style={styles.vacio}>
-          <Text style={styles.vacioIcono}>⇄</Text>
-          <Text style={styles.vacioTitulo}>No hay transferencias para mostrar</Text>
-          <Text style={styles.vacioTexto}>
-            {tarjetas.length === 0
-              ? 'Aparecerán aquí cuando marques un marco con «Transferir» al registrar una inspección.'
-              : nombreElegido
-                ? 'Este apiario no tiene transferencias con estos filtros.'
-                : 'Prueba con otro código de colmena.'}
-          </Text>
-        </View>
-      ) : (
-        <View style={styles.lista}>
-          {filtradas.map((item) => (
-            <View key={item.id} style={styles.tarjeta}>
-              <View style={styles.ruta}>
-                <View style={styles.columnaOrigen}>
-                  <Text style={styles.rotulo}>Salió de</Text>
-                  <Text style={styles.nombreColmena}>{item.origen.codigo}</Text>
-                  <Text style={styles.nombreApiario}>{item.origen.apiarioNombre}</Text>
-                </View>
-                <Text style={styles.flecha}>→</Text>
-                <View style={styles.columnaDestino}>
-                  <Text style={styles.rotulo}>Llegó a</Text>
-                  <Text style={styles.nombreColmena}>{item.destino.codigo}</Text>
-                  <Text style={styles.nombreApiario}>{item.destino.apiarioNombre}</Text>
-                </View>
-              </View>
-              <View style={styles.detalleFila}>
-                <View style={styles.insignia}>
-                  <Text style={styles.insigniaTexto}>
-                    {item.cantidad} {item.cantidad === 1 ? 'marco' : 'marcos'} de {item.tipo}
-                  </Text>
-                </View>
-                <Text style={styles.fecha}>{fechaLegible(item.fecha)} · {item.autor}</Text>
-              </View>
-              {item.pendiente && (
-                <Text style={styles.pendiente}>Pendiente de sincronización · Guardada en este teléfono</Text>
-              )}
-              {!!item.observaciones?.trim() && (
-                <Text style={styles.observaciones}>{item.observaciones.trim()}</Text>
-              )}
+            <View style={styles.filtros}>
+              <TextInput
+                style={styles.buscador}
+                placeholder="Buscar por código de colmena"
+                placeholderTextColor={COLORS.textMuted}
+                autoCapitalize="none"
+                autoCorrect={false}
+                clearButtonMode="while-editing"
+                accessibilityLabel="Buscar por código de colmena"
+                value={busqueda}
+                onChangeText={setBusqueda}
+              />
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Actualizar transferencias"
+                onPress={() => void cargar(true)}
+                disabled={actualizando}
+                style={styles.actualizar}
+              >
+                <Text style={styles.actualizarTexto}>{actualizando ? '…' : '⟳'}</Text>
+              </Pressable>
             </View>
-          ))}
-        </View>
-      )}
-    </ScrollView>
+
+            {mensaje ? (
+              <View style={styles.aviso}>
+                <Text style={styles.avisoTexto}>{mensaje}</Text>
+              </View>
+            ) : !online && !cargando && sesion ? (
+              <Text style={styles.avisoPequeno}>Consulta local. Desliza hacia abajo para intentar actualizar.</Text>
+            ) : null}
+          </View>
+        }
+        ListEmptyComponent={
+          cargando && tarjetas.length === 0 ? (
+            <View style={styles.cargando}>
+              <ActivityIndicator color={COLORS.forestMid} size="large" />
+              <Text style={styles.cargandoTexto}>Cargando transferencias...</Text>
+            </View>
+          ) : (
+            <View style={styles.vacio}>
+              <Text style={styles.vacioIcono}>⇄</Text>
+              <Text style={styles.vacioTitulo}>No hay transferencias para mostrar</Text>
+              <Text style={styles.vacioTexto}>
+                {tarjetas.length === 0
+                  ? 'Aparecerán aquí cuando marques un marco con «Transferir» al registrar una inspección.'
+                  : nombreElegido
+                    ? 'Este apiario no tiene transferencias con estos filtros.'
+                    : 'Prueba con otro código de colmena.'}
+              </Text>
+            </View>
+          )
+        }
+        renderItem={({ item }) => (
+          <View style={styles.tarjeta}>
+            <View style={styles.ruta}>
+              <View style={styles.columnaOrigen}>
+                <Text style={styles.rotulo}>Salió de</Text>
+                <Text style={styles.nombreColmena}>{item.origen.codigo}</Text>
+                <Text style={styles.nombreApiario}>{item.origen.apiarioNombre}</Text>
+              </View>
+              <Text style={styles.flecha}>→</Text>
+              <View style={styles.columnaDestino}>
+                <Text style={styles.rotulo}>Llegó a</Text>
+                <Text style={styles.nombreColmena}>{item.destino.codigo}</Text>
+                <Text style={styles.nombreApiario}>{item.destino.apiarioNombre}</Text>
+              </View>
+            </View>
+            <View style={styles.detalleFila}>
+              <View style={styles.insignia}>
+                <Text style={styles.insigniaTexto}>
+                  {item.cantidad} {item.cantidad === 1 ? 'marco' : 'marcos'} de {item.tipo}
+                </Text>
+              </View>
+              <Text style={styles.fecha}>{fechaLegible(item.fecha)} · {item.autor}</Text>
+            </View>
+            {item.pendiente && (
+              <Text style={styles.pendiente}>Pendiente de sincronización · Guardada en este teléfono</Text>
+            )}
+            {!!item.observaciones?.trim() && (
+              <Text style={styles.observaciones}>{item.observaciones.trim()}</Text>
+            )}
+          </View>
+        )}
+      />
+    </View>
   );
+
 }
 
 const styles = StyleSheet.create({

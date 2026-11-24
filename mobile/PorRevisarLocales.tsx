@@ -1,8 +1,10 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  FlatList,
   Pressable,
   ScrollView,
+  Platform,
   StatusBar,
   StyleSheet,
   Text,
@@ -17,8 +19,8 @@ import { leerSesionGuardada, tokenVigente } from './api/auth';
 import type { SesionMovil } from './api/auth';
 import { listarColmenasSinRevision } from './api/colmenas';
 import type { ColmenaSinRevisionApi } from './api/colmenas';
-import { listarInspecciones } from './api/inspecciones';
-import type { InspeccionApi } from './api/inspecciones';
+import { listarInspeccionesResumen } from './api/inspecciones';
+import type { InspeccionDashboardServidor } from './api/inspecciones';
 import { descargarCatalogo, leerCatalogoLocal } from './database/catalogo';
 import type { CatalogoMovil, ColmenaCatalogo } from './database/catalogo';
 import { listarInspeccionesLocales } from './database/inspecciones';
@@ -34,7 +36,7 @@ type Props = {
 
 type FilaRevision = {
   colmena: ColmenaCatalogo;
-  ultima: InspeccionApi | null;
+  ultima: InspeccionDashboardServidor | null;
   fechaUltima: string | null;
   dias: number | null;
   requiereRevision: boolean;
@@ -73,9 +75,10 @@ function plural(cantidad: number, singular: string, pluralTexto: string) {
 
 export default function PorRevisarLocales({ onVolver }: Props) {
   const [sesion, setSesion] = useState<SesionMovil | null>(null);
+  const catalogoSolicitadoRef = useRef(false);
   const [catalogo, setCatalogo] = useState<CatalogoMovil | null>(null);
   const [sinRevisionServidor, setSinRevisionServidor] = useState<ColmenaSinRevisionApi[]>([]);
-  const [inspeccionesServidor, setInspeccionesServidor] = useState<InspeccionApi[]>([]);
+  const [inspeccionesServidor, setInspeccionesServidor] = useState<InspeccionDashboardServidor[]>([]);
   const [inspeccionesLocales, setInspeccionesLocales] = useState<InspeccionGuardada[]>([]);
   const [apiarioId, setApiarioId] = useState('');
   const [dias, setDias] = useState(30);
@@ -91,44 +94,80 @@ export default function PorRevisarLocales({ onVolver }: Props) {
 
     try {
       const sesionActual = await leerSesionGuardada();
-      if (!sesionActual) throw new Error('No existe una sesión móvil activa. Vuelve a iniciar sesión.');
+      if (!sesionActual) {
+        throw new Error('No existe una sesión móvil activa. Vuelve a iniciar sesión.');
+      }
       setSesion(sesionActual);
 
-      let catalogoActual = await leerCatalogoLocal(sesionActual.usuario.id);
-      if (tokenVigente(sesionActual)) {
-        try {
-          catalogoActual = await descargarCatalogo(sesionActual);
-        } catch (err) {
-          if (!catalogoActual) throw err;
-        }
-      }
-      setCatalogo(catalogoActual);
+      // Recuperar y pintar primero las copias locales.
+      const [catalogoLocal, locales] = await Promise.all([
+        leerCatalogoLocal(sesionActual.usuario.id).catch(() => null),
+        listarInspeccionesLocales().catch(() => [] as InspeccionGuardada[]),
+      ]);
 
-      const locales = await listarInspeccionesLocales();
+      setCatalogo(catalogoLocal);
       setInspeccionesLocales(locales);
 
-      if (tokenVigente(sesionActual)) {
-        const tareas = await Promise.allSettled([
-          listarColmenasSinRevision(
-            sesionActual.accessToken,
-            periodo,
-            apiario ? Number(apiario) : undefined
-          ),
-          listarInspecciones(sesionActual.accessToken),
-        ]);
+      if (catalogoLocal || locales.length > 0) {
+        setCargando(false);
+      }
 
-        if (tareas[0].status === 'fulfilled') {
-          setSinRevisionServidor(tareas[0].value);
-        } else {
-          setSinRevisionServidor([]);
-          setError('No se pudo consultar el listado del servidor. Se calculará el período con los registros disponibles en el teléfono.');
-        }
+      if (!tokenVigente(sesionActual)) {
+        setError('La sesión venció. Se muestran los registros disponibles en el dispositivo.');
+        setSinRevisionServidor([]);
+        setInspeccionesServidor([]);
+        return;
+      }
 
-        if (tareas[1].status === 'fulfilled') {
-          setInspeccionesServidor(tareas[1].value.filter(item => item.activo));
+      // El período y apiario afectan solo el endpoint de colmenas pendientes.
+      // Las inspecciones-resumen se descargan sin marcos y solo una por colmena.
+      const tareas: Promise<unknown>[] = [
+        listarColmenasSinRevision(
+          sesionActual.accessToken,
+          periodo,
+          apiario ? Number(apiario) : undefined
+        ),
+        listarInspeccionesResumen(sesionActual.accessToken, true),
+      ];
+
+      if (!catalogoLocal || forzar || !catalogoSolicitadoRef.current) {
+        catalogoSolicitadoRef.current = true;
+        tareas.push(descargarCatalogo(sesionActual));
+      }
+
+      const resultados = await Promise.allSettled(tareas);
+
+      if (resultados[0].status === 'fulfilled') {
+        setSinRevisionServidor(
+          resultados[0].value as ColmenaSinRevisionApi[]
+        );
+      } else {
+        setSinRevisionServidor([]);
+        setError(
+          'No se pudo consultar el listado del servidor. Se calculará el período con los registros disponibles en el teléfono.'
+        );
+      }
+
+      if (resultados[1].status === 'fulfilled') {
+        setInspeccionesServidor(
+          resultados[1].value as InspeccionDashboardServidor[]
+        );
+      } else {
+        setInspeccionesServidor([]);
+        setError(actual =>
+          actual || 'No se pudieron cargar las inspecciones del servidor. Se utilizará el historial local.'
+        );
+      }
+
+      if (tareas.length > 2) {
+        const resultadoCatalogo = resultados[2];
+        if (resultadoCatalogo.status === 'fulfilled') {
+          setCatalogo(resultadoCatalogo.value as CatalogoMovil);
         } else {
-          setInspeccionesServidor([]);
-          setError(actual => actual || 'No se pudieron cargar las inspecciones del servidor. Se utilizará el historial local.');
+          catalogoSolicitadoRef.current = false;
+          if (!catalogoLocal) {
+            throw resultadoCatalogo.reason;
+          }
         }
       }
     } catch (err) {
@@ -149,7 +188,7 @@ export default function PorRevisarLocales({ onVolver }: Props) {
     const colmenasPorQr = new Map<string, ColmenaCatalogo>(
       catalogo.colmenas.map(colmena => [colmena.codigo_qr.toLowerCase(), colmena])
     );
-    const ultimaPorColmena = new Map<number, InspeccionApi>();
+    const ultimaPorColmena = new Map<number, InspeccionDashboardServidor>();
     for (const inspeccion of inspeccionesServidor) {
       const actual = ultimaPorColmena.get(inspeccion.colmena_id);
       if (!actual || new Date(inspeccion.fecha_inspeccion) > new Date(actual.fecha_inspeccion)) {
@@ -250,104 +289,117 @@ export default function PorRevisarLocales({ onVolver }: Props) {
   }
 
   return (
-    <ScrollView style={styles.pantalla} contentContainerStyle={styles.contenido}>
+    <View style={styles.pantalla}>
       <StatusBar barStyle="dark-content" />
+      <FlatList
+        style={{ flex: 1 }}
+        data={filas}
+        keyExtractor={(fila) => String(fila.colmena.id)}
+        contentContainerStyle={styles.contenido}
+        keyboardShouldPersistTaps="handled"
+        initialNumToRender={10}
+        maxToRenderPerBatch={8}
+        updateCellsBatchingPeriod={50}
+        windowSize={7}
+        removeClippedSubviews={Platform.OS === 'android'}
+        ListHeaderComponent={
+          <View>
+            <Pressable onPress={onVolver} style={styles.volver}>
+              <Text style={styles.volverTexto}>‹ Volver</Text>
+            </Pressable>
+            <Text style={styles.titulo}>Por revisar</Text>
+            <Text style={styles.subtitulo}>
+              Colmenas sin inspección en los últimos {dias} días, nunca inspeccionadas o con su última inspección en «Requiere revisión».
+            </Text>
 
-      <Pressable onPress={onVolver} style={styles.volver}>
-        <Text style={styles.volverTexto}>‹ Volver</Text>
-      </Pressable>
-      <Text style={styles.titulo}>Por revisar</Text>
-      <Text style={styles.subtitulo}>
-        Colmenas sin inspección en los últimos {dias} días, nunca inspeccionadas o con su última inspección en «Requiere revisión».
-      </Text>
+            <Text style={styles.label}>Ver por apiario</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
+              <Chip texto="Todos los apiarios" activo={!apiarioId} onPress={() => setApiarioId('')} />
+              {apiarios.map(item => (
+                <Chip key={item.value} texto={item.label} activo={apiarioId === item.value} onPress={() => setApiarioId(item.value)} />
+              ))}
+            </ScrollView>
 
-      <Text style={styles.label}>Ver por apiario</Text>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chips}>
-        <Chip texto="Todos los apiarios" activo={!apiarioId} onPress={() => setApiarioId('')} />
-        {apiarios.map(item => (
-          <Chip key={item.value} texto={item.label} activo={apiarioId === item.value} onPress={() => setApiarioId(item.value)} />
-        ))}
-      </ScrollView>
-
-      <View style={styles.filtrosPeriodo}>
-        <View style={{ flex: 1 }}>
-          <SelectorLista
-            label="Sin inspección en los últimos"
-            value={String(dias)}
-            opciones={PERIODOS.map(item => ({ value: String(item), label: `${item} días` }))}
-            onChange={valor => setDias(Number(valor))}
-          />
-        </View>
-        <Pressable onPress={() => void cargar(true)} disabled={actualizando} style={styles.actualizarBoton}>
-          <Text style={styles.actualizarTexto}>{actualizando ? 'Actualizando…' : '⟳ Actualizar'}</Text>
-        </Pressable>
-      </View>
-
-      {filas.length > 0 && (
-        <View style={styles.resumen}>
-          <InsigniaMovil texto={plural(conteo.total, 'colmena', 'colmenas')} />
-          {conteo.requiereRevision > 0 && <InsigniaMovil texto={`${conteo.requiereRevision} requieren revisión`} tono="rojo" />}
-          {conteo.nunca > 0 && <InsigniaMovil texto={plural(conteo.nunca, 'nunca inspeccionada', 'nunca inspeccionadas')} tono="ambar" />}
-          {conteo.sinRevision > 0 && <InsigniaMovil texto={`${conteo.sinRevision} con más de ${dias} días`} tono="ambar" />}
-        </View>
-      )}
-
-      {!!error && (
-        <View style={styles.aviso}>
-          <Text style={styles.avisoTexto}>{error}</Text>
-        </View>
-      )}
-
-      {filas.length === 0 ? (
-        <View style={styles.vacio}>
-          <Text style={styles.vacioTitulo}>No hay colmenas por revisar</Text>
-          <Text style={styles.vacioTexto}>
-            Todas las colmenas {apiarioId ? `de ${catalogo?.apiarios.find(item => String(item.id) === apiarioId)?.nombre ?? 'este apiario'} ` : ''}tienen una inspección en los últimos {dias} días y ninguna quedó en «Requiere revisión».
-          </Text>
-        </View>
-      ) : (
-        <View style={styles.lista}>
-          {filas.map(fila => (
-            <View key={fila.colmena.id} style={styles.tarjeta}>
-              <View style={styles.tarjetaCabecera}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.codigo}>{fila.colmena.codigo}</Text>
-                  <Text style={styles.apiario}>{catalogo?.apiarios.find(item => item.id === fila.colmena.apiario_id)?.nombre ?? 'Apiario'}</Text>
-                </View>
-                {fila.requiereRevision && <InsigniaMovil texto="Requiere revisión" tono="rojo" />}
+            <View style={styles.filtrosPeriodo}>
+              <View style={{ flex: 1 }}>
+                <SelectorLista
+                  label="Sin inspección en los últimos"
+                  value={String(dias)}
+                  opciones={PERIODOS.map(item => ({ value: String(item), label: `${item} días` }))}
+                  onChange={valor => setDias(Number(valor))}
+                />
               </View>
-
-              <View style={styles.motivos}>
-                {fila.nunca ? (
-                  <InsigniaMovil texto="Nunca inspeccionada" tono="ambar" />
-                ) : fila.sinRevision ? (
-                  <InsigniaMovil texto={`${fila.dias ?? dias} días sin inspección`} tono="ambar" />
-                ) : null}
-                {fila.requiereRevision && <Text style={styles.motivoTexto}>La última inspección quedó en «Requiere revisión».</Text>}
-              </View>
-
-              <View style={styles.ultimaFila}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.labelPequeno}>Última inspección</Text>
-                  <Text style={styles.ultimaValor}>{fila.nunca ? 'Sin inspecciones' : formatearFecha(fila.fechaUltima)}</Text>
-                </View>
-                {fila.ultima && <InsigniaMovil texto={fila.ultima.estado_general?.replaceAll('_', ' ') ?? 'Sin estado'} tono={fila.requiereRevision ? 'rojo' : 'azul'} />}
-              </View>
-
-              <Pressable
-                style={styles.botonInspeccionar}
-                onPress={() => setCodigoQRActivo(fila.colmena.codigo_qr)}
-              >
-                <Text style={styles.botonInspeccionarTexto}>▣ Inspeccionar</Text>
+              <Pressable onPress={() => void cargar(true)} disabled={actualizando} style={styles.actualizarBoton}>
+                <Text style={styles.actualizarTexto}>{actualizando ? 'Actualizando…' : '⟳ Actualizar'}</Text>
               </Pressable>
             </View>
-          ))}
-        </View>
-      )}
 
-      <Text style={styles.pie}>La lista combina el período consultado en FastAPI con el historial local pendiente de sincronización.</Text>
-    </ScrollView>
+            {filas.length > 0 && (
+              <View style={styles.resumen}>
+                <InsigniaMovil texto={plural(conteo.total, 'colmena', 'colmenas')} />
+                {conteo.requiereRevision > 0 && <InsigniaMovil texto={`${conteo.requiereRevision} requieren revisión`} tono="rojo" />}
+                {conteo.nunca > 0 && <InsigniaMovil texto={plural(conteo.nunca, 'nunca inspeccionada', 'nunca inspeccionadas')} tono="ambar" />}
+                {conteo.sinRevision > 0 && <InsigniaMovil texto={`${conteo.sinRevision} con más de ${dias} días`} tono="ambar" />}
+              </View>
+            )}
+
+            {!!error && (
+              <View style={styles.aviso}>
+                <Text style={styles.avisoTexto}>{error}</Text>
+              </View>
+            )}
+          </View>
+        }
+        ListEmptyComponent={
+          <View style={styles.vacio}>
+            <Text style={styles.vacioTitulo}>No hay colmenas por revisar</Text>
+            <Text style={styles.vacioTexto}>
+              Todas las colmenas {apiarioId ? `de ${catalogo?.apiarios.find(item => String(item.id) === apiarioId)?.nombre ?? 'este apiario'} ` : ''}tienen una inspección en los últimos {dias} días y ninguna quedó en «Requiere revisión».
+            </Text>
+          </View>
+        }
+        renderItem={({ item: fila }) => (
+          <View style={styles.tarjeta}>
+            <View style={styles.tarjetaCabecera}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.codigo}>{fila.colmena.codigo}</Text>
+                <Text style={styles.apiario}>{catalogo?.apiarios.find(item => item.id === fila.colmena.apiario_id)?.nombre ?? 'Apiario'}</Text>
+              </View>
+              {fila.requiereRevision && <InsigniaMovil texto="Requiere revisión" tono="rojo" />}
+            </View>
+
+            <View style={styles.motivos}>
+              {fila.nunca ? (
+                <InsigniaMovil texto="Nunca inspeccionada" tono="ambar" />
+              ) : fila.sinRevision ? (
+                <InsigniaMovil texto={`${fila.dias ?? dias} días sin inspección`} tono="ambar" />
+              ) : null}
+              {fila.requiereRevision && <Text style={styles.motivoTexto}>La última inspección quedó en «Requiere revisión».</Text>}
+            </View>
+
+            <View style={styles.ultimaFila}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.labelPequeno}>Última inspección</Text>
+                <Text style={styles.ultimaValor}>{fila.nunca ? 'Sin inspecciones' : formatearFecha(fila.fechaUltima)}</Text>
+              </View>
+              {fila.ultima && <InsigniaMovil texto={fila.ultima.estado_general?.replaceAll('_', ' ') ?? 'Sin estado'} tono={fila.requiereRevision ? 'rojo' : 'azul'} />}
+            </View>
+
+            <Pressable
+              style={styles.botonInspeccionar}
+              onPress={() => setCodigoQRActivo(fila.colmena.codigo_qr)}
+            >
+              <Text style={styles.botonInspeccionarTexto}>▣ Inspeccionar</Text>
+            </Pressable>
+          </View>
+        )}
+        ListFooterComponent={
+          <Text style={styles.pie}>La lista combina el período consultado en FastAPI con el historial local pendiente de sincronización.</Text>
+        }
+      />
+    </View>
   );
+
 }
 
 function Chip({ texto, activo, onPress }: { texto: string; activo: boolean; onPress: () => void }) {

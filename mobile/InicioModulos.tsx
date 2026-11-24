@@ -15,7 +15,6 @@ import {
 } from 'react-native';
 
 import {
-  descargarCatalogo,
   leerCatalogoLocal,
 } from './database/catalogo';
 
@@ -98,6 +97,7 @@ type AlertaDashboard = {
 };
 
 type Props = {
+  catalogoVersion: number;
   onEscanear: () => void;
   onInspecciones: () => void;
   onColmenas: () => void;
@@ -432,6 +432,7 @@ function textoMaterial(material: string): string {
 // ==========================================
 
 export default function InicioModulos({
+  catalogoVersion,
   onEscanear,
   onInspecciones,
   onTratamientos,
@@ -482,6 +483,7 @@ export default function InicioModulos({
 
     const cargarDatos = async () => {
       setCargandoDashboard(true);
+
       let catalogoLocal: CatalogoMovil | null = null;
       let inspeccionesServidor: InspeccionDashboardServidor[] = [];
       let inspeccionesLocales: InspeccionLocalDashboard[] = [];
@@ -492,57 +494,126 @@ export default function InicioModulos({
         const sesion = await leerSesionGuardada();
 
         if (sesion) {
-          if (conInternet && tokenVigente(sesion)) {
-            try {
-              await descargarCatalogo(sesion);
-            } catch (error) {
-              console.warn('No se pudo actualizar el catálogo del Dashboard:', error);
-              aviso = 'No se pudo actualizar el catálogo. Se conserva la última copia guardada en el dispositivo.';
-            }
-
-            try {
-              inspeccionesServidor = await listarInspeccionesServidor(sesion.accessToken);
-              await guardarInspeccionesServidorDashboard(
-                sesion.usuario.id,
-                inspeccionesServidor
-              );
-            } catch (error) {
-              console.warn('No se pudieron actualizar las inspecciones del Dashboard:', error);
-              inspeccionesServidor = await leerInspeccionesServidorDashboard(
-                sesion.usuario.id
-              ).catch(() => []);
-              if (inspeccionesServidor.length > 0) {
-                aviso = aviso || 'No se pudieron actualizar las inspecciones. Se utiliza la última copia guardada.';
-              } else {
-                aviso = aviso || 'No fue posible consultar las inspecciones del servidor.';
-              }
-            }
-          } else {
-            inspeccionesServidor = await leerInspeccionesServidorDashboard(
+          // Primero se recuperan las copias locales en paralelo.
+          const [
+            catalogoCache,
+            inspeccionesCache,
+            inspeccionesLocalCache,
+          ] = await Promise.all([
+            leerCatalogoLocal(sesion.usuario.id).catch(() => null),
+            leerInspeccionesServidorDashboard(
               sesion.usuario.id
-            ).catch(() => []);
+            ).catch(() => [] as InspeccionDashboardServidor[]),
+            listarInspeccionesDashboardLocales().catch((error) => {
+              console.error(
+                'No se pudieron leer las inspecciones locales del Dashboard:',
+                error
+              );
+              errorLocal = true;
+              return [] as InspeccionLocalDashboard[];
+            }),
+          ]);
+
+          if (!activo) return;
+
+          catalogoLocal = catalogoCache;
+          inspeccionesServidor = inspeccionesCache;
+          inspeccionesLocales = inspeccionesLocalCache;
+
+          if (!catalogoLocal) {
+            aviso = 'No hay un catálogo oficial descargado para este dispositivo.';
+          } else if (sinInternet) {
+            aviso = 'Se está utilizando el catálogo y las inspecciones guardadas en el dispositivo.';
           }
 
-          catalogoLocal = await leerCatalogoLocal(sesion.usuario.id).catch(() => null);
-          if (!catalogoLocal) {
-            aviso = aviso || 'No hay un catálogo oficial descargado para este dispositivo.';
-          } else if (sinInternet) {
-            aviso = aviso || 'Se está utilizando el catálogo y las inspecciones guardadas en el dispositivo.';
+          // Mostrar el Dashboard con la última copia local sin esperar
+          // la descarga completa de inspecciones desde el servidor.
+          setCatalogo(catalogoLocal);
+          setInspecciones(
+            combinarInspecciones(
+              inspeccionesServidor,
+              inspeccionesLocales,
+              catalogoLocal
+            )
+          );
+          setErrorInspecciones(errorLocal);
+
+          if (
+            catalogoLocal ||
+            inspeccionesServidor.length > 0 ||
+            inspeccionesLocales.length > 0
+          ) {
+            setCargandoDashboard(false);
+          }
+
+          // La actualización remota se ejecuta después de pintar la caché.
+          if (conInternet && tokenVigente(sesion)) {
+            try {
+              const remotas = await listarInspeccionesServidor(
+                sesion.accessToken
+              );
+
+              if (!activo) return;
+
+              inspeccionesServidor = remotas;
+
+              void guardarInspeccionesServidorDashboard(
+                sesion.usuario.id,
+                inspeccionesServidor
+              ).catch((error) => {
+                console.warn(
+                  'No se pudo guardar la caché de inspecciones del Dashboard:',
+                  error
+                );
+              });
+            } catch (error) {
+              console.warn(
+                'No se pudieron actualizar las inspecciones del Dashboard:',
+                error
+              );
+
+              aviso = inspeccionesCache.length > 0
+                ? 'No se pudieron actualizar las inspecciones. Se utiliza la última copia guardada.'
+                : 'No fue posible consultar las inspecciones del servidor.';
+            }
           }
         } else {
           aviso = 'No se encontró una sesión para consultar el catálogo.';
-        }
 
-        try {
-          inspeccionesLocales = await listarInspeccionesDashboardLocales();
-        } catch (error) {
-          console.error('No se pudieron leer las inspecciones avanzadas locales:', error);
-          errorLocal = true;
+          inspeccionesLocales = await listarInspeccionesDashboardLocales()
+            .catch((error) => {
+              console.error(
+                'No se pudieron leer las inspecciones locales:',
+                error
+              );
+              errorLocal = true;
+              return [] as InspeccionLocalDashboard[];
+            });
         }
       } catch (error) {
         console.error('Error cargando el Dashboard:', error);
         aviso = aviso || 'No se pudieron cargar todos los datos del Dashboard.';
         errorLocal = true;
+      }
+
+      if (!activo) return;
+
+      // Evitar sobrescribir con una copia antigua si la descarga de
+      // catálogo en segundo plano terminó mientras se actualizaba el Dashboard.
+      try {
+        const sesionActual = await leerSesionGuardada();
+
+        if (sesionActual) {
+          const catalogoActualizado = await leerCatalogoLocal(
+            sesionActual.usuario.id
+          ).catch(() => null);
+
+          if (catalogoActualizado) {
+            catalogoLocal = catalogoActualizado;
+          }
+        }
+      } catch {
+        // Se conserva la última copia local que ya estaba cargada.
       }
 
       if (!activo) return;
@@ -561,10 +632,43 @@ export default function InicioModulos({
     };
 
     void cargarDatos();
+
     return () => {
       activo = false;
     };
   }, [conexion, versionDatos]);
+
+  // El catálogo se actualiza en AppAutenticado. El Dashboard solo
+  // vuelve a leer SQLite cuando llega una nueva versión.
+  useEffect(() => {
+    if (catalogoVersion <= 0) return;
+
+    let activo = true;
+
+    const leerCatalogoActualizado = async () => {
+      const sesion = await leerSesionGuardada();
+      if (!sesion) return;
+
+      const actualizado = await leerCatalogoLocal(
+        sesion.usuario.id
+      ).catch(() => null);
+
+      if (activo && actualizado) {
+        setCatalogo(actualizado);
+      }
+    };
+
+    void leerCatalogoActualizado().catch((error) => {
+      console.warn(
+        'No se pudo releer el catálogo actualizado del Dashboard:',
+        error
+      );
+    });
+
+    return () => {
+      activo = false;
+    };
+  }, [catalogoVersion]);
 
   // ========================================
   // STOCK BAJO, IGUAL QUE EL AVISO DE WEB

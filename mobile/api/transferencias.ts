@@ -296,13 +296,17 @@ function obtenerTokenVigente(
 // ==========================================
 
 export async function listarTransferencias(
-  sesion: SesionMovil
+  sesion: SesionMovil,
+  colmenaId?: number
 ): Promise<TransferenciaMarco[]> {
 
   const token = obtenerTokenVigente(sesion);
+  const filtro = colmenaId
+    ? `?colmena_id=${encodeURIComponent(String(colmenaId))}`
+    : '';
 
   return solicitarAPI<TransferenciaMarco[]>(
-    '/transferencias-marcos/',
+    `/transferencias-marcos/${filtro}`,
     {
       method: 'GET',
       token,

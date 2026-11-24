@@ -76,9 +76,13 @@ def tratamiento_a_dict(tratamiento):
     response_model=list[TratamientoResponse]
 )
 def listar_tratamientos(
+    colmena_id: int | None = None,
     db: Session = Depends(get_db)
 ):
-    return tratamiento_service.listar_tratamientos(db)
+    return tratamiento_service.listar_tratamientos(
+        db,
+        colmena_id=colmena_id,
+    )
 
 
 # ==========================================================
